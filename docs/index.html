@@ -265,6 +265,8 @@
       <li class="section-label">Start Here</li>
       <li><a href="#learn">📘 Handbook</a></li>
       <li><a href="#bootcamp-section" style="color:#f59e0b;">🏋️ Bootcamp Exercise</a></li>
+      <li class="section-label">Advanced</li>
+      <li><a href="#advanced">🔬 Advanced Concepts</a></li>
       <li class="section-label">Reference</li>
       <li><a href="#cheatsheets">🗂 Cheatsheets</a></li>
       <li><a href="#scripts">🐍 Scripts</a></li>
@@ -313,8 +315,8 @@
 <!-- ── Hero (compact) ──────────────────────────────────────────────────── -->
 <div class="hero">
   <div class="hero-badge">LLM Fine-Tuning Kickstart Repo</div>
-  <h1>You can code.<br>Now fine-tune.</h1>
-  <p>Built for senior developers who know software but haven't fine-tuned a model yet. Skip the theory-first spiral — run working code in minutes, understand why it works after. PyTorch → LoRA → Unsloth → DPO → GRPO → Cloud. 10/10 scripts verified.</p>
+  <h1>Own Your Model.</h1>
+  <p style="max-width:620px;">GPT-4 and Claude are brilliant generalists — but your org's schema, your compliance rules, your edge cases? That's where a small, specialized model you own outperforms the biggest API. This repo gets senior developers from zero to a fine-tuned, deployed model — build first, understand deeper after.</p>
 </div>
 
 <!-- ── Philosophy (condensed banner) ───────────────────────────────────── -->
@@ -388,6 +390,75 @@
         <span class="tag yellow">7 phases</span>
         <span class="tag yellow">3 models</span>
         <span class="tag yellow">vs RAG</span>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ── Advanced Concepts ────────────────────────────────────────────── -->
+  <div class="section-title" id="advanced">🔬 Advanced Concepts — Where Silent Bugs Live</div>
+  <div style="font-size:.78em; color:var(--muted); margin:-8px 0 14px; line-height:1.6;">
+    The core chapters teach you to fine-tune. These chapters save you from the bugs that waste days — invisible parameters, wasted compute on padding, and heads that don't train because you didn't know they were randomly initialized.
+  </div>
+  <div class="grid grid-2" style="margin-bottom:32px;">
+
+    <a href="handbook.html#datastack" class="card" style="border-left:3px solid var(--orange);">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#7c2d12,#c2410c);">🗄️</div>
+        <div>
+          <div class="card-title">The Dataset Zoo</div>
+          <div class="card-desc">PyTorch Dataset vs HF Dataset vs DataLoader vs DataCollator — four things called "dataset" and nobody explains how they connect. Dynamic padding saves 3x compute.</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag orange">Collator table</span>
+        <span class="tag orange">5 gotchas</span>
+        <span class="tag orange">Script 12</span>
+      </div>
+    </a>
+
+    <a href="handbook.html#pytorchinternals" class="card" style="border-left:3px solid #ef4444;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#991b1b,#dc2626);">🔧</div>
+        <div>
+          <div class="card-title">PyTorch Module Internals</div>
+          <div class="card-desc">Why <code>nn.ModuleList</code> exists (plain lists = 0 trainable params), weight surgery, freeze/unfreeze patterns, and what AutoModelFor* actually does to the final layer.</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag" style="color:#f87171; border-color:rgba(248,113,113,.3); background:rgba(248,113,113,.07);">ModuleList gotcha</span>
+        <span class="tag" style="color:#f87171; border-color:rgba(248,113,113,.3); background:rgba(248,113,113,.07);">HF heads</span>
+        <span class="tag" style="color:#f87171; border-color:rgba(248,113,113,.3); background:rgba(248,113,113,.07);">Script 13</span>
+      </div>
+    </a>
+
+    <a href="handbook.html#evaluation" class="card" style="border-left:3px solid var(--green);">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#064e3b,#0f766e);">📊</div>
+        <div>
+          <div class="card-title">Evaluation</div>
+          <div class="card-desc">How to know if fine-tuning actually worked. Loss curves, perplexity, before/after generation, and overfitting detection. Don't ship blind.</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag green">Loss curves</span>
+        <span class="tag green">Perplexity</span>
+        <span class="tag green">Script 10</span>
+      </div>
+    </a>
+
+    <a href="handbook.html#owndata" class="card" style="border-left:3px solid var(--purple);">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#3b0764,#6d28d9);">📂</div>
+        <div>
+          <div class="card-title">Bring Your Data</div>
+          <div class="card-desc">CSV, JSONL, plain text — load it, reshape it into the right trainer format, clean it. Format cheatsheet for Causal LM / SFT / DPO / GRPO.</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag purple">Format table</span>
+        <span class="tag purple">Data hygiene</span>
+        <span class="tag purple">Script 11</span>
       </div>
     </a>
 
