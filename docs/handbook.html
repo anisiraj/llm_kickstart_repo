@@ -1854,6 +1854,107 @@ total = <span class="fn">sum</span>(p.<span class="fn">numel</span>() <span clas
     </div>
   </div>
 
+  <!-- Domain Specialization Results -->
+  <div style="margin-top:22px; background:#0f172a; border:1px solid #334155; border-radius:10px; padding:20px 22px;">
+    <div style="font-size:.72em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#38bdf8; margin-bottom:6px;">Experimental Results — Domain Specialization Proof</div>
+    <div style="font-size:.82em; color:#cbd5e1; line-height:1.7; margin-bottom:14px;">
+      Can a <strong>124M parameter model + tiny adapter</strong> beat a <strong>355M model</strong> on domain-specific text?
+      We trained two LoRA adapters (HVAC and Energy) on GPT-2 (124M) with just 120 sentences each and 100 training steps,
+      then compared against GPT-2 Medium (355M) — a model <strong>3× larger</strong>. Perplexity = how surprised the model is by the text (lower = better).
+    </div>
+
+    <!-- Perplexity Results Table -->
+    <div style="overflow-x:auto; margin-bottom:16px;">
+      <table style="width:100%; font-size:.82em; border-collapse:collapse; text-align:center;">
+        <thead>
+          <tr style="border-bottom:2px solid #475569;">
+            <th style="padding:8px 10px; text-align:left; color:#94a3b8; font-weight:600;">Model</th>
+            <th style="padding:8px 10px; color:#94a3b8; font-weight:600;">Params</th>
+            <th style="padding:8px 10px; color:#67e8f9; font-weight:600;">HVAC Text ↓</th>
+            <th style="padding:8px 10px; color:#a78bfa; font-weight:600;">Energy Text ↓</th>
+            <th style="padding:8px 10px; color:#94a3b8; font-weight:600;">Generic Text ↓</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:8px 10px; text-align:left; color:#94a3b8;">GPT-2 (base)</td>
+            <td style="padding:8px 10px; color:#64748b;">124M</td>
+            <td style="padding:8px 10px; color:#94a3b8;">352</td>
+            <td style="padding:8px 10px; color:#94a3b8;">140</td>
+            <td style="padding:8px 10px; color:#94a3b8;">89</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:8px 10px; text-align:left; color:#e2e8f0;">GPT-2 Medium</td>
+            <td style="padding:8px 10px; color:#64748b;">355M</td>
+            <td style="padding:8px 10px; color:#e2e8f0;">340</td>
+            <td style="padding:8px 10px; color:#e2e8f0;">135</td>
+            <td style="padding:8px 10px; color:#34d399; font-weight:700;">44</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:8px 10px; text-align:left; color:#67e8f9; font-weight:600;">GPT-2 + HVAC adapter</td>
+            <td style="padding:8px 10px; color:#64748b;">124M + 1MB</td>
+            <td style="padding:8px 10px; color:#34d399; font-weight:700;">296 ✓</td>
+            <td style="padding:8px 10px; color:#94a3b8;">—</td>
+            <td style="padding:8px 10px; color:#94a3b8;">—</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px; text-align:left; color:#a78bfa; font-weight:600;">GPT-2 + Energy adapter</td>
+            <td style="padding:8px 10px; color:#64748b;">124M + 1MB</td>
+            <td style="padding:8px 10px; color:#94a3b8;">—</td>
+            <td style="padding:8px 10px; color:#34d399; font-weight:700;">110 ✓</td>
+            <td style="padding:8px 10px; color:#94a3b8;">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Key Takeaways -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+      <div style="background:#022c22; border:1px solid #065f46; border-radius:6px; padding:10px 12px;">
+        <div style="font-size:.68em; font-weight:700; text-transform:uppercase; color:#34d399; margin-bottom:4px;">The Result</div>
+        <div style="font-size:.78em; color:#d1fae5; line-height:1.6;">
+          124M + 1 MB adapter <strong>beats</strong> 355M on domain text.<br>
+          HVAC: 296 vs 340 (13% better).<br>
+          Energy: 110 vs 135 (19% better).
+        </div>
+      </div>
+      <div style="background:#1e1b4b; border:1px solid #3730a3; border-radius:6px; padding:10px 12px;">
+        <div style="font-size:.68em; font-weight:700; text-transform:uppercase; color:#a78bfa; margin-bottom:4px;">The Tradeoff</div>
+        <div style="font-size:.78em; color:#e0e7ff; line-height:1.6;">
+          The bigger model wins on <strong>generic text</strong> (44 vs 89).<br>
+          Adapters create specialists, not generalists.<br>
+          That's the point — use each for what it's good at.
+        </div>
+      </div>
+    </div>
+
+    <!-- Benchmark numbers -->
+    <div style="font-size:.72em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#fbbf24; margin-bottom:8px; margin-top:18px;">Operational Benchmarks</div>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:12px;">
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; text-align:center;">
+        <div style="font-size:1.4em; font-weight:700; color:#34d399;">80%</div>
+        <div style="font-size:.7em; color:#94a3b8; margin-top:2px;">Disk savings<br>(5 specialists)</div>
+      </div>
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; text-align:center;">
+        <div style="font-size:1.4em; font-weight:700; color:#38bdf8;">33×</div>
+        <div style="font-size:.7em; color:#94a3b8; margin-top:2px;">Faster adapter load<br>vs full model</div>
+      </div>
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; text-align:center;">
+        <div style="font-size:1.4em; font-weight:700; color:#a78bfa;">852×</div>
+        <div style="font-size:.7em; color:#94a3b8; margin-top:2px;">Faster hot-swap<br>vs reload</div>
+      </div>
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; text-align:center;">
+        <div style="font-size:1.4em; font-weight:700; color:#fbbf24;">+25%</div>
+        <div style="font-size:.7em; color:#94a3b8; margin-top:2px;">Inference overhead<br>(PEFT wrapper)</div>
+      </div>
+    </div>
+
+    <div style="font-size:.78em; color:#64748b; line-height:1.6; font-style:italic; margin-top:10px;">
+      Results from <code>scripts/14_adapter_save_load.py</code> — run it yourself to reproduce. Training: 120 sentences, 100 steps, batch 16, lr 3e-4.
+      Validated: zero data leakage between train/test, 93% vocabulary distinctness between domains, identical tokenizer for fair comparison.
+    </div>
+  </div>
+
   <div style="margin-top:14px; font-size:.76em; color:#475569;">
     Script: <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/14_adapter_save_load.py" target="_blank" style="color:#38bdf8;">14_adapter_save_load.py</a> — all patterns above, runnable.
     &nbsp;·&nbsp; Ref: <a href="https://huggingface.co/docs/peft" target="_blank" style="color:#38bdf8;">PEFT docs</a>
