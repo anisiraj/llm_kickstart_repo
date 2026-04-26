@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Fine-Tuning Kickstart</title>
+<style>
+  :root {
+    --bg:      #0f172a;
+    --surface: #1e293b;
+    --border:  #334155;
+    --accent:  #38bdf8;
+    --accent2: #818cf8;
+    --text:    #e2e8f0;
+    --muted:   #94a3b8;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --purple:  #a78bfa;
+    --yellow:  #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background: linear-gradient(135deg, #0c1a2e 0%, #0f2944 50%, #0c1a2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 64px 32px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 60% 40%, rgba(56,189,248,.07) 0%, transparent 70%),
+                radial-gradient(ellipse at 30% 70%, rgba(129,140,248,.05) 0%, transparent 60%);
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(56,189,248,.12);
+    border: 1px solid rgba(56,189,248,.3);
+    color: var(--accent);
+    font-size: .72em;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: clamp(2em, 5vw, 3.2em);
+    font-weight: 800;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #e2e8f0, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+  }
+  .hero p {
+    color: var(--muted);
+    font-size: 1.05em;
+    max-width: 620px;
+    margin: 0 auto 32px;
+    line-height: 1.7;
+  }
+  .hero-pills { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .pill {
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: .78em;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-family: monospace;
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
+
+  /* ── Section titles ── */
+  .section-title {
+    font-size: .72em;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Cards ── */
+  .grid { display: grid; gap: 16px; margin-bottom: 48px; }
+  .grid-2 { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color .2s, transform .15s, box-shadow .2s;
+    text-decoration: none;
+    display: block;
+  }
+  .card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(56,189,248,.1);
+  }
+  .card-header {
+    padding: 18px 20px 12px;
+    display: flex; align-items: flex-start; gap: 14px;
+  }
+  .card-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2em; flex-shrink: 0;
+  }
+  .card-title { font-size: .95em; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .card-desc  { font-size: .8em; color: var(--muted); line-height: 1.5; }
+  .card-footer {
+    padding: 10px 20px 14px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .tag {
+    font-size: .7em; font-family: monospace;
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .tag.green  { color: var(--green);  border-color: rgba(52,211,153,.3); background: rgba(52,211,153,.07); }
+  .tag.blue   { color: var(--accent); border-color: rgba(56,189,248,.3); background: rgba(56,189,248,.07); }
+  .tag.purple { color: var(--purple); border-color: rgba(167,139,250,.3); background: rgba(167,139,250,.07); }
+  .tag.yellow { color: var(--yellow); border-color: rgba(251,191,36,.3);  background: rgba(251,191,36,.07); }
+  .tag.orange { color: var(--orange); border-color: rgba(251,146,60,.3);  background: rgba(251,146,60,.07); }
+
+  /* handbook card — full width, prominent */
+  .card-main {
+    background: linear-gradient(135deg, #0c2d4a, #1a1040);
+    border-color: rgba(56,189,248,.25);
+  }
+  .card-main:hover { border-color: var(--accent); box-shadow: 0 12px 40px rgba(56,189,248,.15); }
+  .card-main .card-title { font-size: 1.25em; }
+  .card-main .card-desc  { font-size: .88em; max-width: 560px; }
+
+  /* ── Script table ── */
+  .script-grid { display: grid; gap: 10px; margin-bottom: 48px; }
+  .script-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: grid;
+    grid-template-columns: 200px 1fr auto;
+    align-items: center;
+    gap: 16px;
+  }
+  .script-name { font-family: monospace; font-size: .85em; color: var(--accent); }
+  .script-desc { font-size: .82em; color: var(--muted); }
+  .script-venv {
+    font-size: .72em; font-family: monospace; font-weight: 600;
+    padding: 3px 10px; border-radius: 4px; white-space: nowrap;
+  }
+  .venv-main { background: rgba(52,211,153,.1); color: var(--green); border: 1px solid rgba(52,211,153,.3); }
+  .venv-rl   { background: rgba(167,139,250,.1); color: var(--purple); border: 1px solid rgba(167,139,250,.3); }
+
+  /* ── Setup box ── */
+  .setup-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 48px;
+  }
+  .setup-box h3 { font-size: .85em; color: var(--accent); font-weight: 700; margin-bottom: 14px; letter-spacing: .06em; text-transform: uppercase; }
+  .setup-box pre {
+    background: #0a1628;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+    font-size: .8em;
+    color: #a5f3fc;
+    overflow-x: auto;
+    line-height: 1.8;
+  }
+  .setup-box pre .cm { color: #475569; }
+  .setup-box pre .kw { color: #7dd3fc; }
+
+  /* ── Status bar ── */
+  .status-bar {
+    background: rgba(52,211,153,.06);
+    border: 1px solid rgba(52,211,153,.2);
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex; gap: 24px; flex-wrap: wrap;
+    font-size: .8em; color: var(--green);
+    margin-bottom: 48px;
+    align-items: center;
+  }
+  .status-bar .dot { display: inline-block; width: 8px; height: 8px; background: var(--green); border-radius: 50%; margin-right: 6px; }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 32px;
+    text-align: center;
+    color: var(--muted);
+    font-size: .78em;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 640px) {
+    .script-row { grid-template-columns: 1fr; }
+    .hero { padding: 40px 20px 32px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-badge">LLM Fine-Tuning Kickstart Repo</div>
+  <h1>From Tensors to<br>Deployed LLMs</h1>
+  <p>A self-sufficient learning kit — PyTorch, HuggingFace, LoRA, Unsloth, DPO, GRPO, SageMaker, Bedrock. No fluff, all working code.</p>
+  <div class="hero-pills">
+    <span class="pill">PyTorch 2.7</span>
+    <span class="pill">Transformers 5.x</span>
+    <span class="pill">TRL 1.x</span>
+    <span class="pill">Unsloth</span>
+    <span class="pill">CUDA RTX 3080 Ti</span>
+    <span class="pill">GitHub Pages</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ── Verified status ────────────────────────────────────────────────── -->
+  <div class="status-bar">
+    <span><span class="dot"></span>All scripts verified — 7/7 pass</span>
+    <span><span class="dot"></span>.venv: torch 2.7+cu128 · trl 0.24 · Unsloth · SFT</span>
+    <span><span class="dot"></span>.venv-rl: trl 1.2 · DPO · ORPO · GRPO</span>
+    <span><span class="dot"></span>RTX 3080 Ti · CUDA 13.0</span>
+  </div>
+
+  <!-- ── Handbook ───────────────────────────────────────────────────────── -->
+  <div class="section-title">📖 End-to-End Handbook</div>
+  <a href="handbook.html" class="card card-main" style="margin-bottom: 48px;">
+    <div class="card-header">
+      <div class="card-icon" style="background:linear-gradient(135deg,#0369a1,#4f46e5);">📘</div>
+      <div>
+        <div class="card-title">LLM Fine-Tuning Handbook</div>
+        <div class="card-desc" style="margin-top:6px;">9 chapters flowing end-to-end: PyTorch → HF Datasets → Transformers → LoRA/QLoRA → Unsloth SFT → Causal LM → DPO / ORPO / GRPO → SageMaker → Bedrock. Every code block verified.</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="tag blue">9 chapters</span>
+      <span class="tag blue">Working examples</span>
+      <span class="tag blue">Decision guide</span>
+      <span class="tag blue">Dark theme</span>
+    </div>
+  </a>
+
+  <!-- ── Cheatsheets ────────────────────────────────────────────────────── -->
+  <div class="section-title">🗂 One-Page Cheatsheets</div>
+  <div class="grid grid-2" style="margin-bottom: 48px;">
+
+    <a href="cheatsheet_pytorch.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#7c2d12,#c2410c);">🔥</div>
+        <div>
+          <div class="card-title">PyTorch</div>
+          <div class="card-desc">Tensors, autograd, nn.Module, DataLoader, training loop, save/load, GPU tips</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag orange">8 cards</span>
+        <span class="tag orange">Print-ready</span>
+      </div>
+    </a>
+
+    <a href="cheatsheet_hf_datasets.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#064e3b,#0f766e);">🤗</div>
+        <div>
+          <div class="card-title">HF Datasets</div>
+          <div class="card-desc">load_dataset, map, filter, split, format, save_to_disk, push_to_hub</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag green">8 cards</span>
+        <span class="tag green">Print-ready</span>
+      </div>
+    </a>
+
+    <a href="cheatsheet_hf_transformers.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#3b0764,#6d28d9);">🤖</div>
+        <div>
+          <div class="card-title">HF Transformers</div>
+          <div class="card-desc">pipeline, tokenizer, AutoModel, Trainer, eval_strategy, processing_class, metrics</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag purple">8 cards</span>
+        <span class="tag purple">Print-ready</span>
+      </div>
+    </a>
+
+    <a href="cheatsheet_unsloth_lora.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#713f12,#ca8a04);">⚡</div>
+        <div>
+          <div class="card-title">Unsloth + LoRA / QLoRA</div>
+          <div class="card-desc">FastLanguageModel, get_peft_model, SFTTrainer, train_on_responses_only, GGUF export</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag yellow">6-step workflow</span>
+        <span class="tag yellow">Print-ready</span>
+      </div>
+    </a>
+
+    <a href="cheatsheet_aws_sagemaker_bedrock.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#7c2d12,#ea580c);">☁️</div>
+        <div>
+          <div class="card-title">AWS SageMaker + Bedrock</div>
+          <div class="card-desc">HuggingFace estimator, TGI deploy, converse API, fine-tune jobs, provisioned throughput</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag orange">SageMaker</span>
+        <span class="tag orange">Bedrock</span>
+        <span class="tag orange">Print-ready</span>
+      </div>
+    </a>
+
+    <a href="vscode_shortcuts.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#1e3a5f,#0369a1);">⌨️</div>
+        <div>
+          <div class="card-title">VSCode Shortcuts</div>
+          <div class="card-desc">Panel navigation, terminal toggle, editor tabs, split views — the ones that actually save mouse movements</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag blue">20 shortcuts</span>
+        <span class="tag blue">Print-ready</span>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ── Scripts ────────────────────────────────────────────────────────── -->
+  <div class="section-title">🐍 Working Scripts — All Verified</div>
+  <div class="script-grid">
+    <div class="script-row">
+      <span class="script-name">verify_all.py</span>
+      <span class="script-desc">Full environment health check — 25/26 pass (.venv), 24/26 (.venv-rl)</span>
+      <span class="script-venv venv-main">.venv / .venv-rl</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">01_pytorch_basics.py</span>
+      <span class="script-desc">Tensors, autograd, nn.Module, DataLoader, training loop, save/load</span>
+      <span class="script-venv venv-main">.venv</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">02_hf_datasets.py</span>
+      <span class="script-desc">from_dict, map, filter, split, rename, set_format, save_to_disk</span>
+      <span class="script-venv venv-main">.venv</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">03_hf_transformers.py</span>
+      <span class="script-desc">Tokenizer, pipeline, Trainer with eval_strategy + processing_class</span>
+      <span class="script-venv venv-main">.venv</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">04_causal_lm_finetune.py</span>
+      <span class="script-desc">GPT-2 CLM with DataCollatorForLanguageModeling + text generation</span>
+      <span class="script-venv venv-main">.venv</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">05_dpo_example.py</span>
+      <span class="script-desc">DPOTrainer + DPOConfig — ref_model=None implicit reference</span>
+      <span class="script-venv venv-rl">.venv-rl</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">06_orpo_example.py</span>
+      <span class="script-desc">ORPOTrainer from trl.experimental.orpo — SFT + alignment in one pass</span>
+      <span class="script-venv venv-rl">.venv-rl</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">07_grpo_example.py</span>
+      <span class="script-desc">GRPOTrainer — reward_funcs list, max_completion_length, question→prompt fix</span>
+      <span class="script-venv venv-rl">.venv-rl</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">08_unsloth_sft.py</span>
+      <span class="script-desc">Full Unsloth workflow — FastLanguageModel → LoRA → SFT → GGUF (reference)</span>
+      <span class="script-venv venv-main">.venv</span>
+    </div>
+    <div class="script-row">
+      <span class="script-name">09_sagemaker_train.py</span>
+      <span class="script-desc">SageMaker training script + HF estimator + Bedrock converse patterns</span>
+      <span class="script-venv venv-main">.venv</span>
+    </div>
+  </div>
+
+  <!-- ── Setup ──────────────────────────────────────────────────────────── -->
+  <div class="section-title">⚙️ Quick Setup</div>
+  <div class="setup-box">
+    <h3>Why two venvs?</h3>
+    <p style="font-size:.84em; color:var(--muted); margin-bottom:16px; line-height:1.7;">
+      Unsloth pins <code style="color:var(--accent)">trl&lt;0.9</code>, which is incompatible with DPO/ORPO/GRPO trainers (need <code style="color:var(--accent)">trl≥1.0</code>).
+      <strong style="color:var(--text)"> .venv</strong> handles Unsloth+SFT; <strong style="color:var(--purple)">.venv-rl</strong> handles alignment methods.
+    </p>
+    <pre><span class="cm"># One-shot setup (CUDA GPU required)</span>
+bash scripts/setup_envs.sh
+
+<span class="cm"># Or manually:</span>
+uv venv .venv    <span class="cm"># SFT + Unsloth</span>
+uv venv .venv-rl <span class="cm"># DPO / ORPO / GRPO</span>
+
+<span class="cm"># Run scripts</span>
+.venv/bin/python    scripts/verify_all.py
+.venv-rl/bin/python scripts/verify_all.py
+
+<span class="cm"># Notebook kernels (registered automatically)</span>
+<span class="cm"># Ctrl+Shift+P → Notebook: Select Kernel</span>
+<span class="cm">#   → Python (.venv — Unsloth+SFT)      for sections 1-6</span>
+<span class="cm">#   → Python (.venv-rl — DPO/ORPO/GRPO)  for sections 7-9</span></pre>
+  </div>
+
+  <!-- ── Method comparison ──────────────────────────────────────────────── -->
+  <div class="section-title">🧭 Which method should I use?</div>
+  <div class="grid grid-3" style="margin-bottom: 48px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
+      <div style="font-size:1.4em;margin-bottom:8px;">🎓</div>
+      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">SFT</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Teaching a model to follow instructions. First step for any fine-tune. Use Unsloth for speed.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--green);font-family:monospace;">SFTTrainer</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
+      <div style="font-size:1.4em;margin-bottom:8px;">🏆</div>
+      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">DPO</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Aligning to human preferences using chosen/rejected pairs. No reward model needed.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--purple);font-family:monospace;">DPOTrainer</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
+      <div style="font-size:1.4em;margin-bottom:8px;">⚡</div>
+      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">ORPO</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">SFT + alignment in one pass from a BASE model. Faster, no ref model, less memory.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--accent);font-family:monospace;">trl.experimental.orpo</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
+      <div style="font-size:1.4em;margin-bottom:8px;">🧮</div>
+      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">GRPO</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Group reward optimisation. Best for math, code, any verifiable task. Used in DeepSeek-R1.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--yellow);font-family:monospace;">GRPOTrainer</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
+      <div style="font-size:1.4em;margin-bottom:8px;">☁️</div>
+      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">SageMaker</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Train at scale, deploy TGI endpoints. Use spot instances for 70% cost savings.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--orange);font-family:monospace;">HuggingFace estimator</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
+      <div style="font-size:1.4em;margin-bottom:8px;">🪨</div>
+      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">Bedrock</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Managed FM API — Claude, Llama, Titan. Fine-tune Titan/Command, no infra to manage.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--orange);font-family:monospace;">bedrock.converse()</div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<footer>
+  <div style="margin-bottom:8px;">
+    <a href="handbook.html">Handbook</a> &nbsp;·&nbsp;
+    <a href="cheatsheet_pytorch.html">PyTorch</a> &nbsp;·&nbsp;
+    <a href="cheatsheet_hf_datasets.html">Datasets</a> &nbsp;·&nbsp;
+    <a href="cheatsheet_hf_transformers.html">Transformers</a> &nbsp;·&nbsp;
+    <a href="cheatsheet_unsloth_lora.html">Unsloth</a> &nbsp;·&nbsp;
+    <a href="cheatsheet_aws_sagemaker_bedrock.html">AWS</a> &nbsp;·&nbsp;
+    <a href="vscode_shortcuts.html">VSCode</a>
+  </div>
+  LLM Fine-Tuning Kickstart &nbsp;·&nbsp; torch 2.7+cu128 · transformers 5.x · trl 1.x · RTX 3080 Ti
+</footer>
+
+</body>
+</html>

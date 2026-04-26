@@ -1,0 +1,34 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+.venv-rl/
+
+# uv lock (regeneratable)
+uv.lock
+
+# Model outputs
+outputs/
+lora_model/
+model_merged/
+model_gguf/
+*.pt
+*.safetensors
+*.gguf
+*.bin
+
+# HF cache
+.cache/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Misc
+.DS_Store
+*.log

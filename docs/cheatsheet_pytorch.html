@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PyTorch Cheatsheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 13px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 960px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.9em; color: #ee4c2c; border-bottom: 3px solid #ee4c2c; padding-bottom: 6px; margin-bottom: 16px; letter-spacing: -0.5px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.72em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.82em; line-height: 1.55; white-space: pre-wrap; }
+  .kw  { color: #c678dd; font-weight: 600; }  /* keyword */
+  .fn  { color: #61afef; }                    /* function */
+  .st  { color: #98c379; }                    /* string */
+  .cm  { color: #7f848e; font-style: italic; } /* comment */
+  .nb  { color: #e5c07b; }                    /* number / builtin */
+  .c1 { background: #fff3e0; border-left: 3px solid #ff9800; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.8em; margin: 6px 0; display: block; }
+
+  .t1 .card-title { background: #ee4c2c; }
+  .t2 .card-title { background: #5c6bc0; }
+  .t3 .card-title { background: #2e7d32; }
+  .t4 .card-title { background: #6a1b9a; }
+  .t5 .card-title { background: #00838f; }
+  .t6 .card-title { background: #b71c1c; }
+  .t7 .card-title { background: #1565c0; }
+  .t8 .card-title { background: #37474f; }
+  .full { grid-column: 1 / -1; }
+
+  @media print {
+    body { background: white; font-size: 11px; }
+    .page { box-shadow: none; margin: 0; padding: 16px 20px; }
+    h1 { font-size: 1.6em; }
+  }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a></div>
+<div class="page">
+  <h1>PyTorch <span>— Essential One-Pager (Linux / GPU)</span></h1>
+  <div class="grid">
+
+    <!-- TENSORS -->
+    <div class="card t1">
+      <div class="card-title">🔷 Tensors — Create & Move</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> torch
+
+device = <span class="st">"cuda"</span> <span class="kw">if</span> torch.cuda.is_available() <span class="kw">else</span> <span class="st">"cpu"</span>
+
+x = torch.<span class="fn">tensor</span>([[<span class="nb">1.0</span>, <span class="nb">2.0</span>], [<span class="nb">3.0</span>, <span class="nb">4.0</span>]])
+x = torch.<span class="fn">zeros</span>(<span class="nb">3</span>, <span class="nb">4</span>)
+x = torch.<span class="fn">ones</span>(<span class="nb">3</span>, <span class="nb">4</span>)
+x = torch.<span class="fn">rand</span>(<span class="nb">3</span>, <span class="nb">4</span>)          <span class="cm"># uniform [0,1)</span>
+x = torch.<span class="fn">randn</span>(<span class="nb">3</span>, <span class="nb">4</span>)         <span class="cm"># standard normal</span>
+x = torch.<span class="fn">arange</span>(<span class="nb">0</span>, <span class="nb">10</span>, <span class="nb">2</span>)    <span class="cm"># [0,2,4,6,8]</span>
+
+x = x.<span class="fn">to</span>(device)               <span class="cm"># move to GPU/CPU</span>
+x.<span class="fn">shape</span>, x.<span class="fn">dtype</span>, x.<span class="fn">device</span>
+
+<span class="cm"># Common ops</span>
+x.<span class="fn">reshape</span>(<span class="nb">2</span>, <span class="nb">6</span>)  x.<span class="fn">view</span>(<span class="nb">2</span>, <span class="nb">-1</span>)  x.<span class="fn">squeeze</span>()
+x.<span class="fn">unsqueeze</span>(<span class="nb">0</span>)  x.<span class="fn">permute</span>(<span class="nb">2</span>,<span class="nb">0</span>,<span class="nb">1</span>)  x.<span class="fn">T</span>
+torch.<span class="fn">cat</span>([a, b], dim=<span class="nb">0</span>)      <span class="cm"># concat on dim</span>
+torch.<span class="fn">stack</span>([a, b], dim=<span class="nb">0</span>)    <span class="cm"># new dim</span>
+x.<span class="fn">float</span>()  x.<span class="fn">long</span>()  x.<span class="fn">bool</span>()  <span class="cm"># cast dtype</span>
+x.<span class="fn">numpy</span>()                       <span class="cm"># → numpy (CPU only)</span>
+</pre></div>
+    </div>
+
+    <!-- AUTOGRAD -->
+    <div class="card t2">
+      <div class="card-title">⚡ Autograd — Gradients</div>
+      <div class="card-body"><pre>
+x = torch.<span class="fn">randn</span>(<span class="nb">3</span>, requires_grad=<span class="kw">True</span>)
+y = x ** <span class="nb">2</span> + <span class="nb">2</span> * x
+loss = y.<span class="fn">sum</span>()
+
+loss.<span class="fn">backward</span>()         <span class="cm"># compute gradients</span>
+x.grad                  <span class="cm"># dy/dx</span>
+
+<span class="cm"># Stop tracking (inference / no grad)</span>
+<span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+    pred = model(x)
+
+<span class="cm"># Detach from graph</span>
+val = x.<span class="fn">detach</span>().<span class="fn">numpy</span>()
+
+<span class="cm"># Gradient steps (in training loop)</span>
+optimizer.<span class="fn">zero_grad</span>()  <span class="cm"># 1. clear old grads</span>
+loss.<span class="fn">backward</span>()         <span class="cm"># 2. compute grads</span>
+optimizer.<span class="fn">step</span>()        <span class="cm"># 3. update weights</span>
+</pre></div>
+    </div>
+
+    <!-- nn.Module -->
+    <div class="card t3">
+      <div class="card-title">🧠 Build a Model — nn.Module</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="fn">MyModel</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        <span class="fn">super</span>().__init__()
+        self.net = nn.<span class="fn">Sequential</span>(
+            nn.<span class="fn">Linear</span>(<span class="nb">784</span>, <span class="nb">256</span>),
+            nn.<span class="fn">ReLU</span>(),
+            nn.<span class="fn">Dropout</span>(<span class="nb">0.2</span>),
+            nn.<span class="fn">Linear</span>(<span class="nb">256</span>, <span class="nb">10</span>),
+        )
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        <span class="kw">return</span> self.net(x)
+
+model = <span class="fn">MyModel</span>().<span class="fn">to</span>(device)
+
+<span class="cm"># Common layers</span>
+nn.<span class="fn">Linear</span>(in, out)
+nn.<span class="fn">Conv2d</span>(in_ch, out_ch, kernel_size=<span class="nb">3</span>, padding=<span class="nb">1</span>)
+nn.<span class="fn">BatchNorm2d</span>(num_features)
+nn.<span class="fn">LSTM</span>(input_size, hidden_size, num_layers)
+nn.<span class="fn">Embedding</span>(vocab_size, embed_dim)
+nn.<span class="fn">LayerNorm</span>(normalized_shape)
+</pre></div>
+    </div>
+
+    <!-- LOSS + OPTIMIZER -->
+    <div class="card t4">
+      <div class="card-title">🎯 Loss Functions & Optimizers</div>
+      <div class="card-body"><pre>
+<span class="cm"># Loss functions</span>
+nn.<span class="fn">CrossEntropyLoss</span>()        <span class="cm"># classification</span>
+nn.<span class="fn">BCEWithLogitsLoss</span>()       <span class="cm"># binary classif.</span>
+nn.<span class="fn">MSELoss</span>()                 <span class="cm"># regression</span>
+nn.<span class="fn">NLLLoss</span>()                 <span class="cm"># with log-softmax</span>
+
+<span class="cm"># Optimizers</span>
+<span class="kw">import</span> torch.optim <span class="kw">as</span> optim
+
+opt = optim.<span class="fn">Adam</span>(model.<span class="fn">parameters</span>(),
+                 lr=<span class="nb">1e-3</span>, weight_decay=<span class="nb">1e-4</span>)
+opt = optim.<span class="fn">SGD</span>(model.<span class="fn">parameters</span>(),
+                lr=<span class="nb">0.01</span>, momentum=<span class="nb">0.9</span>)
+opt = optim.<span class="fn">AdamW</span>(model.<span class="fn">parameters</span>(), lr=<span class="nb">3e-4</span>)
+
+<span class="cm"># LR Scheduler</span>
+sched = optim.lr_scheduler.<span class="fn">StepLR</span>(opt, step_size=<span class="nb">10</span>)
+sched = optim.lr_scheduler.<span class="fn">CosineAnnealingLR</span>(opt, T_max=<span class="nb">50</span>)
+sched.<span class="fn">step</span>()  <span class="cm"># call after optimizer.step()</span>
+</pre></div>
+    </div>
+
+    <!-- DATALOADER -->
+    <div class="card t5">
+      <div class="card-title">📦 DataLoader & Dataset</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> Dataset, DataLoader
+
+<span class="kw">class</span> <span class="fn">MyDataset</span>(Dataset):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, X, y):
+        self.X, self.y = X, y
+    <span class="kw">def</span> <span class="fn">__len__</span>(self):
+        <span class="kw">return</span> <span class="fn">len</span>(self.X)
+    <span class="kw">def</span> <span class="fn">__getitem__</span>(self, idx):
+        <span class="kw">return</span> self.X[idx], self.y[idx]
+
+train_loader = <span class="fn">DataLoader</span>(
+    <span class="fn">MyDataset</span>(X_train, y_train),
+    batch_size=<span class="nb">32</span>, shuffle=<span class="kw">True</span>, num_workers=<span class="nb">4</span>
+)
+
+<span class="cm"># Torchvision built-in datasets</span>
+<span class="kw">from</span> torchvision <span class="kw">import</span> datasets, transforms
+ds = datasets.<span class="fn">MNIST</span>(<span class="st">"data"</span>, train=<span class="kw">True</span>, download=<span class="kw">True</span>,
+     transform=transforms.<span class="fn">ToTensor</span>())
+</pre></div>
+    </div>
+
+    <!-- TRAINING LOOP -->
+    <div class="card t6">
+      <div class="card-title">🔁 Training Loop — Full Pattern</div>
+      <div class="card-body"><pre>
+loss_fn = nn.<span class="fn">CrossEntropyLoss</span>()
+optimizer = optim.<span class="fn">Adam</span>(model.<span class="fn">parameters</span>(), lr=<span class="nb">1e-3</span>)
+
+<span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(num_epochs):
+    <span class="cm"># --- TRAIN ---</span>
+    model.<span class="fn">train</span>()
+    <span class="kw">for</span> X, y <span class="kw">in</span> train_loader:
+        X, y = X.<span class="fn">to</span>(device), y.<span class="fn">to</span>(device)
+        pred = model(X)
+        loss = <span class="fn">loss_fn</span>(pred, y)
+        optimizer.<span class="fn">zero_grad</span>()
+        loss.<span class="fn">backward</span>()
+        optimizer.<span class="fn">step</span>()
+
+    <span class="cm"># --- EVAL ---</span>
+    model.<span class="fn">eval</span>()
+    <span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+        <span class="kw">for</span> X, y <span class="kw">in</span> val_loader:
+            X, y = X.<span class="fn">to</span>(device), y.<span class="fn">to</span>(device)
+            pred = model(X)
+            <span class="cm"># compute metrics...</span>
+</pre></div>
+    </div>
+
+    <!-- SAVE / LOAD -->
+    <div class="card t7">
+      <div class="card-title">💾 Save & Load Models</div>
+      <div class="card-body"><pre>
+<span class="cm"># Save weights only (recommended)</span>
+torch.<span class="fn">save</span>(model.<span class="fn">state_dict</span>(), <span class="st">"model.pt"</span>)
+
+<span class="cm"># Load weights</span>
+model.<span class="fn">load_state_dict</span>(torch.<span class="fn">load</span>(<span class="st">"model.pt"</span>,
+                         map_location=device))
+model.<span class="fn">eval</span>()
+
+<span class="cm"># Save full checkpoint (model + optimizer + epoch)</span>
+torch.<span class="fn">save</span>({
+    <span class="st">"epoch"</span>: epoch,
+    <span class="st">"model"</span>: model.<span class="fn">state_dict</span>(),
+    <span class="st">"optimizer"</span>: optimizer.<span class="fn">state_dict</span>(),
+}, <span class="st">"checkpoint.pt"</span>)
+
+<span class="cm"># Resume from checkpoint</span>
+ckpt = torch.<span class="fn">load</span>(<span class="st">"checkpoint.pt"</span>)
+model.<span class="fn">load_state_dict</span>(ckpt[<span class="st">"model"</span>])
+optimizer.<span class="fn">load_state_dict</span>(ckpt[<span class="st">"optimizer"</span>])
+</pre></div>
+    </div>
+
+    <!-- TIPS -->
+    <div class="card t8">
+      <div class="card-title">💡 GPU & Key Tips</div>
+      <div class="card-body"><pre>
+<span class="cm"># Always move model AND data to same device</span>
+model = model.<span class="fn">to</span>(device)
+X, y = X.<span class="fn">to</span>(device), y.<span class="fn">to</span>(device)
+
+<span class="cm"># Mixed precision (2x faster on modern GPUs)</span>
+scaler = torch.cuda.amp.<span class="fn">GradScaler</span>()
+<span class="kw">with</span> torch.cuda.amp.<span class="fn">autocast</span>():
+    loss = <span class="fn">loss_fn</span>(model(X), y)
+scaler.<span class="fn">scale</span>(loss).<span class="fn">backward</span>()
+scaler.<span class="fn">step</span>(optimizer)
+scaler.<span class="fn">update</span>()
+
+<span class="cm"># Inspect model</span>
+<span class="fn">print</span>(model)
+<span class="fn">sum</span>(p.<span class="fn">numel</span>() <span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>())
+
+<span class="cm"># Reproducibility</span>
+torch.<span class="fn">manual_seed</span>(<span class="nb">42</span>)
+</pre>
+<span class="c1">⚠️  model.train() enables Dropout/BN.  model.eval() disables them. Always switch!</span>
+</div>
+    </div>
+
+  </div><!-- end grid -->
+</div><!-- end page -->
+</body>
+</html>

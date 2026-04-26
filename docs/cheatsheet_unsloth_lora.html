@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Unsloth + LoRA/QLoRA Cheatsheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 13px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 960px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.9em; color: #0d9488; border-bottom: 3px solid #0d9488; padding-bottom: 6px; margin-bottom: 16px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.72em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.82em; line-height: 1.55; white-space: pre-wrap; }
+  .kw  { color: #c678dd; font-weight: 600; }
+  .fn  { color: #0891b2; }
+  .st  { color: #16a34a; }
+  .cm  { color: #7f848e; font-style: italic; }
+  .nb  { color: #d97706; }
+  .c1  { background: #f0fdfa; border-left: 3px solid #0d9488; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.79em; margin: 5px 0; display: block; }
+  .c2  { background: #fff7ed; border-left: 3px solid #f97316; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.79em; margin: 5px 0; display: block; }
+  .c3  { background: #fef9c3; border-left: 3px solid #ca8a04; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.79em; margin: 5px 0; display: block; }
+
+  .t1 .card-title { background: #0f766e; }
+  .t2 .card-title { background: #0369a1; }
+  .t3 .card-title { background: #6d28d9; }
+  .t4 .card-title { background: #be185d; }
+  .t5 .card-title { background: #b45309; }
+  .t6 .card-title { background: #15803d; }
+  .t7 .card-title { background: #7c3aed; }
+  .t8 .card-title { background: #374151; }
+  .full { grid-column: 1 / -1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.8em; margin: 6px 0 2px; }
+  td, th { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; }
+  th { background: #f3f4f6; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-family: 'Fira Mono', monospace; color: #0f766e; font-size: 0.9em; font-weight: 600; }
+  td:nth-child(2) { color: #374151; }
+
+  @media print {
+    body { background: white; font-size: 11px; }
+    .page { box-shadow: none; margin: 0; padding: 16px 20px; }
+  }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a></div>
+<div class="page">
+  <h1>🦥 Unsloth + LoRA / QLoRA <span>— End-to-End Fine-Tuning One-Pager</span></h1>
+
+  <div class="grid">
+
+    <!-- WHY / CONCEPTS -->
+    <div class="card t1">
+      <div class="card-title">🧩 LoRA vs QLoRA — What to Pick</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Method</th><th>VRAM</th><th>Speed</th><th>When to use</th></tr>
+          <tr><td>Full FT</td><td>80GB+</td><td>Fastest</td><td>Many GPUs, max quality</td></tr>
+          <tr><td>LoRA</td><td>~20GB</td><td>Fast</td><td>1× A100, good quality</td></tr>
+          <tr><td>QLoRA</td><td>~6GB</td><td>Slower</td><td>Single consumer GPU / Colab</td></tr>
+        </table>
+        <span class="c1">LoRA freezes the base model and adds small rank-decomposed adapter matrices (A×B) to attention layers. Only adapters are trained — &lt;1% of params.</span>
+        <span class="c1">QLoRA = QLoRA quantizes the frozen base to 4-bit NF4, trains LoRA adapters in bf16. 33% less VRAM than LoRA, ~39% slower.</span>
+        <span class="c2">Unsloth: 2× faster training, 60% less VRAM via custom Triton CUDA kernels. Single-GPU only.</span>
+      </div>
+    </div>
+
+    <!-- INSTALL -->
+    <div class="card t2">
+      <div class="card-title">📦 Install</div>
+      <div class="card-body"><pre>
+<span class="cm"># Colab / Linux (CUDA)</span>
+pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+pip install --no-deps "xformers&lt;0.0.27" "trl&lt;0.9.0" peft accelerate bitsandbytes
+
+<span class="cm"># uv (pyproject.toml)</span>
+<span class="cm"># dependencies = [</span>
+<span class="cm">#   "unsloth[colab-new] @ git+https://...",</span>
+<span class="cm">#   "xformers&lt;0.0.27", "trl&lt;0.9.0",</span>
+<span class="cm">#   "peft", "accelerate", "bitsandbytes" ]</span>
+<span class="cm"># then: uv sync</span>
+
+<span class="cm"># Login to HF Hub (for gated models)</span>
+huggingface-cli login
+<span class="cm"># or: from huggingface_hub import notebook_login; notebook_login()</span>
+</pre></div>
+    </div>
+
+    <!-- STEP 1: LOAD MODEL -->
+    <div class="card t3">
+      <div class="card-title">① Load Model (QLoRA = 4-bit)</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> unsloth <span class="kw">import</span> FastLanguageModel
+<span class="kw">import</span> torch
+
+model, tokenizer = FastLanguageModel.<span class="fn">from_pretrained</span>(
+    model_name = <span class="st">"unsloth/Meta-Llama-3.1-8B-bnb-4bit"</span>,
+    max_seq_length = <span class="nb">2048</span>,   <span class="cm"># max tokens per sample</span>
+    load_in_4bit  = <span class="kw">True</span>,    <span class="cm"># QLoRA (False = LoRA 16-bit)</span>
+    dtype         = <span class="kw">None</span>,    <span class="cm"># auto-detect bf16/fp16</span>
+)
+<span class="cm"># Popular 4-bit checkpoints (pre-quantized, fast download):</span>
+<span class="cm"># unsloth/Meta-Llama-3.1-8B-bnb-4bit</span>
+<span class="cm"># unsloth/Qwen2.5-7B-bnb-4bit</span>
+<span class="cm"># unsloth/mistral-7b-v0.3-bnb-4bit</span>
+<span class="cm"># unsloth/gemma-2-9b-bnb-4bit</span>
+</pre></div>
+    </div>
+
+    <!-- STEP 2: LORA CONFIG -->
+    <div class="card t4">
+      <div class="card-title">② Attach LoRA Adapters</div>
+      <div class="card-body"><pre>
+model = FastLanguageModel.<span class="fn">get_peft_model</span>(
+    model,
+    r              = <span class="nb">16</span>,    <span class="cm"># rank: 8/16/32/64. Higher=more params</span>
+    lora_alpha     = <span class="nb">16</span>,    <span class="cm"># scaling: keep = r (or 2×r for aggressive)</span>
+    lora_dropout   = <span class="nb">0</span>,     <span class="cm"># 0 is optimal per Unsloth</span>
+    target_modules = [<span class="st">"q_proj"</span>, <span class="st">"k_proj"</span>, <span class="st">"v_proj"</span>,
+                      <span class="st">"o_proj"</span>, <span class="st">"gate_proj"</span>,
+                      <span class="st">"up_proj"</span>, <span class="st">"down_proj"</span>],
+    use_rslora     = <span class="kw">True</span>,  <span class="cm"># rank-stabilised LoRA (recommended)</span>
+    use_gradient_checkpointing = <span class="st">"unsloth"</span>,  <span class="cm"># saves VRAM</span>
+    bias           = <span class="st">"none"</span>,
+    random_state   = <span class="nb">42</span>,
+)
+<span class="cm"># Result: ~42M trainable / 8B total = 0.52%</span>
+</pre></div>
+    </div>
+
+    <!-- STEP 3: DATASET -->
+    <div class="card t5">
+      <div class="card-title">③ Prepare Dataset (ChatML format)</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+<span class="kw">from</span> unsloth.chat_templates <span class="kw">import</span> get_chat_template
+
+<span class="cm"># Apply chat template to tokenizer</span>
+tokenizer = <span class="fn">get_chat_template</span>(
+    tokenizer,
+    chat_template = <span class="st">"chatml"</span>,  <span class="cm"># or "llama-3", "mistral"</span>
+    mapping = {<span class="st">"role"</span>:<span class="st">"from"</span>, <span class="st">"content"</span>:<span class="st">"value"</span>,
+               <span class="st">"user"</span>:<span class="st">"human"</span>, <span class="st">"assistant"</span>:<span class="st">"gpt"</span>},
+)
+
+<span class="kw">def</span> <span class="fn">apply_template</span>(examples):
+    <span class="kw">return</span> {<span class="st">"text"</span>: [
+        tokenizer.<span class="fn">apply_chat_template</span>(m, tokenize=<span class="kw">False</span>,
+            add_generation_prompt=<span class="kw">False</span>)
+        <span class="kw">for</span> m <span class="kw">in</span> examples[<span class="st">"conversations"</span>]
+    ]}
+
+dataset = <span class="fn">load_dataset</span>(<span class="st">"mlabonne/FineTome-100k"</span>, split=<span class="st">"train"</span>)
+dataset = dataset.<span class="fn">map</span>(apply_template, batched=<span class="kw">True</span>)
+<span class="cm"># Your own data: Dataset.from_dict({"conversations": [...]}) </span>
+</pre></div>
+    </div>
+
+    <!-- STEP 4: TRAIN -->
+    <div class="card t6">
+      <div class="card-title">④ Train with SFTTrainer</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> trl <span class="kw">import</span> SFTTrainer
+<span class="kw">from</span> transformers <span class="kw">import</span> TrainingArguments
+<span class="kw">from</span> unsloth <span class="kw">import</span> is_bfloat16_supported
+
+trainer = <span class="fn">SFTTrainer</span>(
+    model              = model,
+    tokenizer          = tokenizer,
+    train_dataset      = dataset,
+    dataset_text_field = <span class="st">"text"</span>,
+    max_seq_length     = <span class="nb">2048</span>,
+    packing            = <span class="kw">True</span>,   <span class="cm"># pack short samples → faster</span>
+    args = <span class="fn">TrainingArguments</span>(
+        output_dir                  = <span class="st">"output"</span>,
+        num_train_epochs            = <span class="nb">1</span>,
+        per_device_train_batch_size = <span class="nb">8</span>,
+        gradient_accumulation_steps = <span class="nb">2</span>,    <span class="cm"># eff. batch=16</span>
+        learning_rate               = <span class="nb">3e-4</span>,
+        lr_scheduler_type           = <span class="st">"linear"</span>,
+        warmup_steps                = <span class="nb">10</span>,
+        optim                       = <span class="st">"adamw_8bit"</span>,
+        weight_decay                = <span class="nb">0.01</span>,
+        fp16 = <span class="kw">not</span> <span class="fn">is_bfloat16_supported</span>(),
+        bf16 = <span class="fn">is_bfloat16_supported</span>(),
+        logging_steps               = <span class="nb">10</span>,
+        seed                        = <span class="nb">42</span>,
+    ),
+)
+trainer.<span class="fn">train</span>()
+</pre></div>
+    </div>
+
+    <!-- STEP 5: INFERENCE -->
+    <div class="card t7">
+      <div class="card-title">⑤ Inference (after training)</div>
+      <div class="card-body"><pre>
+<span class="cm"># Switch to fast inference mode</span>
+FastLanguageModel.<span class="fn">for_inference</span>(model)
+
+<span class="kw">from</span> transformers <span class="kw">import</span> TextStreamer
+
+messages = [{<span class="st">"from"</span>: <span class="st">"human"</span>,
+             <span class="st">"value"</span>: <span class="st">"Explain transformers in 2 sentences."</span>}]
+
+inputs = tokenizer.<span class="fn">apply_chat_template</span>(
+    messages,
+    tokenize               = <span class="kw">True</span>,
+    add_generation_prompt  = <span class="kw">True</span>,
+    return_tensors         = <span class="st">"pt"</span>,
+).<span class="fn">to</span>(<span class="st">"cuda"</span>)
+
+streamer = <span class="fn">TextStreamer</span>(tokenizer)
+_ = model.<span class="fn">generate</span>(
+    input_ids        = inputs,
+    streamer         = streamer,
+    max_new_tokens   = <span class="nb">256</span>,
+    use_cache        = <span class="kw">True</span>,
+    temperature      = <span class="nb">0.7</span>,
+    do_sample        = <span class="kw">True</span>,
+)
+</pre></div>
+    </div>
+
+    <!-- STEP 6: SAVE -->
+    <div class="card t8">
+      <div class="card-title">⑥ Save — 3 Options</div>
+      <div class="card-body"><pre>
+<span class="cm"># Option A: LoRA adapters only (smallest, ~100MB)</span>
+model.<span class="fn">save_pretrained</span>(<span class="st">"lora_model"</span>)
+tokenizer.<span class="fn">save_pretrained</span>(<span class="st">"lora_model"</span>)
+
+<span class="cm"># Option B: Merged 16-bit (best quality, ~16GB)</span>
+model.<span class="fn">save_pretrained_merged</span>(<span class="st">"merged_model"</span>, tokenizer,
+    save_method = <span class="st">"merged_16bit"</span>)
+<span class="cm"># Push to HF Hub</span>
+model.<span class="fn">push_to_hub_merged</span>(<span class="st">"username/MyModel"</span>, tokenizer,
+    save_method = <span class="st">"merged_16bit"</span>)
+
+<span class="cm"># Option C: GGUF (for Ollama / LM Studio / llama.cpp)</span>
+quants = [<span class="st">"q4_k_m"</span>, <span class="st">"q8_0"</span>, <span class="st">"q5_k_m"</span>]
+<span class="kw">for</span> q <span class="kw">in</span> quants:
+    model.<span class="fn">push_to_hub_gguf</span>(<span class="st">"username/MyModel-GGUF"</span>,
+                            tokenizer, q)
+
+<span class="cm"># Run locally with Ollama after GGUF export:</span>
+<span class="cm"># ollama run hf.co/username/MyModel-GGUF</span>
+</pre>
+<span class="c3">⚠️  Always save tokenizer alongside model. Merged model = no adapter needed at inference.</span>
+</div>
+    </div>
+
+  </div><!-- grid -->
+
+  <!-- FULL WORKFLOW SUMMARY -->
+  <div style="margin-top:14px; background:#f0fdfa; border:1px solid #0d9488; border-radius:8px; padding:12px 16px;">
+    <strong style="color:#0f766e; font-size:0.85em; text-transform:uppercase; letter-spacing:0.06em;">⚡ Full Workflow in One Glance</strong>
+    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:0.85em;">
+      <span style="background:#0f766e;color:white;padding:4px 10px;border-radius:20px;">① from_pretrained (4-bit)</span>
+      <span style="color:#999;">→</span>
+      <span style="background:#0369a1;color:white;padding:4px 10px;border-radius:20px;">② get_peft_model (LoRA)</span>
+      <span style="color:#999;">→</span>
+      <span style="background:#b45309;color:white;padding:4px 10px;border-radius:20px;">③ load + map dataset</span>
+      <span style="color:#999;">→</span>
+      <span style="background:#15803d;color:white;padding:4px 10px;border-radius:20px;">④ SFTTrainer.train()</span>
+      <span style="color:#999;">→</span>
+      <span style="background:#7c3aed;color:white;padding:4px 10px;border-radius:20px;">⑤ for_inference + generate</span>
+      <span style="color:#999;">→</span>
+      <span style="background:#374151;color:white;padding:4px 10px;border-radius:20px;">⑥ save / push to Hub</span>
+    </div>
+    <div style="margin-top:10px; font-size:0.8em; color:#374151;">
+      <strong>GPU time (100k samples, 1 epoch):</strong> A100 40GB ≈ 4h45m &nbsp;|&nbsp; L4 ≈ 19h &nbsp;|&nbsp; T4 (free Colab) ≈ 47h
+      &nbsp;&nbsp;<strong>|</strong>&nbsp;&nbsp;
+      <strong>Trainable params:</strong> r=16 → ~42M / 8B = 0.52%
+      &nbsp;&nbsp;<strong>|</strong>&nbsp;&nbsp;
+      <strong>VRAM:</strong> QLoRA 8B ≈ 5.5GB &nbsp;|&nbsp; LoRA 8B ≈ 14GB
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

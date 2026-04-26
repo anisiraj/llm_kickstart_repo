@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LLM Fine-Tuning Handbook</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Mono:wght@400;500&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 13px; background: #0f172a; color: #e2e8f0; }
+
+  /* NAV */
+  nav { position: fixed; top: 0; left: 0; width: 200px; height: 100vh; background: #1e293b; padding: 20px 0; overflow-y: auto; z-index: 100; border-right: 1px solid #334155; }
+  nav .logo { font-size: 0.85em; font-weight: 800; color: #f8fafc; padding: 0 16px 16px; border-bottom: 1px solid #334155; line-height: 1.3; }
+  nav .logo span { color: #38bdf8; }
+  nav ul { list-style: none; margin-top: 12px; }
+  nav ul li a { display: block; padding: 7px 16px; color: #94a3b8; text-decoration: none; font-size: 0.8em; font-weight: 500; border-left: 3px solid transparent; transition: all 0.15s; }
+  nav ul li a:hover { color: #f8fafc; background: #334155; border-left-color: #38bdf8; }
+  nav ul li.section { padding: 12px 16px 4px; font-size: 0.65em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #475569; }
+
+  /* MAIN */
+  main { margin-left: 200px; padding: 0; }
+
+  /* HERO */
+  .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0c1a32 100%); padding: 60px 48px 48px; border-bottom: 1px solid #334155; }
+  .hero h1 { font-size: 2.4em; font-weight: 800; color: #f8fafc; line-height: 1.2; }
+  .hero h1 span { color: #38bdf8; }
+  .hero p { color: #94a3b8; margin-top: 12px; max-width: 620px; line-height: 1.7; font-size: 0.95em; }
+  .flow-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 24px; }
+  .flow-bar .step { background: #1e40af; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.75em; font-weight: 600; }
+  .flow-bar .arr { color: #475569; font-size: 1.1em; }
+
+  /* SECTIONS */
+  .chapter { padding: 40px 48px; border-bottom: 1px solid #1e293b; }
+  .chapter:nth-child(even) { background: #0f172a; }
+  .chapter:nth-child(odd) { background: #0d1117; }
+  .chapter-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .chapter-num { background: #1e40af; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85em; flex-shrink: 0; }
+  .chapter-title { font-size: 1.5em; font-weight: 700; color: #f8fafc; }
+  .chapter-subtitle { font-size: 0.8em; color: #64748b; margin-top: 2px; }
+
+  /* GRID */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .full { grid-column: 1 / -1; }
+
+  /* CARDS */
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: hidden; }
+  .card-title { font-size: 0.7em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
+  .card-body { padding: 10px 12px; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.81em; line-height: 1.6; white-space: pre-wrap; color: #e2e8f0; }
+
+  /* SYNTAX */
+  .kw  { color: #c084fc; font-weight: 600; }
+  .fn  { color: #60a5fa; }
+  .st  { color: #4ade80; }
+  .cm  { color: #475569; font-style: italic; }
+  .nb  { color: #fb923c; }
+
+  /* CALLOUTS */
+  .tip  { background: #0c2340; border-left: 3px solid #38bdf8; padding: 8px 12px; border-radius: 0 6px 6px 0; font-size: 0.8em; margin: 8px 0; color: #bae6fd; }
+  .warn { background: #2d1515; border-left: 3px solid #ef4444; padding: 8px 12px; border-radius: 0 6px 6px 0; font-size: 0.8em; margin: 8px 0; color: #fca5a5; }
+  .good { background: #0c2a1a; border-left: 3px solid #22c55e; padding: 8px 12px; border-radius: 0 6px 6px 0; font-size: 0.8em; margin: 8px 0; color: #86efac; }
+
+  /* COLORS per chapter */
+  .c-pytorch .card-title  { background: #7c2d12; color: #fed7aa; }
+  .c-datasets .card-title { background: #78350f; color: #fde68a; }
+  .c-transformers .card-title { background: #3b0764; color: #e9d5ff; }
+  .c-lora .card-title     { background: #042f2e; color: #99f6e4; }
+  .c-aws .card-title      { background: #1c1917; color: #d6d3d1; }
+  .c-bedrock .card-title  { background: #170a0a; color: #fca5a5; }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; font-size: 0.8em; margin: 8px 0; }
+  td, th { padding: 6px 10px; border-bottom: 1px solid #334155; text-align: left; }
+  th { color: #94a3b8; font-weight: 600; font-size: 0.9em; }
+  td:first-child { font-family: 'Fira Mono', monospace; color: #60a5fa; }
+  tr:last-child td { border-bottom: none; }
+
+  /* PIPELINE TABLE */
+  .pipe-table td { color: #e2e8f0; }
+  .pipe-table td:first-child { color: #4ade80; }
+
+  /* DECISION BOX */
+  .decision { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px 20px; margin-top: 14px; }
+  .decision h3 { font-size: 0.85em; font-weight: 700; color: #f8fafc; margin-bottom: 10px; }
+  .decision-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 0.8em; }
+  .decision-col h4 { margin-bottom: 6px; }
+  .decision-col ul { padding-left: 14px; color: #94a3b8; line-height: 1.8; }
+
+  @media print {
+    nav { display: none; }
+    main { margin-left: 0; }
+    .hero { padding: 30px 24px 20px; }
+    .chapter { padding: 24px; page-break-inside: avoid; }
+    body { background: white; color: #111; }
+    .card { background: #f9f9f9; border-color: #ddd; }
+    pre { color: #111; }
+    .kw { color: #7c3aed; } .fn { color: #1d4ed8; } .st { color: #15803d; }
+    .cm { color: #6b7280; } .nb { color: #d97706; }
+    .tip { background: #f0f9ff; color: #0369a1; border-color: #0369a1; }
+    .warn { background: #fef2f2; color: #991b1b; border-color: #ef4444; }
+    .good { background: #f0fdf4; color: #166534; border-color: #22c55e; }
+    .chapter-title { color: #111; }
+    .chapter:nth-child(even), .chapter:nth-child(odd) { background: white; }
+    .hero h1 { color: #111; } .hero h1 span { color: #1d4ed8; }
+    .hero p { color: #374151; }
+    nav + main { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" style="display:block;font-size:.72em;color:#38bdf8;text-decoration:none;padding:8px 12px;margin:-8px -12px 10px;border-bottom:1px solid #1e293b;background:rgba(56,189,248,.06);">← Back to Index</a>
+  <div class="logo">🤖 LLM Fine-Tuning<br><span>Handbook</span></div>
+  <ul>
+    <li class="section">Foundation</li>
+    <li><a href="#pytorch">① PyTorch Core</a></li>
+    <li><a href="#datasets">② HF Datasets</a></li>
+    <li><a href="#transformers">③ HF Transformers</a></li>
+    <li class="section">Fine-Tuning</li>
+    <li><a href="#lora">④ LoRA / QLoRA</a></li>
+    <li><a href="#unsloth">⑤ Unsloth SFT</a></li>
+    <li><a href="#causal">⑥ Causal LM & Pretraining</a></li>
+    <li><a href="#methods">⑦ FT Methods Compared</a></li>
+    <li class="section">Cloud</li>
+    <li><a href="#sagemaker">⑧ SageMaker</a></li>
+    <li><a href="#bedrock">⑨ Bedrock</a></li>
+    <li class="section">Reference</li>
+    <li><a href="#workflow">Full Workflow</a></li>
+    <li><a href="#decision">Decision Guide</a></li>
+    <li><a href="#scripts">Working Scripts</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>LLM Fine-Tuning<br><span>End-to-End Handbook</span></h1>
+  <p>Everything you need — from raw tensors to a deployed fine-tuned model in the cloud. No fluff, no missing steps. Each section is self-sufficient and flows into the next.</p>
+  <div class="flow-bar">
+    <span class="step">PyTorch</span><span class="arr">→</span>
+    <span class="step">HF Datasets</span><span class="arr">→</span>
+    <span class="step">Transformers</span><span class="arr">→</span>
+    <span class="step">LoRA / QLoRA</span><span class="arr">→</span>
+    <span class="step">Unsloth SFT</span><span class="arr">→</span>
+    <span class="step">Causal LM / Pretrain</span><span class="arr">→</span>
+    <span class="step">FT Methods</span><span class="arr">→</span>
+    <span class="step">SageMaker</span><span class="arr">→</span>
+    <span class="step">Bedrock</span>
+  </div>
+</div>
+
+<!-- ══════════════════ CHAPTER 1: PYTORCH ══════════════════ -->
+<div class="chapter c-pytorch" id="pytorch">
+  <div class="chapter-header">
+    <div class="chapter-num">1</div>
+    <div><div class="chapter-title">PyTorch Core</div><div class="chapter-subtitle">Tensors · Autograd · Models · Training loop</div></div>
+  </div>
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title">🔷 Tensors & Device</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> torch
+
+device = <span class="st">"cuda"</span> <span class="kw">if</span> torch.cuda.<span class="fn">is_available</span>() <span class="kw">else</span> <span class="st">"cpu"</span>
+
+x = torch.<span class="fn">tensor</span>([[<span class="nb">1.0</span>, <span class="nb">2.0</span>]])
+x = torch.<span class="fn">randn</span>(<span class="nb">3</span>, <span class="nb">4</span>)            <span class="cm"># normal dist</span>
+x = x.<span class="fn">to</span>(device)                  <span class="cm"># move to GPU</span>
+x.<span class="fn">reshape</span>(<span class="nb">2</span>, <span class="nb">-1</span>)  x.<span class="fn">squeeze</span>()  x.<span class="fn">T</span>
+torch.<span class="fn">cat</span>([a, b], dim=<span class="nb">0</span>)          <span class="cm"># concat</span>
+x.<span class="fn">float</span>()  x.<span class="fn">long</span>()  x.<span class="fn">numpy</span>()
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚡ Autograd</div>
+      <div class="card-body"><pre>
+x = torch.<span class="fn">randn</span>(<span class="nb">3</span>, requires_grad=<span class="kw">True</span>)
+loss = (x ** <span class="nb">2</span>).<span class="fn">sum</span>()
+loss.<span class="fn">backward</span>()    <span class="cm"># compute grads</span>
+x.grad             <span class="cm"># dy/dx</span>
+
+<span class="cm"># Disable for inference</span>
+<span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+    pred = <span class="fn">model</span>(x)
+
+optimizer.<span class="fn">zero_grad</span>()   <span class="cm"># 1. clear</span>
+loss.<span class="fn">backward</span>()          <span class="cm"># 2. grads</span>
+optimizer.<span class="fn">step</span>()         <span class="cm"># 3. update</span>
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🧠 nn.Module & Layers</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="fn">Net</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        <span class="fn">super</span>().__init__()
+        self.net = nn.<span class="fn">Sequential</span>(
+            nn.<span class="fn">Linear</span>(<span class="nb">784</span>, <span class="nb">256</span>), nn.<span class="fn">ReLU</span>(),
+            nn.<span class="fn">Dropout</span>(<span class="nb">0.2</span>),
+            nn.<span class="fn">Linear</span>(<span class="nb">256</span>, <span class="nb">10</span>))
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        <span class="kw">return</span> self.net(x)
+
+model = <span class="fn">Net</span>().<span class="fn">to</span>(device)
+<span class="cm"># Also: Conv2d, LSTM, Embedding, LayerNorm</span>
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔁 Training Loop + Save</div>
+      <div class="card-body"><pre>
+loss_fn = nn.<span class="fn">CrossEntropyLoss</span>()
+opt = torch.optim.<span class="fn">AdamW</span>(model.<span class="fn">parameters</span>(), lr=<span class="nb">1e-3</span>)
+
+<span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(epochs):
+    model.<span class="fn">train</span>()
+    <span class="kw">for</span> X, y <span class="kw">in</span> train_loader:
+        X, y = X.<span class="fn">to</span>(device), y.<span class="fn">to</span>(device)
+        loss = <span class="fn">loss_fn</span>(model(X), y)
+        opt.<span class="fn">zero_grad</span>(); loss.<span class="fn">backward</span>(); opt.<span class="fn">step</span>()
+    model.<span class="fn">eval</span>()
+    <span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+        <span class="kw">pass</span>  <span class="cm"># validate here</span>
+
+torch.<span class="fn">save</span>(model.<span class="fn">state_dict</span>(), <span class="st">"model.pt"</span>)
+model.<span class="fn">load_state_dict</span>(torch.<span class="fn">load</span>(<span class="st">"model.pt"</span>))
+</pre></div>
+    </div>
+
+  </div>
+  <div class="warn" style="margin-top:12px;">⚠️  Always call model.train() before training and model.eval() before validation — Dropout and BatchNorm behave differently in each mode.</div>
+</div>
+
+<!-- ══════════════════ CHAPTER 2: DATASETS ══════════════════ -->
+<div class="chapter c-datasets" id="datasets">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#92400e;">2</div>
+    <div><div class="chapter-title">HF Datasets</div><div class="chapter-subtitle">Load · Inspect · Map · Filter · Format for training</div></div>
+  </div>
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title">📥 Load</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset, Dataset
+
+ds = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>)
+ds = <span class="fn">load_dataset</span>(<span class="st">"nyu-mll/glue"</span>, <span class="st">"mrpc"</span>, split=<span class="st">"train"</span>)
+ds = <span class="fn">load_dataset</span>(<span class="st">"json"</span>,  data_files=<span class="st">"data.jsonl"</span>)
+ds = <span class="fn">load_dataset</span>(<span class="st">"csv"</span>,   data_files=<span class="st">"data.csv"</span>)
+ds = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>, streaming=<span class="kw">True</span>)  <span class="cm"># no download</span>
+ds = Dataset.<span class="fn">from_dict</span>({
+    <span class="st">"text"</span>: [<span class="st">"hi"</span>, <span class="st">"bye"</span>], <span class="st">"label"</span>: [<span class="nb">0</span>, <span class="nb">1</span>]})
+ds = Dataset.<span class="fn">from_pandas</span>(df)
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🗺️ map() — Core Transform</div>
+      <div class="card-body"><pre>
+<span class="kw">def</span> <span class="fn">tokenize</span>(examples):
+    <span class="kw">return</span> <span class="fn">tokenizer</span>(examples[<span class="st">"text"</span>],
+        truncation=<span class="kw">True</span>, max_length=<span class="nb">128</span>)
+
+<span class="cm"># batched=True = 10-100x faster</span>
+ds = ds.<span class="fn">map</span>(tokenize, batched=<span class="kw">True</span>,
+             remove_columns=[<span class="st">"text"</span>])
+
+<span class="cm"># Filter, select, split</span>
+ds = ds.<span class="fn">filter</span>(<span class="kw">lambda</span> x: x[<span class="st">"label"</span>] == <span class="nb">1</span>)
+ds = ds.<span class="fn">select</span>(<span class="fn">range</span>(<span class="nb">1000</span>))
+ds = ds.<span class="fn">shuffle</span>(seed=<span class="nb">42</span>)
+split = ds.<span class="fn">train_test_split</span>(test_size=<span class="nb">0.2</span>)
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔄 Format for PyTorch</div>
+      <div class="card-body"><pre>
+<span class="cm"># Set format after all transforms</span>
+ds.<span class="fn">set_format</span>(<span class="st">"torch"</span>,
+    columns=[<span class="st">"input_ids"</span>, <span class="st">"attention_mask"</span>, <span class="st">"labels"</span>])
+
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> DataLoader
+loader = <span class="fn">DataLoader</span>(ds, batch_size=<span class="nb">32</span>, shuffle=<span class="kw">True</span>)
+
+<span class="cm"># Column ops</span>
+ds = ds.<span class="fn">rename_column</span>(<span class="st">"label"</span>, <span class="st">"labels"</span>)
+ds = ds.<span class="fn">remove_columns</span>([<span class="st">"idx"</span>])
+ds = ds.<span class="fn">select_columns</span>([<span class="st">"input_ids"</span>, <span class="st">"labels"</span>])
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💾 Save & Push</div>
+      <div class="card-body"><pre>
+ds.<span class="fn">save_to_disk</span>(<span class="st">"my_dataset"</span>)      <span class="cm"># fast Arrow format</span>
+ds = datasets.<span class="fn">load_from_disk</span>(<span class="st">"my_dataset"</span>)
+ds.<span class="fn">to_json</span>(<span class="st">"out.jsonl"</span>)
+ds.<span class="fn">to_csv</span>(<span class="st">"out.csv"</span>)
+ds.<span class="fn">push_to_hub</span>(<span class="st">"username/my-dataset"</span>)
+
+<span class="cm"># Speed tip: multiprocessing</span>
+ds = ds.<span class="fn">map</span>(fn, batched=<span class="kw">True</span>, num_proc=<span class="nb">4</span>)
+</pre></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════ CHAPTER 3: TRANSFORMERS ══════════════════ -->
+<div class="chapter c-transformers" id="transformers">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#6d28d9;">3</div>
+    <div><div class="chapter-title">HF Transformers</div><div class="chapter-subtitle">Pipeline · Tokenizer · AutoModel · Trainer · Push to Hub</div></div>
+  </div>
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title">🚀 Pipeline — Instant Inference</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> pipeline
+
+clf  = <span class="fn">pipeline</span>(<span class="st">"text-classification"</span>)
+gen  = <span class="fn">pipeline</span>(<span class="st">"text-generation"</span>,
+               model=<span class="st">"meta-llama/Llama-3.1-8B-Instruct"</span>,
+               device_map=<span class="st">"auto"</span>)
+asr  = <span class="fn">pipeline</span>(<span class="st">"automatic-speech-recognition"</span>,
+               model=<span class="st">"openai/whisper-large-v3"</span>)
+summ = <span class="fn">pipeline</span>(<span class="st">"summarization"</span>)
+ner  = <span class="fn">pipeline</span>(<span class="st">"token-classification"</span>)
+qa   = <span class="fn">pipeline</span>(<span class="st">"question-answering"</span>)
+
+<span class="fn">gen</span>(<span class="st">"Once upon a time"</span>, max_new_tokens=<span class="nb">50</span>)
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">✏️ Tokenizer + AutoModel</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer, AutoModelForCausalLM
+
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"bert-base-uncased"</span>)
+model = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(
+    <span class="st">"meta-llama/Llama-3.1-8B-Instruct"</span>,
+    device_map=<span class="st">"auto"</span>, torch_dtype=<span class="st">"auto"</span>)
+
+enc = <span class="fn">tok</span>(<span class="st">"Hello"</span>, return_tensors=<span class="st">"pt"</span>,
+          truncation=<span class="kw">True</span>, max_length=<span class="nb">128</span>).<span class="fn">to</span>(model.device)
+ids = model.<span class="fn">generate</span>(**enc, max_new_tokens=<span class="nb">100</span>,
+                       temperature=<span class="nb">0.7</span>, do_sample=<span class="kw">True</span>)
+<span class="fn">tok</span>.<span class="fn">decode</span>(ids[<span class="nb">0</span>], skip_special_tokens=<span class="kw">True</span>)
+</pre></div>
+    </div>
+
+    <div class="card full">
+      <div class="card-title">🏋️ Trainer — Full Fine-Tuning Loop</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoModelForSequenceClassification, AutoTokenizer, TrainingArguments, Trainer, DataCollatorWithPadding
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+model = AutoModelForSequenceClassification.<span class="fn">from_pretrained</span>(<span class="st">"distilbert-base-uncased"</span>, num_labels=<span class="nb">2</span>)
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"distilbert-base-uncased"</span>)
+ds    = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>).<span class="fn">map</span>(<span class="kw">lambda</span> x: <span class="fn">tok</span>(x[<span class="st">"text"</span>], truncation=<span class="kw">True</span>), batched=<span class="kw">True</span>)
+
+args = <span class="fn">TrainingArguments</span>(output_dir=<span class="st">"./out"</span>, num_train_epochs=<span class="nb">3</span>, per_device_train_batch_size=<span class="nb">16</span>,
+    learning_rate=<span class="nb">2e-5</span>, eval_strategy=<span class="st">"epoch"</span>, save_strategy=<span class="st">"epoch"</span>,
+    load_best_model_at_end=<span class="kw">True</span>, fp16=<span class="kw">True</span>, weight_decay=<span class="nb">0.01</span>)
+
+trainer = <span class="fn">Trainer</span>(model=model, args=args, train_dataset=ds[<span class="st">"train"</span>], eval_dataset=ds[<span class="st">"test"</span>],
+    processing_class=tok, data_collator=<span class="fn">DataCollatorWithPadding</span>(tok))
+trainer.<span class="fn">train</span>()
+trainer.<span class="fn">push_to_hub</span>(<span class="st">"username/my-model"</span>)   <span class="cm"># save + push</span>
+</pre></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════ CHAPTER 4: LoRA / QLoRA ══════════════════ -->
+<div class="chapter c-lora" id="lora">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0f766e;">4</div>
+    <div><div class="chapter-title">LoRA &amp; QLoRA Concepts</div><div class="chapter-subtitle">Parameter-efficient fine-tuning — the theory you need</div></div>
+  </div>
+  <div class="grid3">
+
+    <div class="card">
+      <div class="card-title">🧩 What is LoRA?</div>
+      <div class="card-body" style="font-size:0.82em; color:#cbd5e1; line-height:1.7;">
+        Freeze the base model. Inject small <strong style="color:#4ade80;">rank-r matrices</strong> (A and B) into attention layers.<br><br>
+        Original weight W stays frozen.<br>
+        Update: <code style="color:#60a5fa; font-family:'Fira Mono';">ΔW = A × B</code> (r ≪ d)<br><br>
+        <strong style="color:#f8fafc;">Only A and B are trained</strong> → &lt;1% of total params.<br><br>
+        <strong style="color:#fb923c;">r (rank)</strong> = adapter size. Higher r = more expressiveness, more VRAM.<br>
+        <strong style="color:#fb923c;">lora_alpha</strong> = scaling factor. Keep = r for simplicity.
+        <div class="tip">rsLoRA (use_rslora=True) scales alpha by √r instead of r — better gradient flow at high ranks.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔢 QLoRA = LoRA + 4-bit</div>
+      <div class="card-body" style="font-size:0.82em; color:#cbd5e1; line-height:1.7;">
+        Base model quantized to <strong style="color:#4ade80;">4-bit NF4</strong> (NormalFloat4).<br>
+        LoRA adapters trained in <strong style="color:#4ade80;">bf16</strong>.<br><br>
+        <strong style="color:#f8fafc;">Result:</strong><br>
+        • 8B model: ~16GB → ~5.4GB<br>
+        • Enables fine-tuning on single consumer GPU<br><br>
+        <strong style="color:#fb923c;">Trade-off:</strong> ~39% slower than full LoRA.<br><br>
+        <strong style="color:#f8fafc;">When done, merge adapters back</strong> into base for inference — no overhead at runtime.
+        <div class="warn">4-bit training = QLoRA. load_in_4bit=True in from_pretrained.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 Pick Your Config</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Param</th><th>Value</th><th>Effect</th></tr>
+          <tr><td>r</td><td>8–16</td><td>Standard, balanced</td></tr>
+          <tr><td>r</td><td>32–64</td><td>More expressive, more VRAM</td></tr>
+          <tr><td>lora_alpha</td><td>= r</td><td>Neutral scaling</td></tr>
+          <tr><td>lora_alpha</td><td>2× r</td><td>Stronger updates</td></tr>
+          <tr><td>dropout</td><td>0</td><td>Recommended by Unsloth</td></tr>
+          <tr><td>target_modules</td><td>all projections</td><td>Best quality</td></tr>
+        </table>
+        <div class="good">Target all: q_proj k_proj v_proj o_proj gate_proj up_proj down_proj</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════ CHAPTER 5: UNSLOTH ══════════════════ -->
+<div class="chapter c-lora" id="unsloth">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0d9488;">5</div>
+    <div><div class="chapter-title">Unsloth — Fast SFT Fine-Tuning</div><div class="chapter-subtitle">2× faster · 60% less VRAM · Full end-to-end workflow</div></div>
+  </div>
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title">① Load + ② Attach LoRA</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> unsloth <span class="kw">import</span> FastLanguageModel
+
+model, tokenizer = FastLanguageModel.<span class="fn">from_pretrained</span>(
+    model_name    = <span class="st">"unsloth/Meta-Llama-3.1-8B-bnb-4bit"</span>,
+    max_seq_length= <span class="nb">2048</span>,
+    load_in_4bit  = <span class="kw">True</span>,   <span class="cm"># False → 16-bit LoRA</span>
+    dtype         = <span class="kw">None</span>)
+
+model = FastLanguageModel.<span class="fn">get_peft_model</span>(model,
+    r=<span class="nb">16</span>, lora_alpha=<span class="nb">16</span>, lora_dropout=<span class="nb">0</span>,
+    target_modules=[<span class="st">"q_proj"</span>,<span class="st">"k_proj"</span>,<span class="st">"v_proj"</span>,<span class="st">"o_proj"</span>,
+                    <span class="st">"gate_proj"</span>,<span class="st">"up_proj"</span>,<span class="st">"down_proj"</span>],
+    use_rslora=<span class="kw">True</span>,
+    use_gradient_checkpointing=<span class="st">"unsloth"</span>)
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">③ Dataset + ④ Train</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> unsloth.chat_templates <span class="kw">import</span> get_chat_template
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+<span class="kw">from</span> trl <span class="kw">import</span> SFTTrainer
+<span class="kw">from</span> transformers <span class="kw">import</span> TrainingArguments
+<span class="kw">from</span> unsloth <span class="kw">import</span> is_bfloat16_supported
+
+tokenizer = <span class="fn">get_chat_template</span>(tokenizer, chat_template=<span class="st">"chatml"</span>)
+ds = <span class="fn">load_dataset</span>(<span class="st">"mlabonne/FineTome-100k"</span>, split=<span class="st">"train"</span>)
+ds = ds.<span class="fn">map</span>(<span class="kw">lambda</span> x: {<span class="st">"text"</span>: [
+    tokenizer.<span class="fn">apply_chat_template</span>(m, tokenize=<span class="kw">False</span>)
+    <span class="kw">for</span> m <span class="kw">in</span> x[<span class="st">"conversations"</span>]]}, batched=<span class="kw">True</span>)
+
+trainer = <span class="fn">SFTTrainer</span>(model=model, tokenizer=tokenizer,
+    train_dataset=ds, dataset_text_field=<span class="st">"text"</span>,
+    max_seq_length=<span class="nb">2048</span>, packing=<span class="kw">True</span>,
+    args=<span class="fn">TrainingArguments</span>(output_dir=<span class="st">"output"</span>,
+        num_train_epochs=<span class="nb">1</span>, per_device_train_batch_size=<span class="nb">8</span>,
+        gradient_accumulation_steps=<span class="nb">2</span>, learning_rate=<span class="nb">3e-4</span>,
+        lr_scheduler_type=<span class="st">"linear"</span>, warmup_steps=<span class="nb">10</span>,
+        optim=<span class="st">"adamw_8bit"</span>, weight_decay=<span class="nb">0.01</span>,
+        fp16=<span class="kw">not</span> <span class="fn">is_bfloat16_supported</span>(),
+        bf16=<span class="fn">is_bfloat16_supported</span>(), seed=<span class="nb">42</span>))
+trainer.<span class="fn">train</span>()
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⑤ Inference</div>
+      <div class="card-body"><pre>
+FastLanguageModel.<span class="fn">for_inference</span>(model)
+<span class="kw">from</span> transformers <span class="kw">import</span> TextStreamer
+
+inputs = tokenizer.<span class="fn">apply_chat_template</span>(
+    [{<span class="st">"from"</span>:<span class="st">"human"</span>,<span class="st">"value"</span>:<span class="st">"Explain LoRA simply."</span>}],
+    tokenize=<span class="kw">True</span>, add_generation_prompt=<span class="kw">True</span>,
+    return_tensors=<span class="st">"pt"</span>).<span class="fn">to</span>(<span class="st">"cuda"</span>)
+
+model.<span class="fn">generate</span>(input_ids=inputs,
+    streamer=<span class="fn">TextStreamer</span>(tokenizer),
+    max_new_tokens=<span class="nb">256</span>, temperature=<span class="nb">0.7</span>,
+    do_sample=<span class="kw">True</span>, use_cache=<span class="kw">True</span>)
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⑥ Save — 3 Ways</div>
+      <div class="card-body"><pre>
+<span class="cm"># A — adapters only (~100MB)</span>
+model.<span class="fn">save_pretrained</span>(<span class="st">"lora_adapters"</span>)
+tokenizer.<span class="fn">save_pretrained</span>(<span class="st">"lora_adapters"</span>)
+
+<span class="cm"># B — merged 16-bit (~16GB, best for deploy)</span>
+model.<span class="fn">save_pretrained_merged</span>(<span class="st">"merged"</span>, tokenizer,
+    save_method=<span class="st">"merged_16bit"</span>)
+model.<span class="fn">push_to_hub_merged</span>(<span class="st">"user/MyModel"</span>,
+    tokenizer, save_method=<span class="st">"merged_16bit"</span>)
+
+<span class="cm"># C — GGUF for Ollama / llama.cpp</span>
+<span class="kw">for</span> q <span class="kw">in</span> [<span class="st">"q4_k_m"</span>,<span class="st">"q8_0"</span>]:
+    model.<span class="fn">push_to_hub_gguf</span>(<span class="st">"user/MyModel-GGUF"</span>, tokenizer, q)
+<span class="cm"># ollama run hf.co/user/MyModel-GGUF</span>
+</pre></div>
+    </div>
+
+  </div>
+  <div class="tip" style="margin-top:12px;">⚡ GPU times (100k samples, 1 epoch): A100 40GB ≈ 4h45m &nbsp;|&nbsp; L4 ≈ 19h &nbsp;|&nbsp; Free T4 ≈ 47h &nbsp;|&nbsp; VRAM: QLoRA 8B ≈ 5.5GB</div>
+</div>
+
+<!-- ══════════════════ CHAPTER 6: CAUSAL LM & PRETRAINING ══════════════════ -->
+<div class="chapter c-lora" id="causal">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0369a1;">6</div>
+    <div><div class="chapter-title">Causal LM Fine-Tuning &amp; Continued Pretraining</div><div class="chapter-subtitle">Raw text training · next-token prediction · domain adaptation</div></div>
+  </div>
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title">📖 Causal LM Fine-Tuning — What &amp; When</div>
+      <div class="card-body" style="font-size:0.82em; color:#cbd5e1; line-height:1.8;">
+        <strong style="color:#60a5fa;">SFT (instruction)</strong> = model learns Q→A pairs with chat template.<br>
+        <strong style="color:#4ade80;">Causal LM FT</strong> = model learns to continue raw text — next-token prediction on your corpus.<br><br>
+        <strong style="color:#f8fafc;">Use causal LM fine-tuning when:</strong>
+        <ul style="padding-left:16px; margin-top:4px; color:#94a3b8;">
+          <li>You want domain-style text generation (legal, medical, code)</li>
+          <li>Your data is raw documents, <em>not</em> instruction pairs</li>
+          <li>You're doing <strong style="color:#4ade80;">continued pretraining</strong> on a new corpus</li>
+          <li>Building a base model before instruction tuning</li>
+        </ul>
+        <div class="tip" style="margin-top:8px;">Key: <strong>labels = input_ids</strong> — the model predicts every next token. Loss is computed on all tokens (unlike SFT where you can mask the prompt).</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔁 Causal LM Fine-Tune — Full Example</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> (AutoModelForCausalLM, AutoTokenizer,
+    Trainer, TrainingArguments, DataCollatorForLanguageModeling)
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+model_name = <span class="st">"meta-llama/Llama-3.1-8B"</span>   <span class="cm"># base, not instruct</span>
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(model_name)
+tok.pad_token = tok.eos_token              <span class="cm"># required for causal LM</span>
+model = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(
+    model_name, device_map=<span class="st">"auto"</span>, torch_dtype=<span class="st">"auto"</span>)
+
+<span class="cm"># Load raw text corpus</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"text"</span>, data_files={<span class="st">"train"</span>:<span class="st">"corpus.txt"</span>})
+<span class="cm"># or from Hub: load_dataset("wikitext","wikitext-103-raw-v1")</span>
+
+<span class="kw">def</span> <span class="fn">tokenize</span>(batch):
+    enc = <span class="fn">tok</span>(batch[<span class="st">"text"</span>], truncation=<span class="kw">True</span>,
+               max_length=<span class="nb">2048</span>, padding=<span class="st">"max_length"</span>)
+    enc[<span class="st">"labels"</span>] = enc[<span class="st">"input_ids"</span>].<span class="fn">copy</span>()  <span class="cm"># ← predict every token</span>
+    <span class="kw">return</span> enc
+
+ds = ds.<span class="fn">map</span>(tokenize, batched=<span class="kw">True</span>, remove_columns=[<span class="st">"text"</span>])
+
+<span class="cm"># DataCollator handles labels automatically</span>
+collator = <span class="fn">DataCollatorForLanguageModeling</span>(
+    tokenizer=tok, mlm=<span class="kw">False</span>)  <span class="cm"># mlm=False → causal (GPT-style)</span>
+
+trainer = <span class="fn">Trainer</span>(
+    model=model,
+    args=<span class="fn">TrainingArguments</span>(
+        output_dir=<span class="st">"./causal-ft"</span>,
+        num_train_epochs=<span class="nb">1</span>,
+        per_device_train_batch_size=<span class="nb">4</span>,
+        gradient_accumulation_steps=<span class="nb">8</span>,   <span class="cm"># eff. batch = 32</span>
+        learning_rate=<span class="nb">2e-5</span>,
+        lr_scheduler_type=<span class="st">"cosine"</span>,
+        warmup_ratio=<span class="nb">0.05</span>,
+        fp16=<span class="kw">True</span>,
+        logging_steps=<span class="nb">50</span>,
+        save_strategy=<span class="st">"epoch"</span>,
+    ),
+    train_dataset=ds[<span class="st">"train"</span>],
+    data_collator=collator,
+)
+trainer.<span class="fn">train</span>()
+model.<span class="fn">save_pretrained</span>(<span class="st">"./causal-ft"</span>)
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌱 Continued Pretraining with Unsloth</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> unsloth <span class="kw">import</span> FastLanguageModel
+<span class="kw">from</span> trl <span class="kw">import</span> SFTTrainer
+<span class="kw">from</span> transformers <span class="kw">import</span> TrainingArguments
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+model, tokenizer = FastLanguageModel.<span class="fn">from_pretrained</span>(
+    <span class="st">"unsloth/Meta-Llama-3.1-8B-bnb-4bit"</span>,
+    max_seq_length=<span class="nb">2048</span>, load_in_4bit=<span class="kw">True</span>)
+
+model = FastLanguageModel.<span class="fn">get_peft_model</span>(model,
+    r=<span class="nb">16</span>, lora_alpha=<span class="nb">16</span>, lora_dropout=<span class="nb">0</span>,
+    target_modules=[<span class="st">"q_proj"</span>,<span class="st">"k_proj"</span>,<span class="st">"v_proj"</span>,<span class="st">"o_proj"</span>,
+                    <span class="st">"gate_proj"</span>,<span class="st">"up_proj"</span>,<span class="st">"down_proj"</span>],
+    use_rslora=<span class="kw">True</span>, use_gradient_checkpointing=<span class="st">"unsloth"</span>)
+
+<span class="cm"># Raw text dataset — no chat template</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"text"</span>, data_files=<span class="st">"domain_corpus.txt"</span>,
+                   split=<span class="st">"train"</span>)
+
+trainer = <span class="fn">SFTTrainer</span>(
+    model=model, tokenizer=tokenizer,
+    train_dataset=ds,
+    dataset_text_field=<span class="st">"text"</span>,   <span class="cm"># raw text column</span>
+    max_seq_length=<span class="nb">2048</span>,
+    packing=<span class="kw">True</span>,               <span class="cm"># pack documents end-to-end</span>
+    args=<span class="fn">TrainingArguments</span>(
+        output_dir=<span class="st">"./pretrain-out"</span>,
+        num_train_epochs=<span class="nb">1</span>,
+        per_device_train_batch_size=<span class="nb">4</span>,
+        gradient_accumulation_steps=<span class="nb">8</span>,
+        learning_rate=<span class="nb">1e-4</span>,      <span class="cm"># higher LR for pretraining</span>
+        lr_scheduler_type=<span class="st">"cosine"</span>,
+        warmup_ratio=<span class="nb">0.05</span>,
+        optim=<span class="st">"adamw_8bit"</span>,
+        fp16=<span class="kw">True</span>, seed=<span class="nb">42</span>,
+    ),
+)
+trainer.<span class="fn">train</span>()
+<span class="cm"># Then fine-tune the pretrained model with SFT (instruction data)</span>
+</pre>
+<div class="tip">Continued pretraining injects domain knowledge. Follow up with SFT instruction tuning on the same domain for best results.</div>
+</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🎯 Train on Responses Only (SFT — mask prompt loss)</div>
+      <div class="card-body"><pre>
+<span class="cm"># Standard SFT computes loss on BOTH prompt + response.</span>
+<span class="cm"># train_on_responses_only() masks the prompt — more efficient.</span>
+<span class="kw">from</span> trl <span class="kw">import</span> SFTTrainer
+<span class="kw">from</span> unsloth.chat_templates <span class="kw">import</span> train_on_responses_only
+
+trainer = <span class="fn">SFTTrainer</span>(
+    model=model, tokenizer=tokenizer,
+    train_dataset=dataset,
+    dataset_text_field=<span class="st">"text"</span>,
+    max_seq_length=<span class="nb">2048</span>, packing=<span class="kw">False</span>,
+    args=<span class="fn">TrainingArguments</span>(...),
+)
+
+<span class="cm"># Wrap trainer to mask prompt tokens from loss</span>
+trainer = <span class="fn">train_on_responses_only</span>(
+    trainer,
+    instruction_part = <span class="st">"&lt;|im_start|&gt;user\n"</span>,   <span class="cm"># ChatML</span>
+    response_part    = <span class="st">"&lt;|im_start|&gt;assistant\n"</span>,
+)
+trainer.<span class="fn">train</span>()
+
+<span class="cm"># For Llama-3 instruct format:</span>
+<span class="cm"># instruction_part = "&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;\n\n"</span>
+<span class="cm"># response_part    = "&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;\n\n"</span>
+</pre>
+<div class="good">Response-only training = model only learns from its own outputs, not from memorising user prompts. Often improves quality.</div>
+</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════ CHAPTER 7: FT METHODS COMPARED ══════════════════ -->
+<div class="chapter" id="methods" style="background:#0d1117;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#7c3aed;">7</div>
+    <div><div class="chapter-title">Fine-Tuning Methods — Full Comparison</div><div class="chapter-subtitle">SFT · Causal LM · DPO · ORPO · GRPO · Pretraining — know which to reach for</div></div>
+  </div>
+
+  <!-- Comparison table -->
+  <div class="card full" style="margin-bottom:14px;">
+    <div class="card-title" style="background:#3b0764; color:#e9d5ff;">📊 Method Comparison at a Glance</div>
+    <div class="card-body">
+      <table>
+        <tr>
+          <th>Method</th><th>Data format</th><th>Loss target</th><th>When to use</th><th>TRL class</th>
+        </tr>
+        <tr>
+          <td>Continued Pretraining</td>
+          <td>Raw text documents</td>
+          <td>All tokens (CLM)</td>
+          <td>Inject domain knowledge into base model</td>
+          <td>SFTTrainer (no template)</td>
+        </tr>
+        <tr>
+          <td>Causal LM FT</td>
+          <td>Raw text / completions</td>
+          <td>All tokens (CLM)</td>
+          <td>Style/domain adaptation, base model training</td>
+          <td>Trainer + DataCollatorForLanguageModeling</td>
+        </tr>
+        <tr>
+          <td>SFT (instruction)</td>
+          <td>{instruction, response} pairs</td>
+          <td>All or response-only tokens</td>
+          <td>Teach model to follow instructions</td>
+          <td>SFTTrainer</td>
+        </tr>
+        <tr>
+          <td>DPO</td>
+          <td>{prompt, chosen, rejected} triples</td>
+          <td>Preference margin loss</td>
+          <td>Align after SFT — prefer chosen over rejected</td>
+          <td>DPOTrainer</td>
+        </tr>
+        <tr>
+          <td>ORPO</td>
+          <td>{prompt, chosen, rejected} triples</td>
+          <td>SFT loss + odds ratio penalty</td>
+          <td>SFT + alignment in one pass, no reference model</td>
+          <td>ORPOTrainer</td>
+        </tr>
+        <tr>
+          <td>GRPO</td>
+          <td>Prompts + reward function</td>
+          <td>Group relative policy reward</td>
+          <td>Reasoning / math — reward-based RL (DeepSeek-R1 style)</td>
+          <td>GRPOTrainer</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a8a; color:#bfdbfe;">🔵 DPO — Direct Preference Optimization</div>
+      <div class="card-body"><pre>
+<span class="cm"># Data: {prompt, chosen, rejected}</span>
+<span class="cm"># {"prompt":"Q:...", "chosen":"good answer", "rejected":"bad answer"}</span>
+<span class="kw">from</span> trl <span class="kw">import</span> DPOTrainer, DPOConfig
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+model_name = <span class="st">"username/my-sft-model"</span>  <span class="cm"># start from SFT model</span>
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(model_name)
+model = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(
+    model_name, torch_dtype=<span class="st">"auto"</span>, device_map=<span class="st">"auto"</span>)
+
+ds = <span class="fn">load_dataset</span>(<span class="st">"mlabonne/orpo-dpo-mix-40k"</span>, split=<span class="st">"train"</span>)
+<span class="cm"># needs columns: prompt, chosen, rejected</span>
+
+trainer = <span class="fn">DPOTrainer</span>(
+    model=model,
+    ref_model=<span class="kw">None</span>,              <span class="cm"># None = use initial model as ref</span>
+    args=<span class="fn">DPOConfig</span>(
+        output_dir=<span class="st">"./dpo-out"</span>,
+        num_train_epochs=<span class="nb">1</span>,
+        per_device_train_batch_size=<span class="nb">4</span>,
+        learning_rate=<span class="nb">5e-7</span>,        <span class="cm"># very small LR for DPO</span>
+        beta=<span class="nb">0.1</span>,                  <span class="cm"># KL penalty strength</span>
+        fp16=<span class="kw">True</span>,
+    ),
+    processing_class=tok,
+    train_dataset=ds,
+)
+trainer.<span class="fn">train</span>()
+</pre>
+<div class="tip">DPO = most common post-SFT alignment step. Run SFT first, then DPO on preference data.</div>
+</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#14532d; color:#bbf7d0;">🟢 ORPO — One-Pass SFT + Alignment</div>
+      <div class="card-body"><pre>
+<span class="cm"># Same data format as DPO but trains SFT + alignment together.</span>
+<span class="cm"># No separate reference model needed → faster + cheaper.</span>
+<span class="cm"># NOTE: ORPO lives in trl.experimental.orpo (not top-level trl)</span>
+<span class="kw">from</span> trl.experimental.orpo <span class="kw">import</span> ORPOTrainer, ORPOConfig
+
+model_name = <span class="st">"meta-llama/Llama-3.1-8B"</span>  <span class="cm"># start from BASE model</span>
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(model_name)
+model = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(
+    model_name, torch_dtype=<span class="st">"auto"</span>, device_map=<span class="st">"auto"</span>)
+
+ds = <span class="fn">load_dataset</span>(<span class="st">"mlabonne/orpo-dpo-mix-40k"</span>, split=<span class="st">"train"</span>)
+
+trainer = <span class="fn">ORPOTrainer</span>(
+    model=model,
+    args=<span class="fn">ORPOConfig</span>(
+        output_dir=<span class="st">"./orpo-out"</span>,
+        num_train_epochs=<span class="nb">1</span>,
+        per_device_train_batch_size=<span class="nb">4</span>,
+        learning_rate=<span class="nb">8e-6</span>,
+        beta=<span class="nb">0.1</span>,               <span class="cm"># odds ratio weight</span>
+        max_length=<span class="nb">1024</span>,     <span class="cm"># max_prompt_length removed in trl 1.x</span>
+        fp16=<span class="kw">True</span>,
+    ),
+    processing_class=tok,
+    train_dataset=ds,
+)
+trainer.<span class="fn">train</span>()
+</pre>
+<div class="good">ORPO skips the SFT step — go straight from base model to aligned model in one training run.</div>
+</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#7c2d12; color:#fed7aa;">🟠 GRPO — RL from Reward (DeepSeek-R1 style)</div>
+      <div class="card-body"><pre>
+<span class="cm"># GRPO = model generates multiple responses per prompt,</span>
+<span class="cm"># scores them with a reward function, updates policy.</span>
+<span class="cm"># Used for reasoning / math / verifiable tasks.</span>
+<span class="kw">from</span> trl <span class="kw">import</span> GRPOTrainer, GRPOConfig
+
+<span class="cm"># Define reward function (returns float per response)</span>
+<span class="kw">def</span> <span class="fn">reward_fn</span>(completions, **kwargs):
+    <span class="cm"># Example: reward correct math answers</span>
+    rewards = []
+    <span class="kw">for</span> c <span class="kw">in</span> completions:
+        answer = <span class="fn">extract_answer</span>(c)   <span class="cm"># your parsing logic</span>
+        rewards.<span class="fn">append</span>(<span class="nb">1.0</span> <span class="kw">if</span> answer == correct_answer <span class="kw">else</span> <span class="nb">0.0</span>)
+    <span class="kw">return</span> rewards
+
+ds = <span class="fn">load_dataset</span>(<span class="st">"openai/gsm8k"</span>, <span class="st">"main"</span>, split=<span class="st">"train"</span>)
+<span class="cm"># gsm8k has "question" column — rename to "prompt" (required by GRPOTrainer)</span>
+ds = ds.<span class="fn">map</span>(<span class="kw">lambda</span> x: {<span class="st">"prompt"</span>: x[<span class="st">"question"</span>]}, remove_columns=[<span class="st">"question"</span>])
+
+trainer = <span class="fn">GRPOTrainer</span>(
+    model=model,
+    reward_funcs=[reward_fn],   <span class="cm"># reward_funcs is a LIST of callables</span>
+    args=<span class="fn">GRPOConfig</span>(
+        output_dir=<span class="st">"./grpo-out"</span>,
+        num_train_epochs=<span class="nb">1</span>,
+        per_device_train_batch_size=<span class="nb">4</span>,
+        learning_rate=<span class="nb">1e-6</span>,
+        num_generations=<span class="nb">4</span>,            <span class="cm"># must be &lt;= per_device_train_batch_size</span>
+        max_completion_length=<span class="nb">512</span>,    <span class="cm"># renamed from max_new_tokens in trl 1.x</span>
+        fp16=<span class="kw">True</span>,
+    ),
+    processing_class=tok,
+    train_dataset=ds,
+)
+trainer.<span class="fn">train</span>()
+</pre>
+<div class="warn">GRPO needs a verifiable reward signal — best for math, code, structured output. Hard to apply to open-ended chat.</div>
+</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#374151; color:#e5e7eb;">📌 Recommended Training Pipeline</div>
+      <div class="card-body" style="font-size:0.82em; color:#cbd5e1; line-height:1.9;">
+        <strong style="color:#60a5fa;">For a general assistant:</strong>
+        <ol style="padding-left:18px; color:#94a3b8; margin: 6px 0 12px;">
+          <li>Start from a strong base model (Llama, Qwen, Mistral)</li>
+          <li><strong style="color:#4ade80;">Optional:</strong> Continued pretraining on your domain corpus</li>
+          <li><strong style="color:#4ade80;">SFT</strong> on instruction pairs (Unsloth + SFTTrainer)</li>
+          <li><strong style="color:#4ade80;">DPO</strong> on preference data to align outputs</li>
+        </ol>
+
+        <strong style="color:#60a5fa;">For a reasoning / math model:</strong>
+        <ol style="padding-left:18px; color:#94a3b8; margin: 6px 0 12px;">
+          <li>Start from instruct model</li>
+          <li><strong style="color:#fb923c;">GRPO</strong> with verifiable reward (accuracy, format)</li>
+        </ol>
+
+        <strong style="color:#60a5fa;">For fastest path to aligned model:</strong>
+        <ol style="padding-left:18px; color:#94a3b8; margin: 6px 0;">
+          <li>Base model → <strong style="color:#4ade80;">ORPO</strong> (SFT + alignment in one shot)</li>
+        </ol>
+        <div class="tip" style="margin-top:8px;">
+          <strong>LR guidelines:</strong> Pretraining 1e-4 → SFT 3e-4 → DPO 5e-7 → GRPO 1e-6<br>
+          <strong>Always</strong> use a lower LR for alignment than for SFT.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════ CHAPTER 8: SAGEMAKER ══════════════════ -->
+<div class="chapter c-aws" id="sagemaker">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#1e3a5f;">8</div>
+    <div><div class="chapter-title">AWS SageMaker</div><div class="chapter-subtitle">Train &amp; deploy HF models in the cloud — full control</div></div>
+  </div>
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title">🔧 Setup + Training Script</div>
+      <div class="card-body"><pre>
+<span class="cm"># local: pip install sagemaker boto3</span>
+<span class="kw">import</span> sagemaker, boto3
+sess = sagemaker.<span class="fn">Session</span>()
+role = sagemaker.<span class="fn">get_execution_role</span>()   <span class="cm"># in Studio</span>
+<span class="cm"># local: role = boto3.client("iam").get_role(</span>
+<span class="cm">#              RoleName="SageMakerRole")["Role"]["Arn"]</span>
+
+<span class="cm"># scripts/train.py  (runs in SageMaker container)</span>
+<span class="kw">import</span> argparse, os
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoModelForSequenceClassification,\
+    AutoTokenizer, Trainer, TrainingArguments
+<span class="kw">from</span> datasets <span class="kw">import</span> load_from_disk
+parser = argparse.<span class="fn">ArgumentParser</span>()
+parser.<span class="fn">add_argument</span>(<span class="st">"--model_name"</span>, default=<span class="st">"distilbert-base-uncased"</span>)
+parser.<span class="fn">add_argument</span>(<span class="st">"--epochs"</span>, type=int, default=<span class="nb">3</span>)
+parser.<span class="fn">add_argument</span>(<span class="st">"--train_dir"</span>, default=os.environ[<span class="st">"SM_CHANNEL_TRAIN"</span>])
+parser.<span class="fn">add_argument</span>(<span class="st">"--model_dir"</span>, default=os.environ[<span class="st">"SM_MODEL_DIR"</span>])
+args = parser.<span class="fn">parse_args</span>()
+model = AutoModelForSequenceClassification.<span class="fn">from_pretrained</span>(args.model_name,num_labels=<span class="nb">2</span>)
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(args.model_name)
+<span class="fn">Trainer</span>(model=model,args=<span class="fn">TrainingArguments</span>(args.model_dir,
+    num_train_epochs=args.epochs),
+    train_dataset=<span class="fn">load_from_disk</span>(args.train_dir)).<span class="fn">train</span>()
+model.<span class="fn">save_pretrained</span>(args.model_dir)   <span class="cm"># ← must save here</span>
+tok.<span class="fn">save_pretrained</span>(args.model_dir)
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🚀 Launch + Deploy + Predict</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> sagemaker.huggingface <span class="kw">import</span> HuggingFace, HuggingFaceModel,\
+                                    get_huggingface_llm_image_uri
+
+<span class="cm"># Upload data to S3</span>
+s3_train = sess.<span class="fn">upload_data</span>(<span class="st">"./data"</span>, key_prefix=<span class="st">"data"</span>)
+
+estimator = <span class="fn">HuggingFace</span>(entry_point=<span class="st">"train.py"</span>,
+    source_dir=<span class="st">"./scripts"</span>, role=role,
+    instance_type=<span class="st">"ml.g5.2xlarge"</span>, instance_count=<span class="nb">1</span>,
+    transformers_version=<span class="st">"4.36"</span>, pytorch_version=<span class="st">"2.1"</span>,
+    py_version=<span class="st">"py310"</span>,
+    hyperparameters={<span class="st">"model_name"</span>:<span class="st">"distilbert-base-uncased"</span>,<span class="st">"epochs"</span>:<span class="nb">3</span>},
+    use_spot_instances=<span class="kw">True</span>, max_wait=<span class="nb">7200</span>, max_run=<span class="nb">3600</span>)
+estimator.<span class="fn">fit</span>({<span class="st">"train"</span>: s3_train})
+
+<span class="cm"># Deploy trained model</span>
+predictor = estimator.<span class="fn">deploy</span>(<span class="nb">1</span>, <span class="st">"ml.m5.xlarge"</span>)
+
+<span class="cm"># OR: deploy any HF Hub LLM (TGI)</span>
+model = <span class="fn">HuggingFaceModel</span>(role=role,
+    image_uri=<span class="fn">get_huggingface_llm_image_uri</span>(<span class="st">"huggingface"</span>),
+    env={<span class="st">"HF_MODEL_ID"</span>:<span class="st">"meta-llama/Llama-3.1-8B-Instruct"</span>,
+         <span class="st">"SM_NUM_GPUS"</span>:<span class="st">"1"</span>,<span class="st">"HUGGING_FACE_HUB_TOKEN"</span>:<span class="st">"hf_xxx"</span>})
+predictor = model.<span class="fn">deploy</span>(<span class="nb">1</span>, <span class="st">"ml.g5.2xlarge"</span>)
+
+predictor.<span class="fn">predict</span>({<span class="st">"inputs"</span>:<span class="st">"Summarize: ..."</span>,
+    <span class="st">"parameters"</span>:{<span class="st">"max_new_tokens"</span>:<span class="nb">200</span>,<span class="st">"temperature"</span>:<span class="nb">0.7</span>}})
+predictor.<span class="fn">delete_endpoint</span>()   <span class="cm"># ← always clean up!</span>
+</pre></div>
+    </div>
+
+  </div>
+  <div class="tip" style="margin-top:12px;"><strong>Instances:</strong> ml.g5.2xlarge (A10G 24GB) → 7B-8B &nbsp;|&nbsp; ml.p3.2xlarge (V100 16GB) → small models &nbsp;|&nbsp; ml.g5.12xlarge (4×A10G) → 34B &nbsp;|&nbsp; use_spot_instances=True → 70% cheaper</div>
+</div>
+
+<!-- ══════════════════ CHAPTER 7: BEDROCK ══════════════════ -->
+<div class="chapter c-bedrock" id="bedrock">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#7f1d1d;">9</div>
+    <div><div class="chapter-title">AWS Bedrock</div><div class="chapter-subtitle">Managed FM inference + fine-tuning — no infra, pay per token</div></div>
+  </div>
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title">⚡ Inference (Converse API)</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> boto3
+
+rt = boto3.<span class="fn">client</span>(<span class="st">"bedrock-runtime"</span>, region_name=<span class="st">"us-east-1"</span>)
+
+<span class="cm"># One-shot</span>
+r = rt.<span class="fn">converse</span>(
+    modelId  = <span class="st">"anthropic.claude-3-5-sonnet-20241022-v2:0"</span>,
+    messages = [{<span class="st">"role"</span>:<span class="st">"user"</span>,<span class="st">"content"</span>:[{<span class="st">"text"</span>:<span class="st">"Hello!"</span>}]}],
+    inferenceConfig={<span class="st">"maxTokens"</span>:<span class="nb">512</span>,<span class="st">"temperature"</span>:<span class="nb">0.7</span>})
+<span class="fn">print</span>(r[<span class="st">"output"</span>][<span class="st">"message"</span>][<span class="st">"content"</span>][<span class="nb">0</span>][<span class="st">"text"</span>])
+
+<span class="cm"># Streaming</span>
+stream = rt.<span class="fn">converse_stream</span>(modelId=<span class="st">"..."</span>, messages=[...])
+<span class="kw">for</span> evt <span class="kw">in</span> stream[<span class="st">"stream"</span>]:
+    <span class="kw">if</span> <span class="st">"contentBlockDelta"</span> <span class="kw">in</span> evt:
+        <span class="fn">print</span>(evt[<span class="st">"contentBlockDelta"</span>][<span class="st">"delta"</span>][<span class="st">"text"</span>], end=<span class="st">""</span>)
+
+<span class="cm"># Model IDs</span>
+<span class="cm"># anthropic.claude-3-5-sonnet-20241022-v2:0</span>
+<span class="cm"># meta.llama3-70b-instruct-v1:0</span>
+<span class="cm"># mistral.mistral-large-2402-v1:0</span>
+<span class="cm"># amazon.titan-text-express-v1</span>
+</pre></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🎯 Fine-Tune on Bedrock</div>
+      <div class="card-body"><pre>
+<span class="cm"># Data: JSONL in S3</span>
+<span class="cm"># {"prompt": "Q: ...", "completion": "A: ..."}</span>
+
+bedrock = boto3.<span class="fn">client</span>(<span class="st">"bedrock"</span>)
+
+resp = bedrock.<span class="fn">create_model_customization_job</span>(
+    customizationJobName = <span class="st">"my-ft-job"</span>,
+    customModelName      = <span class="st">"my-llama-custom"</span>,
+    baseModelIdentifier  = <span class="st">"meta.llama3-8b-instruct-v1:0"</span>,
+    roleArn              = <span class="st">"arn:aws:iam::ACCT:role/BedrockRole"</span>,
+    trainingDataConfig   = {<span class="st">"s3Uri"</span>:<span class="st">"s3://bucket/train.jsonl"</span>},
+    outputDataConfig     = {<span class="st">"s3Uri"</span>:<span class="st">"s3://bucket/output/"</span>},
+    hyperParameters      = {<span class="st">"epochCount"</span>:<span class="st">"1"</span>,<span class="st">"batchSize"</span>:<span class="st">"8"</span>,
+                            <span class="st">"learningRate"</span>:<span class="st">"0.00001"</span>})
+
+<span class="cm"># Monitor</span>
+job = bedrock.<span class="fn">get_model_customization_job</span>(
+    jobIdentifier=resp[<span class="st">"jobArn"</span>])
+<span class="fn">print</span>(job[<span class="st">"status"</span>])   <span class="cm"># InProgress / Completed</span>
+
+<span class="cm"># Provision throughput to invoke</span>
+pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
+    modelUnits=<span class="nb">1</span>, provisionedModelName=<span class="st">"prod"</span>,
+    modelId=job[<span class="st">"outputModelArn"</span>])
+<span class="cm"># use pt["provisionedModelArn"] as modelId in converse()</span>
+</pre></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════ FULL WORKFLOW ══════════════════ -->
+<div class="chapter" id="workflow" style="background:#020617;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0891b2;">✓</div>
+    <div><div class="chapter-title" style="color:#38bdf8;">End-to-End Workflow</div><div class="chapter-subtitle">The complete path from idea to deployed model</div></div>
+  </div>
+  <div style="display:flex; flex-direction:column; gap:10px;">
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#1e3a5f; color:#bfdbfe; padding:12px 16px; border-radius:8px 0 0 8px; font-size:0.8em; font-weight:700; writing-mode:vertical-rl; text-orientation:mixed; text-transform:uppercase; letter-spacing:0.1em; display:flex; align-items:center;">Local Dev</div>
+      <div style="flex:1; background:#1e293b; border-radius:0 8px 8px 0; padding:14px 18px; font-size:0.82em; color:#cbd5e1; line-height:2;">
+        <strong style="color:#60a5fa;">1. Explore data</strong> → <code>load_dataset()</code>, inspect, filter, map &nbsp;|&nbsp;
+        <strong style="color:#60a5fa;">2. Prototype model</strong> → <code>pipeline()</code> or <code>AutoModel</code> for quick test &nbsp;|&nbsp;
+        <strong style="color:#60a5fa;">3. Format dataset</strong> → apply chat template, tokenize, set_format("torch") &nbsp;|&nbsp;
+        <strong style="color:#60a5fa;">4. Fine-tune locally</strong> → Unsloth + SFTTrainer on GPU (or Colab) &nbsp;|&nbsp;
+        <strong style="color:#60a5fa;">5. Eval locally</strong> → <code>trainer.evaluate()</code>, spot-check outputs
+      </div>
+    </div>
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#14532d; color:#bbf7d0; padding:12px 16px; border-radius:8px 0 0 8px; font-size:0.8em; font-weight:700; writing-mode:vertical-rl; text-orientation:mixed; text-transform:uppercase; letter-spacing:0.1em; display:flex; align-items:center;">Cloud Train</div>
+      <div style="flex:1; background:#1e293b; border-radius:0 8px 8px 0; padding:14px 18px; font-size:0.82em; color:#cbd5e1; line-height:2;">
+        <strong style="color:#4ade80;">6. Upload data to S3</strong> → <code>sess.upload_data()</code> &nbsp;|&nbsp;
+        <strong style="color:#4ade80;">7. Launch SageMaker job</strong> → <code>HuggingFace(estimator).fit()</code> with spot instances &nbsp;|&nbsp;
+        <strong style="color:#4ade80;">8. Save model</strong> → <code>model.save_pretrained(SM_MODEL_DIR)</code> inside train.py &nbsp;|&nbsp;
+        <strong style="color:#4ade80;">9. Push to Hub</strong> → <code>trainer.push_to_hub()</code> or <code>model.push_to_hub_merged()</code>
+      </div>
+    </div>
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#7c2d12; color:#fed7aa; padding:12px 16px; border-radius:8px 0 0 8px; font-size:0.8em; font-weight:700; writing-mode:vertical-rl; text-orientation:mixed; text-transform:uppercase; letter-spacing:0.1em; display:flex; align-items:center;">Deploy</div>
+      <div style="flex:1; background:#1e293b; border-radius:0 8px 8px 0; padding:14px 18px; font-size:0.82em; color:#cbd5e1; line-height:2;">
+        <strong style="color:#fb923c;">10. Deploy endpoint</strong> → <code>estimator.deploy()</code> or <code>HuggingFaceModel.deploy()</code> &nbsp;|&nbsp;
+        <strong style="color:#fb923c;">11. Test endpoint</strong> → <code>predictor.predict({"inputs": "..."})</code> &nbsp;|&nbsp;
+        <strong style="color:#fb923c;">12. Or: Bedrock</strong> → <code>rt.converse()</code> for managed FMs, no endpoint management &nbsp;|&nbsp;
+        <strong style="color:#fb923c;">13. Or: local GGUF</strong> → <code>ollama run hf.co/username/MyModel-GGUF</code> &nbsp;|&nbsp;
+        <strong style="color:#fb923c;">14. Cleanup</strong> → <code>predictor.delete_endpoint()</code> to stop billing
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DECISION GUIDE ══════════════════ -->
+<div class="chapter" id="decision" style="background:#0d1117;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#6d28d9;">?</div>
+    <div><div class="chapter-title">Decision Guide</div><div class="chapter-subtitle">Pick the right tool for the job</div></div>
+  </div>
+  <div class="grid2" style="gap:14px;">
+
+    <div style="background:#1e293b; border-radius:10px; padding:16px; border:1px solid #334155;">
+      <div style="font-weight:700; color:#60a5fa; margin-bottom:10px; font-size:0.9em;">🔵 Colab / Local GPU</div>
+      <div style="font-size:0.82em; color:#94a3b8; line-height:1.9;">
+        ✅ Prototyping &amp; experimentation<br>
+        ✅ Small datasets (&lt;100k samples)<br>
+        ✅ Models up to 13B with QLoRA<br>
+        ✅ Unsloth + SFTTrainer<br>
+        ❌ Long runs → use cloud instead
+      </div>
+    </div>
+
+    <div style="background:#1e293b; border-radius:10px; padding:16px; border:1px solid #334155;">
+      <div style="font-weight:700; color:#4ade80; margin-bottom:10px; font-size:0.9em;">🟢 SageMaker</div>
+      <div style="font-size:0.82em; color:#94a3b8; line-height:1.9;">
+        ✅ Production training jobs<br>
+        ✅ Spot instances (70% cheaper)<br>
+        ✅ Bring your own code / model<br>
+        ✅ Deploy any HF Hub model (TGI)<br>
+        ✅ Multi-GPU distributed training<br>
+        ❌ Overkill for one-off inference
+      </div>
+    </div>
+
+    <div style="background:#1e293b; border-radius:10px; padding:16px; border:1px solid #334155;">
+      <div style="font-weight:700; color:#fb923c; margin-bottom:10px; font-size:0.9em;">🟠 Bedrock</div>
+      <div style="font-size:0.82em; color:#94a3b8; line-height:1.9;">
+        ✅ Call foundation models via API<br>
+        ✅ No infra / no GPU management<br>
+        ✅ Pay per token (no idle cost)<br>
+        ✅ Fine-tune on supported models<br>
+        ❌ Can't bring arbitrary HF models<br>
+        ❌ Less control over infra
+      </div>
+    </div>
+
+    <div style="background:#1e293b; border-radius:10px; padding:16px; border:1px solid #334155;">
+      <div style="font-weight:700; color:#c084fc; margin-bottom:10px; font-size:0.9em;">🟣 GGUF / Ollama (local deploy)</div>
+      <div style="font-size:0.82em; color:#94a3b8; line-height:1.9;">
+        ✅ Run fine-tuned model locally<br>
+        ✅ No cloud costs<br>
+        ✅ Works on Mac / consumer GPU<br>
+        ✅ q4_k_m = best quality/size tradeoff<br>
+        ❌ Slower than GPU cloud endpoints<br>
+        ❌ Not for production APIs
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:20px; background:#1e293b; border-radius:10px; padding:16px; border:1px solid #334155;">
+    <div style="font-weight:700; color:#f8fafc; margin-bottom:10px; font-size:0.85em; text-transform:uppercase; letter-spacing:0.08em;">⚡ Quick Decision Tree</div>
+    <div style="font-size:0.82em; color:#94a3b8; line-height:2.2;">
+      <strong style="color:#e2e8f0;">Just need to query a big FM?</strong> → Bedrock <code>converse()</code> &nbsp;|&nbsp;
+      <strong style="color:#e2e8f0;">Fine-tune a 7B-8B model on a budget?</strong> → QLoRA + Unsloth on Colab / spot A100 &nbsp;|&nbsp;
+      <strong style="color:#e2e8f0;">Fine-tune at scale / production?</strong> → SageMaker HuggingFace estimator &nbsp;|&nbsp;
+      <strong style="color:#e2e8f0;">Deploy fine-tuned model as API?</strong> → SageMaker endpoint (TGI) &nbsp;|&nbsp;
+      <strong style="color:#e2e8f0;">Run model offline?</strong> → Export GGUF → Ollama
+    </div>
+  </div>
+
+  <div style="margin-top:16px; text-align:center; font-size:0.75em; color:#475569; padding-top:12px; border-top:1px solid #1e293b;">
+    LLM Fine-Tuning Handbook &nbsp;·&nbsp; PyTorch · HF Datasets · HF Transformers · Unsloth · LoRA / QLoRA · SageMaker · Bedrock
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     WORKING SCRIPTS REFERENCE
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="chapter" id="scripts" style="border-top:2px solid #1e3a5f;">
+  <div class="chapter-header" style="background:linear-gradient(135deg,#0c4a6e,#075985);">
+    <div class="chapter-num" style="background:#0369a1;">💻</div>
+    <div>
+      <div class="chapter-title">Working Scripts</div>
+      <div class="chapter-subtitle">Runnable examples — each script is self-contained and verified</div>
+    </div>
+  </div>
+
+  <div class="card-grid">
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">verify_all.py</div>
+      <div class="card-body">
+        <p style="margin:0 0 8px; font-size:0.85em; color:#94a3b8;">Run first to confirm your environment is ready.</p>
+        <pre><span class="cm"># Checks all packages + APIs in one shot</span>
+python scripts/verify_all.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Expected: 23+/26 pass (unsloth requires GPU + install)</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">01_pytorch_basics.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># Tensors, autograd, nn.Module,
+# DataLoader, training loop, save/load</span>
+python scripts/01_pytorch_basics.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">CPU-only · no internet needed</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">02_hf_datasets.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># from_dict, map, filter, split,
+# rename, set_format, save_to_disk</span>
+python scripts/02_hf_datasets.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">CPU-only · no internet needed</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">03_hf_transformers.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># Tokenizer, pipeline, Trainer,
+# eval_strategy, processing_class</span>
+python scripts/03_hf_transformers.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Downloads distilbert (~66MB) on first run</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">04_causal_lm_finetune.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># GPT-2 + DataCollatorForLanguageModeling
+# mlm=False → labels auto-set, then generate</span>
+python scripts/04_causal_lm_finetune.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Downloads GPT-2 (~500MB) on first run</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">05_dpo_example.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># DPOTrainer + DPOConfig
+# ref_model=None → implicit reference</span>
+python scripts/05_dpo_example.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Requires trl&gt;=0.9 · synthetic dataset</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">06_orpo_example.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># Correct import:</span>
+<span class="kw">from</span> trl.experimental.orpo <span class="kw">import</span> ORPOTrainer, ORPOConfig
+<span class="cm"># NOT: from trl import ORPOTrainer</span>
+python scripts/06_orpo_example.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">No ref_model needed · synthetic dataset</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">07_grpo_example.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># Key fixes vs. naive examples:
+# • gsm8k "question" → renamed to "prompt"
+# • reward_funcs is a LIST
+# • num_generations ≤ batch_size</span>
+python scripts/07_grpo_example.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Toy math dataset · no internet needed</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">08_unsloth_sft.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># Full Unsloth workflow (reference):
+# FastLanguageModel → get_peft_model
+# → SFTTrainer → inference → save/GGUF</span>
+python scripts/08_unsloth_sft.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Prints full code pattern · runs Unsloth if available</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">09_sagemaker_train.py</div>
+      <div class="card-body">
+        <pre><span class="cm"># SageMaker training script pattern +
+# HuggingFace estimator + Bedrock converse</span>
+python scripts/09_sagemaker_train.py</pre>
+        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Prints patterns · AWS creds needed to run live</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="tip" style="margin-top:16px;">
+    <strong>Two venvs required</strong> — Unsloth pins <code>trl&lt;0.9</code>, which conflicts with DPO/ORPO/GRPO (<code>trl≥1.0</code>).<br><br>
+    <code>.venv</code> &nbsp;→ Unsloth + SFT (scripts 01–04, 08) &nbsp;|&nbsp; <code>.venv-rl</code> &nbsp;→ DPO / ORPO / GRPO (scripts 05–07)<br><br>
+    <strong>One-shot setup:</strong> <code>bash scripts/setup_envs.sh</code><br><br>
+    <strong>Run scripts:</strong><br>
+    <code>.venv/bin/python scripts/01_pytorch_basics.py</code><br>
+    <code>.venv/bin/python scripts/08_unsloth_sft.py</code><br>
+    <code>.venv-rl/bin/python scripts/05_dpo_example.py</code><br>
+    <code>.venv-rl/bin/python scripts/06_orpo_example.py</code><br>
+    <code>.venv-rl/bin/python scripts/07_grpo_example.py</code>
+  </div>
+
+  <div style="margin-top:16px; text-align:center; font-size:0.75em; color:#475569; padding-top:12px; border-top:1px solid #1e293b;">
+    LLM Fine-Tuning Handbook &nbsp;·&nbsp; All scripts verified against trl 1.x · transformers 5.x · datasets 4.x
+  </div>
+</div>
+
+</main>
+</body>
+</html>

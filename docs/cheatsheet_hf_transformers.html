@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>HF Transformers Cheatsheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 13px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 960px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.9em; color: #6d28d9; border-bottom: 3px solid #6d28d9; padding-bottom: 6px; margin-bottom: 16px; letter-spacing: -0.5px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.72em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.82em; line-height: 1.55; white-space: pre-wrap; }
+  .kw  { color: #c678dd; font-weight: 600; }
+  .fn  { color: #2563eb; }
+  .st  { color: #16a34a; }
+  .cm  { color: #7f848e; font-style: italic; }
+  .nb  { color: #d97706; }
+  .c1  { background: #faf5ff; border-left: 3px solid #7c3aed; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.8em; margin: 6px 0; display: block; }
+  .c2  { background: #ecfdf5; border-left: 3px solid #10b981; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.8em; margin: 6px 0; display: block; }
+  .c3  { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.8em; margin: 6px 0; display: block; }
+
+  .t1 .card-title { background: #6d28d9; }
+  .t2 .card-title { background: #1d4ed8; }
+  .t3 .card-title { background: #065f46; }
+  .t4 .card-title { background: #9a3412; }
+  .t5 .card-title { background: #1e3a5f; }
+  .t6 .card-title { background: #701a75; }
+  .t7 .card-title { background: #134e4a; }
+  .t8 .card-title { background: #374151; }
+  .full { grid-column: 1 / -1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.8em; margin-top: 4px; }
+  td, th { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+  th { background: #f3f4f6; font-weight: 600; color: #374151; }
+  td:first-child { font-family: 'Fira Mono', monospace; color: #1d4ed8; font-size: 0.9em; }
+  tr:last-child td { border-bottom: none; }
+
+  @media print {
+    body { background: white; font-size: 11px; }
+    .page { box-shadow: none; margin: 0; padding: 16px 20px; }
+    h1 { font-size: 1.6em; }
+  }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a></div>
+<div class="page">
+  <h1>🤗 HF Transformers <span>— Essential One-Pager</span></h1>
+  <div class="grid">
+
+    <!-- PIPELINE -->
+    <div class="card t1">
+      <div class="card-title">🚀 Pipeline — Instant Inference</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> pipeline
+
+<span class="cm"># Task + default model</span>
+clf = <span class="fn">pipeline</span>(<span class="st">"text-classification"</span>)
+clf(<span class="st">"I love this!"</span>)
+<span class="cm"># → [{'label': 'POSITIVE', 'score': 0.999}]</span>
+
+<span class="cm"># Specify model</span>
+gen = <span class="fn">pipeline</span>(<span class="st">"text-generation"</span>,
+               model=<span class="st">"meta-llama/Llama-3.1-8B-Instruct"</span>,
+               device_map=<span class="st">"auto"</span>)
+gen(<span class="st">"Once upon a time"</span>, max_new_tokens=<span class="nb">50</span>)
+</pre>
+<table>
+  <tr><th>Task string</th><th>What it does</th></tr>
+  <tr><td>text-generation</td><td>Generate / complete text</td></tr>
+  <tr><td>text-classification</td><td>Sentiment / labels</td></tr>
+  <tr><td>token-classification</td><td>NER, POS tagging</td></tr>
+  <tr><td>question-answering</td><td>Extractive QA</td></tr>
+  <tr><td>summarization</td><td>Abstractive summary</td></tr>
+  <tr><td>translation</td><td>Seq-to-seq translation</td></tr>
+  <tr><td>fill-mask</td><td>MLM (BERT-style)</td></tr>
+  <tr><td>automatic-speech-recognition</td><td>Whisper / ASR</td></tr>
+</table>
+</div>
+    </div>
+
+    <!-- TOKENIZER -->
+    <div class="card t2">
+      <div class="card-title">✏️ Tokenizer</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer
+
+tok = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"bert-base-uncased"</span>)
+
+<span class="cm"># Encode single sentence</span>
+enc = <span class="fn">tok</span>(<span class="st">"Hello world"</span>,
+          return_tensors=<span class="st">"pt"</span>,
+          truncation=<span class="kw">True</span>,
+          padding=<span class="st">"max_length"</span>,
+          max_length=<span class="nb">128</span>)
+<span class="cm"># → {input_ids, attention_mask, token_type_ids}</span>
+
+<span class="cm"># Batch encode</span>
+enc = <span class="fn">tok</span>([<span class="st">"Hello"</span>, <span class="st">"World"</span>],
+          padding=<span class="kw">True</span>, truncation=<span class="kw">True</span>,
+          return_tensors=<span class="st">"pt"</span>)
+
+<span class="cm"># Decode back to text</span>
+tok.<span class="fn">decode</span>(enc[<span class="st">"input_ids"</span>][<span class="nb">0</span>])
+tok.<span class="fn">batch_decode</span>(enc[<span class="st">"input_ids"</span>],
+                  skip_special_tokens=<span class="kw">True</span>)
+
+<span class="cm"># Chat template (instruct models)</span>
+msgs = [{<span class="st">"role"</span>:<span class="st">"user"</span>, <span class="st">"content"</span>:<span class="st">"Hi!"</span>}]
+tok.<span class="fn">apply_chat_template</span>(msgs, tokenize=<span class="kw">False</span>)
+</pre></div>
+    </div>
+
+    <!-- AUTOMODEL -->
+    <div class="card t3">
+      <div class="card-title">🧠 AutoModel — Load Any Model</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoModel, AutoModelForSequenceClassification,\
+  AutoModelForCausalLM, AutoModelForSeq2SeqLM
+
+<span class="cm"># Raw hidden states (no head)</span>
+model = AutoModel.<span class="fn">from_pretrained</span>(<span class="st">"bert-base-uncased"</span>)
+
+<span class="cm"># With task head</span>
+model = AutoModelForSequenceClassification.<span class="fn">from_pretrained</span>(
+    <span class="st">"bert-base-uncased"</span>, num_labels=<span class="nb">2</span>)
+
+model = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(
+    <span class="st">"meta-llama/Llama-3.1-8B-Instruct"</span>,
+    device_map=<span class="st">"auto"</span>,      <span class="cm"># auto GPU placement</span>
+    torch_dtype=<span class="st">"auto"</span>,    <span class="cm"># use stored dtype</span>
+    load_in_4bit=<span class="kw">True</span>,      <span class="cm"># QLoRA memory saving</span>
+)
+
+<span class="cm"># Common task heads</span>
+<span class="cm"># AutoModelForTokenClassification  → NER</span>
+<span class="cm"># AutoModelForQuestionAnswering    → QA</span>
+<span class="cm"># AutoModelForSeq2SeqLM            → T5, BART</span>
+<span class="cm"># AutoModelForAudioClassification  → audio</span>
+</pre></div>
+    </div>
+
+    <!-- INFERENCE -->
+    <div class="card t4">
+      <div class="card-title">⚡ Manual Inference</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> torch
+
+model.<span class="fn">eval</span>()
+<span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+    outputs = <span class="fn">model</span>(**enc)  <span class="cm"># unpack tokenizer dict</span>
+
+<span class="cm"># Classification → logits → probs</span>
+logits = outputs.logits
+probs  = logits.<span class="fn">softmax</span>(dim=-<span class="nb">1</span>)
+pred   = logits.<span class="fn">argmax</span>(dim=-<span class="nb">1</span>)
+
+<span class="cm"># Text generation</span>
+inputs = <span class="fn">tok</span>(<span class="st">"Tell me a joke"</span>, return_tensors=<span class="st">"pt"</span>).<span class="fn">to</span>(model.device)
+out_ids = model.<span class="fn">generate</span>(
+    **inputs,
+    max_new_tokens=<span class="nb">200</span>,
+    temperature=<span class="nb">0.7</span>,
+    do_sample=<span class="kw">True</span>,
+    top_p=<span class="nb">0.9</span>,
+    repetition_penalty=<span class="nb">1.1</span>,
+)
+tok.<span class="fn">decode</span>(out_ids[<span class="nb">0</span>], skip_special_tokens=<span class="kw">True</span>)
+</pre></div>
+    </div>
+
+    <!-- TRAINER -->
+    <div class="card t5">
+      <div class="card-title">🏋️ Trainer — Fine-Tune a Model</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> (
+    AutoModelForSequenceClassification, AutoTokenizer,
+    TrainingArguments, Trainer, DataCollatorWithPadding
+)
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+model = AutoModelForSequenceClassification.<span class="fn">from_pretrained</span>(
+    <span class="st">"distilbert-base-uncased"</span>, num_labels=<span class="nb">2</span>)
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"distilbert-base-uncased"</span>)
+ds    = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>)
+ds    = ds.<span class="fn">map</span>(<span class="kw">lambda</span> x: <span class="fn">tok</span>(x[<span class="st">"text"</span>], truncation=<span class="kw">True</span>), batched=<span class="kw">True</span>)
+
+args = <span class="fn">TrainingArguments</span>(
+    output_dir=<span class="st">"./output"</span>,
+    num_train_epochs=<span class="nb">3</span>,
+    per_device_train_batch_size=<span class="nb">16</span>,
+    per_device_eval_batch_size=<span class="nb">16</span>,
+    learning_rate=<span class="nb">2e-5</span>,
+    eval_strategy=<span class="st">"epoch"</span>,
+    save_strategy=<span class="st">"epoch"</span>,
+    load_best_model_at_end=<span class="kw">True</span>,
+    fp16=<span class="kw">True</span>,
+    push_to_hub=<span class="kw">False</span>,
+)
+
+trainer = <span class="fn">Trainer</span>(model=model, args=args,
+    train_dataset=ds[<span class="st">"train"</span>],
+    eval_dataset=ds[<span class="st">"test"</span>],
+    processing_class=tok,
+    data_collator=<span class="fn">DataCollatorWithPadding</span>(tok))
+trainer.<span class="fn">train</span>()
+</pre></div>
+    </div>
+
+    <!-- SAVE / PUSH -->
+    <div class="card t6">
+      <div class="card-title">💾 Save & Push to Hub</div>
+      <div class="card-body"><pre>
+<span class="cm"># Save locally</span>
+model.<span class="fn">save_pretrained</span>(<span class="st">"./my-model"</span>)
+tok.<span class="fn">save_pretrained</span>(<span class="st">"./my-model"</span>)
+
+<span class="cm"># Reload</span>
+model = AutoModelForSequenceClassification.<span class="fn">from_pretrained</span>(<span class="st">"./my-model"</span>)
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"./my-model"</span>)
+
+<span class="cm"># Push to HF Hub (needs hf auth login first)</span>
+model.<span class="fn">push_to_hub</span>(<span class="st">"username/my-model"</span>)
+tok.<span class="fn">push_to_hub</span>(<span class="st">"username/my-model"</span>)
+
+<span class="cm"># Or via Trainer after training</span>
+trainer.<span class="fn">push_to_hub</span>()
+
+<span class="cm"># Login</span>
+<span class="kw">from</span> huggingface_hub <span class="kw">import</span> notebook_login
+<span class="fn">notebook_login</span>()
+<span class="cm"># CLI: hf auth login</span>
+</pre></div>
+    </div>
+
+    <!-- CUSTOM METRICS -->
+    <div class="card t7">
+      <div class="card-title">📊 Evaluation & Metrics</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> evaluate
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+metric = evaluate.<span class="fn">load</span>(<span class="st">"accuracy"</span>)
+<span class="cm"># Other: "f1", "rouge", "bleu", "seqeval"</span>
+
+<span class="kw">def</span> <span class="fn">compute_metrics</span>(eval_pred):
+    logits, labels = eval_pred
+    preds = np.<span class="fn">argmax</span>(logits, axis=-<span class="nb">1</span>)
+    <span class="kw">return</span> metric.<span class="fn">compute</span>(
+        predictions=preds, references=labels)
+
+<span class="cm"># Pass to Trainer</span>
+trainer = <span class="fn">Trainer</span>(
+    ...,
+    compute_metrics=compute_metrics,
+)
+
+<span class="cm"># Run evaluation only</span>
+trainer.<span class="fn">evaluate</span>()
+
+<span class="cm"># Predict on new data</span>
+preds = trainer.<span class="fn">predict</span>(test_dataset)
+preds.predictions   <span class="cm"># raw logits</span>
+preds.label_ids     <span class="cm"># true labels</span>
+</pre></div>
+    </div>
+
+    <!-- TIPS -->
+    <div class="card t8">
+      <div class="card-title">💡 Key Tips & Common Patterns</div>
+      <div class="card-body"><pre>
+<span class="cm"># Always use Auto classes → portable across models</span>
+<span class="cm"># AutoTokenizer, AutoModel, AutoConfig</span>
+
+<span class="cm"># Key TrainingArguments to know</span>
+<span class="cm"># fp16=True          → half precision (saves VRAM)</span>
+<span class="cm"># gradient_accumulation_steps=4  → fake larger batch</span>
+<span class="cm"># warmup_ratio=0.1   → LR warmup for 10% of steps</span>
+<span class="cm"># weight_decay=0.01  → L2 regularization</span>
+<span class="cm"># logging_steps=50   → print loss every 50 steps</span>
+
+<span class="cm"># Freeze base, train head only</span>
+<span class="kw">for</span> param <span class="kw">in</span> model.base_model.<span class="fn">parameters</span>():
+    param.requires_grad = <span class="kw">False</span>
+
+<span class="cm"># Config: see hyperparams</span>
+<span class="fn">print</span>(model.config)
+
+<span class="cm"># Move model to GPU</span>
+model = model.<span class="fn">to</span>(<span class="st">"cuda"</span>)
+<span class="cm"># or device_map="auto" at from_pretrained</span>
+</pre>
+<span class="c3">⚠️  Use eval_strategy="epoch" not evaluation_strategy — renamed in v4.38+</span>
+<span class="c2">💡  Trainer handles device placement automatically — no need to .to(device) manually.</span>
+</div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>VSCode Shortcuts</title>
+  <style>
+    @media print {
+      body { font-size: 16pt; }
+      h1 { font-size: 26pt; }
+      h2 { font-size: 18pt; }
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 15px;
+      max-width: 860px;
+      margin: 40px auto;
+      color: #111;
+      line-height: 1.6;
+    }
+
+    h1 {
+      font-size: 2em;
+      border-bottom: 3px solid #111;
+      padding-bottom: 6px;
+      margin-bottom: 4px;
+    }
+
+    h2 {
+      font-size: 1.2em;
+      color: #444;
+      margin: 28px 0 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 8px;
+    }
+
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #ddd;
+      font-size: 1em;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    td:first-child {
+      color: #333;
+      width: 55%;
+    }
+
+    td:last-child {
+      font-family: 'Courier New', monospace;
+      font-size: 1em;
+      font-weight: bold;
+      color: #1a1a2e;
+      background: #f4f4f4;
+      border-radius: 4px;
+    }
+
+    .section {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-bottom: 22px;
+      overflow: hidden;
+    }
+
+    .section-title {
+      background: #1a1a2e;
+      color: white;
+      padding: 8px 14px;
+      font-size: 1em;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .tip {
+      background: #fffbe6;
+      border-left: 4px solid #f0c040;
+      padding: 10px 16px;
+      font-size: 0.95em;
+      margin-top: 24px;
+      border-radius: 0 4px 4px 0;
+    }
+  </style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a></div>
+
+  <h1>VSCode — Essential Shortcuts <span style="font-size:0.5em; color:#666;">(Linux)</span></h1>
+
+  <div class="section">
+    <div class="section-title">Navigate Between Panels &amp; Windows</div>
+    <table>
+      <tr><td>Open any file (fuzzy search)</td>      <td>Ctrl + P</td></tr>
+      <tr><td>Command Palette</td>                   <td>Ctrl + Shift + P</td></tr>
+      <tr><td>Toggle left sidebar</td>               <td>Ctrl + B</td></tr>
+      <tr><td>Toggle bottom panel</td>               <td>Ctrl + J</td></tr>
+      <tr><td>Toggle terminal</td>                   <td>Ctrl + `</td></tr>
+      <tr><td>Focus editor (from anywhere)</td>      <td>Ctrl + 1</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Switch Sidebar View</div>
+    <table>
+      <tr><td>Explorer (files)</td>      <td>Ctrl + Shift + E</td></tr>
+      <tr><td>Search in files</td>       <td>Ctrl + Shift + F</td></tr>
+      <tr><td>Source Control (git)</td>  <td>Ctrl + Shift + G</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Switch Bottom Console</div>
+    <table>
+      <tr><td>Terminal</td>         <td>Ctrl + `</td></tr>
+      <tr><td>Problems</td>         <td>Ctrl + Shift + M</td></tr>
+      <tr><td>Output</td>           <td>Ctrl + Shift + U</td></tr>
+      <tr><td>Debug Console</td>    <td>Ctrl + Shift + Y</td></tr>
+      <tr><td>Next terminal tab</td><td>Ctrl + PageDown</td></tr>
+      <tr><td>Prev terminal tab</td><td>Ctrl + PageUp</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Switch Editor Tabs</div>
+    <table>
+      <tr><td>Cycle open tabs</td>          <td>Ctrl + Tab</td></tr>
+      <tr><td>Focus pane 1 / 2 / 3</td>    <td>Ctrl + 1 / 2 / 3</td></tr>
+      <tr><td>Split editor side by side</td><td>Ctrl + \</td></tr>
+      <tr><td>Close current tab</td>        <td>Ctrl + W</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Editing (Biggest Time Savers)</div>
+    <table>
+      <tr><td>Go to definition</td>             <td>F12</td></tr>
+      <tr><td>Go back / forward</td>            <td>Alt + ← / →</td></tr>
+      <tr><td>Select next occurrence</td>       <td>Ctrl + D</td></tr>
+      <tr><td>Select ALL occurrences</td>       <td>Ctrl + Shift + L</td></tr>
+      <tr><td>Move line up / down</td>          <td>Alt + ↑ / ↓</td></tr>
+      <tr><td>Toggle comment</td>               <td>Ctrl + /</td></tr>
+      <tr><td>Quick fix / suggestions</td>      <td>Ctrl + .</td></tr>
+    </table>
+  </div>
+
+  <div class="tip">
+    <strong>Drill these first:</strong>
+    <code>Ctrl+P</code> (open file) &nbsp;·&nbsp;
+    <code>Ctrl+`</code> (terminal) &nbsp;·&nbsp;
+    <code>Ctrl+1</code> (back to editor) &nbsp;·&nbsp;
+    <code>Ctrl+Tab</code> (cycle tabs) &nbsp;·&nbsp;
+    <code>Ctrl+Shift+P</code> (any command)
+  </div>
+
+</body>
+</html>

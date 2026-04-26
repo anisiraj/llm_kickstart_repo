@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AWS SageMaker + Bedrock Cheatsheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 13px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 960px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.9em; color: #c2410c; border-bottom: 3px solid #c2410c; padding-bottom: 6px; margin-bottom: 16px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.72em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.82em; line-height: 1.55; white-space: pre-wrap; }
+  .kw  { color: #c678dd; font-weight: 600; }
+  .fn  { color: #0369a1; }
+  .st  { color: #16a34a; }
+  .cm  { color: #7f848e; font-style: italic; }
+  .nb  { color: #d97706; }
+  .c1  { background: #fff7ed; border-left: 3px solid #c2410c; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.79em; margin: 5px 0; display: block; }
+  .c2  { background: #eff6ff; border-left: 3px solid #1d4ed8; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.79em; margin: 5px 0; display: block; }
+  .c3  { background: #f0fdf4; border-left: 3px solid #16a34a; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.79em; margin: 5px 0; display: block; }
+
+  .t1 .card-title { background: #7f1d1d; }
+  .t2 .card-title { background: #1e40af; }
+  .t3 .card-title { background: #065f46; }
+  .t4 .card-title { background: #92400e; }
+  .t5 .card-title { background: #1e3a5f; }
+  .t6 .card-title { background: #4c1d95; }
+  .t7 .card-title { background: #831843; }
+  .t8 .card-title { background: #374151; }
+  .full { grid-column: 1 / -1; }
+
+  .section-label { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #c2410c; margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #fed7aa; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8em; margin: 4px 0; }
+  td, th { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; }
+  th { background: #f3f4f6; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-family: 'Fira Mono', monospace; color: #1e40af; font-size: 0.88em; }
+
+  @media print {
+    body { background: white; font-size: 11px; }
+    .page { box-shadow: none; margin: 0; padding: 16px 20px; }
+  }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a></div>
+<div class="page">
+  <h1>☁️ AWS SageMaker + Bedrock <span>— Train, Fine-Tune, Deploy &amp; Monitor HF Models</span></h1>
+
+  <div class="section-label">▶ SAGEMAKER — Train &amp; Deploy Hugging Face Models</div>
+  <div class="grid">
+
+    <!-- SETUP -->
+    <div class="card t1">
+      <div class="card-title">🔧 Setup & IAM</div>
+      <div class="card-body"><pre>
+pip install sagemaker transformers datasets --upgrade
+
+<span class="kw">import</span> sagemaker, boto3
+<span class="kw">from</span> sagemaker <span class="kw">import</span> get_execution_role
+
+<span class="cm"># In SageMaker Studio / notebook</span>
+sess = sagemaker.<span class="fn">Session</span>()
+role = <span class="fn">get_execution_role</span>()        <span class="cm"># auto</span>
+bucket = sess.<span class="fn">default_bucket</span>()
+
+<span class="cm"># From local machine (needs AWS CLI configured)</span>
+role = boto3.<span class="fn">client</span>(<span class="st">"iam"</span>).<span class="fn">get_role</span>(
+    RoleName=<span class="st">"SageMakerRole"</span>)[<span class="st">"Role"</span>][<span class="st">"Arn"</span>]
+sess = sagemaker.<span class="fn">Session</span>(
+    boto_session=boto3.<span class="fn">Session</span>(region_name=<span class="st">"us-east-1"</span>))
+</pre>
+<table>
+  <tr><th>Instance</th><th>GPU</th><th>VRAM</th><th>Use case</th></tr>
+  <tr><td>ml.g5.2xlarge</td><td>A10G</td><td>24GB</td><td>7B-8B fine-tune</td></tr>
+  <tr><td>ml.p3.2xlarge</td><td>V100</td><td>16GB</td><td>Smaller models</td></tr>
+  <tr><td>ml.p3dn.24xlarge</td><td>8×V100</td><td>256GB</td><td>Distributed</td></tr>
+  <tr><td>ml.g5.12xlarge</td><td>4×A10G</td><td>96GB</td><td>13B-34B</td></tr>
+</table>
+</div>
+    </div>
+
+    <!-- TRAINING SCRIPT -->
+    <div class="card t2">
+      <div class="card-title">📝 Training Script (train.py)</div>
+      <div class="card-body"><pre>
+<span class="cm"># scripts/train.py — runs INSIDE the container</span>
+<span class="kw">import</span> argparse, os
+<span class="kw">from</span> transformers <span class="kw">import</span> (AutoModelForSequenceClassification,
+    AutoTokenizer, Trainer, TrainingArguments)
+<span class="kw">from</span> datasets <span class="kw">import</span> load_from_disk
+
+parser = argparse.<span class="fn">ArgumentParser</span>()
+parser.<span class="fn">add_argument</span>(<span class="st">"--model_name"</span>, default=<span class="st">"distilbert-base-uncased"</span>)
+parser.<span class="fn">add_argument</span>(<span class="st">"--epochs"</span>, type=int, default=<span class="nb">3</span>)
+parser.<span class="fn">add_argument</span>(<span class="st">"--lr"</span>, type=float, default=<span class="nb">2e-5</span>)
+parser.<span class="fn">add_argument</span>(<span class="st">"--train_dir"</span>,
+    default=os.environ[<span class="st">"SM_CHANNEL_TRAIN"</span>])  <span class="cm"># ← SageMaker injects</span>
+parser.<span class="fn">add_argument</span>(<span class="st">"--model_dir"</span>,
+    default=os.environ[<span class="st">"SM_MODEL_DIR"</span>])      <span class="cm"># ← save here</span>
+args = parser.<span class="fn">parse_args</span>()
+
+model     = AutoModelForSequenceClassification.<span class="fn">from_pretrained</span>(args.model_name, num_labels=<span class="nb">2</span>)
+tokenizer = AutoTokenizer.<span class="fn">from_pretrained</span>(args.model_name)
+dataset   = load_from_disk(args.train_dir)
+
+trainer = <span class="fn">Trainer</span>(model=model,
+    args=<span class="fn">TrainingArguments</span>(args.model_dir, num_train_epochs=args.epochs,
+        learning_rate=args.lr, per_device_train_batch_size=<span class="nb">16</span>),
+    train_dataset=dataset)
+trainer.<span class="fn">train</span>()
+model.<span class="fn">save_pretrained</span>(args.model_dir)  <span class="cm"># ← MUST save to SM_MODEL_DIR</span>
+tokenizer.<span class="fn">save_pretrained</span>(args.model_dir)
+</pre></div>
+    </div>
+
+    <!-- LAUNCH TRAINING -->
+    <div class="card t3">
+      <div class="card-title">🚀 Launch Training Job</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> sagemaker.huggingface <span class="kw">import</span> HuggingFace
+
+<span class="cm"># Upload dataset to S3</span>
+train_s3 = sess.<span class="fn">upload_data</span>(<span class="st">"data/train"</span>,
+               key_prefix=<span class="st">"datasets/my-dataset"</span>)
+
+estimator = <span class="fn">HuggingFace</span>(
+    entry_point         = <span class="st">"train.py"</span>,
+    source_dir          = <span class="st">"./scripts"</span>,
+    role                = role,
+    instance_type       = <span class="st">"ml.g5.2xlarge"</span>,
+    instance_count      = <span class="nb">1</span>,
+    transformers_version= <span class="st">"4.36"</span>,
+    pytorch_version     = <span class="st">"2.1"</span>,
+    py_version          = <span class="st">"py310"</span>,
+    hyperparameters     = {
+        <span class="st">"model_name"</span>: <span class="st">"distilbert-base-uncased"</span>,
+        <span class="st">"epochs"</span>: <span class="nb">3</span>, <span class="st">"lr"</span>: <span class="nb">2e-5</span>,
+    },
+    <span class="cm"># Spot instance = up to 70% cheaper</span>
+    use_spot_instances  = <span class="kw">True</span>,
+    max_wait            = <span class="nb">7200</span>,
+    max_run             = <span class="nb">3600</span>,
+    checkpoint_s3_uri   = <span class="st">f"s3://{bucket}/checkpoints"</span>,
+)
+
+estimator.<span class="fn">fit</span>({<span class="st">"train"</span>: train_s3})  <span class="cm"># blocks until done</span>
+<span class="fn">print</span>(estimator.model_data)           <span class="cm"># S3 path to model.tar.gz</span>
+</pre></div>
+    </div>
+
+    <!-- DEPLOY -->
+    <div class="card t4">
+      <div class="card-title">🌐 Deploy Endpoint (Real-Time)</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> sagemaker.huggingface <span class="kw">import</span> HuggingFaceModel, \
+                                    get_huggingface_llm_image_uri
+
+<span class="cm"># A: Deploy trained model from S3</span>
+hf_model = <span class="fn">HuggingFaceModel</span>(
+    model_data          = estimator.model_data,   <span class="cm"># or S3 URI</span>
+    role                = role,
+    transformers_version= <span class="st">"4.36"</span>,
+    pytorch_version     = <span class="st">"2.1"</span>,
+    py_version          = <span class="st">"py310"</span>,
+)
+predictor = hf_model.<span class="fn">deploy</span>(
+    initial_instance_count = <span class="nb">1</span>,
+    instance_type          = <span class="st">"ml.m5.xlarge"</span>,
+)
+
+<span class="cm"># B: Deploy any HF Hub LLM (TGI backend)</span>
+image_uri = <span class="fn">get_huggingface_llm_image_uri</span>(<span class="st">"huggingface"</span>)
+llm_model = <span class="fn">HuggingFaceModel</span>(role=role, image_uri=image_uri,
+    env={<span class="st">"HF_MODEL_ID"</span>: <span class="st">"meta-llama/Llama-3.1-8B-Instruct"</span>,
+         <span class="st">"SM_NUM_GPUS"</span>: <span class="st">"1"</span>,
+         <span class="st">"HUGGING_FACE_HUB_TOKEN"</span>: <span class="st">"hf_xxx"</span>})
+predictor = llm_model.<span class="fn">deploy</span>(<span class="nb">1</span>, <span class="st">"ml.g5.2xlarge"</span>)
+
+<span class="cm"># Predict</span>
+predictor.<span class="fn">predict</span>({<span class="st">"inputs"</span>: <span class="st">"Summarize: ..."</span>})
+predictor.<span class="fn">predict</span>({<span class="st">"inputs"</span>: <span class="st">"Hello!"</span>,
+    <span class="st">"parameters"</span>: {<span class="st">"max_new_tokens"</span>: <span class="nb">200</span>, <span class="st">"temperature"</span>: <span class="nb">0.7</span>}})
+predictor.<span class="fn">delete_endpoint</span>()              <span class="cm"># ← ALWAYS clean up!</span>
+</pre></div>
+    </div>
+
+    <!-- MONITOR -->
+    <div class="card t5">
+      <div class="card-title">📊 Monitor Training &amp; Endpoints</div>
+      <div class="card-body"><pre>
+<span class="cm"># Auto-parse training logs → CloudWatch metrics</span>
+metric_definitions = [
+    {<span class="st">"Name"</span>: <span class="st">"train_loss"</span>,
+     <span class="st">"Regex"</span>: <span class="st">"'loss': ([0-9\\.]+)"</span>},
+    {<span class="st">"Name"</span>: <span class="st">"eval_accuracy"</span>,
+     <span class="st">"Regex"</span>: <span class="st">"eval_accuracy.*=\\D*([0-9\\.]+)"</span>},
+]
+<span class="cm"># Add to HuggingFace() constructor above</span>
+
+<span class="cm"># Monitor job status via boto3</span>
+sm = boto3.<span class="fn">client</span>(<span class="st">"sagemaker"</span>)
+status = sm.<span class="fn">describe_training_job</span>(
+    TrainingJobName=estimator.latest_training_job.name)
+<span class="fn">print</span>(status[<span class="st">"TrainingJobStatus"</span>])  <span class="cm"># InProgress/Completed/Failed</span>
+
+<span class="cm"># Endpoint auto-scaling</span>
+aas = boto3.<span class="fn">client</span>(<span class="st">"application-autoscaling"</span>)
+aas.<span class="fn">register_scalable_target</span>(
+    ServiceNamespace=<span class="st">"sagemaker"</span>,
+    ResourceId=<span class="st">f"endpoint/{predictor.endpoint_name}/variant/AllTraffic"</span>,
+    ScalableDimension=<span class="st">"sagemaker:variant:DesiredInstanceCount"</span>,
+    MinCapacity=<span class="nb">1</span>, MaxCapacity=<span class="nb">4</span>)
+</pre>
+<span class="c2">💡 View logs in CloudWatch → /aws/sagemaker/TrainingJobs/{job-name}</span>
+</div>
+    </div>
+
+    <!-- BEDROCK SETUP -->
+    <div class="card t6">
+      <div class="card-title">🪨 Bedrock — Foundation Model Inference</div>
+      <div class="card-body"><pre>
+<span class="cm"># bedrock = managed FM inference, no infra</span>
+<span class="kw">import</span> boto3, json
+
+bedrock_rt = boto3.<span class="fn">client</span>(<span class="st">"bedrock-runtime"</span>,
+                            region_name=<span class="st">"us-east-1"</span>)
+
+<span class="cm"># Invoke any foundation model (Converse API — universal)</span>
+response = bedrock_rt.<span class="fn">converse</span>(
+    modelId  = <span class="st">"anthropic.claude-3-5-sonnet-20241022-v2:0"</span>,
+    messages = [{
+        <span class="st">"role"</span>: <span class="st">"user"</span>,
+        <span class="st">"content"</span>: [{<span class="st">"text"</span>: <span class="st">"Summarize transformers in 3 lines."</span>}]
+    }],
+    inferenceConfig = {<span class="st">"maxTokens"</span>: <span class="nb">512</span>, <span class="st">"temperature"</span>: <span class="nb">0.7</span>}
+)
+<span class="fn">print</span>(response[<span class="st">"output"</span>][<span class="st">"message"</span>][<span class="st">"content"</span>][<span class="nb">0</span>][<span class="st">"text"</span>])
+
+<span class="cm"># Streaming</span>
+stream = bedrock_rt.<span class="fn">converse_stream</span>(modelId=<span class="st">"..."</span>, messages=[...])
+<span class="kw">for</span> event <span class="kw">in</span> stream[<span class="st">"stream"</span>]:
+    <span class="kw">if</span> <span class="st">"contentBlockDelta"</span> <span class="kw">in</span> event:
+        <span class="fn">print</span>(event[<span class="st">"contentBlockDelta"</span>][<span class="st">"delta"</span>][<span class="st">"text"</span>], end=<span class="st">""</span>)
+</pre>
+<table>
+  <tr><th>Model ID</th><th>Provider</th></tr>
+  <tr><td>anthropic.claude-3-5-sonnet-20241022-v2:0</td><td>Anthropic</td></tr>
+  <tr><td>meta.llama3-70b-instruct-v1:0</td><td>Meta</td></tr>
+  <tr><td>amazon.titan-text-express-v1</td><td>Amazon</td></tr>
+  <tr><td>mistral.mistral-large-2402-v1:0</td><td>Mistral</td></tr>
+</table>
+</div>
+    </div>
+
+    <!-- BEDROCK FINE-TUNE -->
+    <div class="card t7">
+      <div class="card-title">🎯 Bedrock — Custom Model Fine-Tuning</div>
+      <div class="card-body"><pre>
+<span class="cm"># 1. Data format: JSONL in S3</span>
+<span class="cm"># {"prompt": "...", "completion": "..."}</span>
+
+bedrock = boto3.<span class="fn">client</span>(<span class="st">"bedrock"</span>, region_name=<span class="st">"us-east-1"</span>)
+
+<span class="cm"># 2. Create fine-tuning job</span>
+resp = bedrock.<span class="fn">create_model_customization_job</span>(
+    customizationJobName = <span class="st">"my-ft-job"</span>,
+    customModelName      = <span class="st">"my-custom-llama"</span>,
+    baseModelIdentifier  = <span class="st">"meta.llama3-8b-instruct-v1:0"</span>,
+    roleArn              = <span class="st">"arn:aws:iam::ACCT:role/BedrockRole"</span>,
+    trainingDataConfig   = {<span class="st">"s3Uri"</span>: <span class="st">"s3://bucket/train.jsonl"</span>},
+    outputDataConfig     = {<span class="st">"s3Uri"</span>: <span class="st">"s3://bucket/output/"</span>},
+    hyperParameters      = {
+        <span class="st">"epochCount"</span>: <span class="st">"1"</span>, <span class="st">"batchSize"</span>: <span class="st">"8"</span>,
+        <span class="st">"learningRate"</span>: <span class="st">"0.00001"</span>},
+)
+
+<span class="cm"># 3. Check status</span>
+job = bedrock.<span class="fn">get_model_customization_job</span>(
+    jobIdentifier=resp[<span class="st">"jobArn"</span>])
+<span class="fn">print</span>(job[<span class="st">"status"</span>])                   <span class="cm"># InProgress / Completed</span>
+
+<span class="cm"># 4. Provision throughput to invoke custom model</span>
+pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
+    modelUnits          = <span class="nb">1</span>,
+    provisionedModelName= <span class="st">"my-prod-model"</span>,
+    modelId             = job[<span class="st">"outputModelArn"</span>])
+<span class="cm"># → use pt["provisionedModelArn"] in converse(modelId=...)</span>
+</pre>
+<span class="c1">⚠️  Bedrock fine-tuning: not all models support it. Check console → Model customization.</span>
+</div>
+    </div>
+
+    <!-- TIPS -->
+    <div class="card t8">
+      <div class="card-title">💡 Key Tips &amp; Cost Control</div>
+      <div class="card-body"><pre>
+<span class="cm"># Use spot instances → 70% cheaper for training</span>
+use_spot_instances = <span class="kw">True</span>,  max_wait = <span class="nb">7200</span>
+
+<span class="cm"># Test locally first (no cost)</span>
+instance_type = <span class="st">"local"</span>         <span class="cm"># runs on your machine</span>
+instance_type = <span class="st">"local_gpu"</span>     <span class="cm"># uses local GPU</span>
+
+<span class="cm"># Upload data to S3 (helper)</span>
+s3_uri = sess.<span class="fn">upload_data</span>(<span class="st">"./data"</span>, key_prefix=<span class="st">"my/data"</span>)
+
+<span class="cm"># Download model artifacts from S3</span>
+<span class="kw">from</span> sagemaker.s3 <span class="kw">import</span> S3Downloader
+S3Downloader.<span class="fn">download</span>(estimator.model_data, <span class="st">"./local_model"</span>)
+
+<span class="cm"># List running endpoints</span>
+sm.<span class="fn">list_endpoints</span>(StatusEquals=<span class="st">"InService"</span>)
+
+<span class="cm"># ALWAYS delete endpoints when done</span>
+predictor.<span class="fn">delete_endpoint</span>()
+</pre>
+<span class="c3">✅ SageMaker = full control, bring your own code, any HF model.<br>✅ Bedrock = no infra, pay-per-token, managed FMs only.</span>
+</div>
+    </div>
+
+  </div><!-- grid -->
+
+  <!-- DECISION GUIDE -->
+  <div style="margin-top:14px; background:#fff7ed; border:1px solid #c2410c; border-radius:8px; padding:12px 16px;">
+    <strong style="color:#9a3412; font-size:0.85em; text-transform:uppercase; letter-spacing:0.06em;">⚡ SageMaker vs Bedrock — When to Use What</strong>
+    <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.82em;">
+      <div>
+        <strong style="color:#1e40af;">🔵 Use SageMaker when:</strong><br>
+        • Training / fine-tuning your own model<br>
+        • Deploying any HF Hub model with custom code<br>
+        • Need full control over infra, GPU, distributed training<br>
+        • Running batch transform jobs on large datasets
+      </div>
+      <div>
+        <strong style="color:#15803d;">🟢 Use Bedrock when:</strong><br>
+        • You just need to call a Foundation Model via API<br>
+        • Fine-tuning on supported base models (no infra setup)<br>
+        • Building apps fast — no container management<br>
+        • Pay-per-token pricing with no idle endpoint costs
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

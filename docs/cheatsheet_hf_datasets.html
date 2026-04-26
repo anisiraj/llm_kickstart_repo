@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>HF Datasets Cheatsheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 13px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 960px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.9em; color: #f59e0b; border-bottom: 3px solid #f59e0b; padding-bottom: 6px; margin-bottom: 16px; letter-spacing: -0.5px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.72em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.82em; line-height: 1.55; white-space: pre-wrap; }
+  .kw  { color: #c678dd; font-weight: 600; }
+  .fn  { color: #0ea5e9; }
+  .st  { color: #16a34a; }
+  .cm  { color: #7f848e; font-style: italic; }
+  .nb  { color: #d97706; }
+  .c1  { background: #fff3e0; border-left: 3px solid #f59e0b; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.8em; margin: 6px 0; display: block; }
+  .c2  { background: #e0f2fe; border-left: 3px solid #0ea5e9; padding: 4px 8px; border-radius: 0 4px 4px 0; font-size: 0.8em; margin: 6px 0; display: block; }
+
+  .t1 .card-title { background: #b45309; }
+  .t2 .card-title { background: #0369a1; }
+  .t3 .card-title { background: #15803d; }
+  .t4 .card-title { background: #7c3aed; }
+  .t5 .card-title { background: #be185d; }
+  .t6 .card-title { background: #0f766e; }
+  .t7 .card-title { background: #9a3412; }
+  .t8 .card-title { background: #374151; }
+  .full { grid-column: 1 / -1; }
+
+  @media print {
+    body { background: white; font-size: 11px; }
+    .page { box-shadow: none; margin: 0; padding: 16px 20px; }
+    h1 { font-size: 1.6em; }
+  }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a></div>
+<div class="page">
+  <h1>🤗 HF Datasets <span>— Essential One-Pager</span></h1>
+  <div class="grid">
+
+    <!-- LOAD -->
+    <div class="card t1">
+      <div class="card-title">📥 Load a Dataset</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+<span class="cm"># From Hugging Face Hub</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>)
+ds = <span class="fn">load_dataset</span>(<span class="st">"nyu-mll/glue"</span>, <span class="st">"mrpc"</span>)
+
+<span class="cm"># Specific split</span>
+train = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>, split=<span class="st">"train"</span>)
+test  = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>, split=<span class="st">"test"</span>)
+
+<span class="cm"># From local files</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"csv"</span>,   data_files=<span class="st">"data.csv"</span>)
+ds = <span class="fn">load_dataset</span>(<span class="st">"json"</span>,  data_files=<span class="st">"data.jsonl"</span>)
+ds = <span class="fn">load_dataset</span>(<span class="st">"parquet"</span>, data_files=<span class="st">"data.parquet"</span>)
+
+<span class="cm"># Stream large datasets (no full download)</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>, streaming=<span class="kw">True</span>)
+<span class="kw">for</span> row <span class="kw">in</span> ds[<span class="st">"train"</span>].<span class="fn">take</span>(<span class="nb">5</span>):
+    <span class="fn">print</span>(row)
+</pre></div>
+    </div>
+
+    <!-- INSPECT -->
+    <div class="card t2">
+      <div class="card-title">🔍 Inspect & Access</div>
+      <div class="card-body"><pre>
+ds = <span class="fn">load_dataset</span>(<span class="st">"imdb"</span>)
+
+<span class="cm"># Structure</span>
+<span class="fn">print</span>(ds)                  <span class="cm"># DatasetDict overview</span>
+<span class="fn">print</span>(ds[<span class="st">"train"</span>])        <span class="cm"># split info</span>
+<span class="fn">print</span>(ds[<span class="st">"train"</span>].<span class="fn">features</span>) <span class="cm"># column types</span>
+<span class="fn">print</span>(ds[<span class="st">"train"</span>].<span class="fn">column_names</span>)
+
+<span class="cm"># Access rows</span>
+ds[<span class="st">"train"</span>][<span class="nb">0</span>]            <span class="cm"># first row (dict)</span>
+ds[<span class="st">"train"</span>][:<span class="nb">5</span>]           <span class="cm"># first 5 rows</span>
+ds[<span class="st">"train"</span>][<span class="st">"label"</span>][:<span class="nb">5</span>] <span class="cm"># column slice</span>
+
+<span class="cm"># Convert to pandas</span>
+df = ds[<span class="st">"train"</span>].<span class="fn">to_pandas</span>()
+
+<span class="cm"># Convert from pandas</span>
+<span class="kw">from</span> datasets <span class="kw">import</span> Dataset
+ds = Dataset.<span class="fn">from_pandas</span>(df)
+</pre></div>
+    </div>
+
+    <!-- MAP -->
+    <div class="card t3">
+      <div class="card-title">🗺️ map() — Transform Data</div>
+      <div class="card-body"><pre>
+<span class="cm"># map() is the core transformation tool</span>
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer
+tokenizer = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"bert-base-uncased"</span>)
+
+<span class="kw">def</span> <span class="fn">tokenize</span>(examples):
+    <span class="kw">return</span> <span class="fn">tokenizer</span>(examples[<span class="st">"text"</span>],
+                      truncation=<span class="kw">True</span>,
+                      padding=<span class="st">"max_length"</span>,
+                      max_length=<span class="nb">128</span>)
+
+<span class="cm"># batched=True = fast (vectorized)</span>
+ds = ds.<span class="fn">map</span>(tokenize, batched=<span class="kw">True</span>)
+
+<span class="cm"># Add a new column</span>
+ds = ds.<span class="fn">map</span>(<span class="kw">lambda</span> x: {<span class="st">"len"</span>: <span class="fn">len</span>(x[<span class="st">"text"</span>])})
+
+<span class="cm"># Remove columns during map</span>
+ds = ds.<span class="fn">map</span>(tokenize, batched=<span class="kw">True</span>,
+             remove_columns=[<span class="st">"text"</span>])
+
+<span class="cm"># Cache control</span>
+ds = ds.<span class="fn">map</span>(tokenize, batched=<span class="kw">True</span>,
+             load_from_cache_file=<span class="kw">False</span>)
+</pre></div>
+    </div>
+
+    <!-- FILTER / SELECT -->
+    <div class="card t4">
+      <div class="card-title">🔎 Filter, Select & Sort</div>
+      <div class="card-body"><pre>
+<span class="cm"># Filter rows by condition</span>
+ds = ds.<span class="fn">filter</span>(<span class="kw">lambda</span> x: x[<span class="st">"label"</span>] == <span class="nb">1</span>)
+ds = ds.<span class="fn">filter</span>(<span class="kw">lambda</span> x: <span class="fn">len</span>(x[<span class="st">"text"</span>]) > <span class="nb">100</span>)
+
+<span class="cm"># Select specific indices</span>
+ds = ds.<span class="fn">select</span>(<span class="fn">range</span>(<span class="nb">1000</span>))    <span class="cm"># first 1000</span>
+ds = ds.<span class="fn">select</span>([<span class="nb">0</span>, <span class="nb">5</span>, <span class="nb">10</span>])     <span class="cm"># specific rows</span>
+
+<span class="cm"># Shuffle</span>
+ds = ds.<span class="fn">shuffle</span>(seed=<span class="nb">42</span>)
+
+<span class="cm"># Sort</span>
+ds = ds.<span class="fn">sort</span>(<span class="st">"label"</span>)
+
+<span class="cm"># Column ops</span>
+ds = ds.<span class="fn">rename_column</span>(<span class="st">"label"</span>, <span class="st">"labels"</span>)
+ds = ds.<span class="fn">remove_columns</span>([<span class="st">"text"</span>])
+ds = ds.<span class="fn">select_columns</span>([<span class="st">"input_ids"</span>, <span class="st">"labels"</span>])
+</pre></div>
+    </div>
+
+    <!-- SPLIT -->
+    <div class="card t5">
+      <div class="card-title">✂️ Split & Combine</div>
+      <div class="card-body"><pre>
+<span class="cm"># Train/test split from a single dataset</span>
+split = ds.<span class="fn">train_test_split</span>(test_size=<span class="nb">0.2</span>, seed=<span class="nb">42</span>)
+train_ds = split[<span class="st">"train"</span>]
+test_ds  = split[<span class="st">"test"</span>]
+
+<span class="cm"># Concatenate datasets</span>
+<span class="kw">from</span> datasets <span class="kw">import</span> concatenate_datasets
+full = <span class="fn">concatenate_datasets</span>([ds1, ds2])
+
+<span class="cm"># Interleave (mix multiple datasets)</span>
+<span class="kw">from</span> datasets <span class="kw">import</span> interleave_datasets
+mixed = <span class="fn">interleave_datasets</span>([ds1, ds2],
+                               probabilities=[<span class="nb">0.7</span>, <span class="nb">0.3</span>])
+
+<span class="cm"># Create from dict</span>
+<span class="kw">from</span> datasets <span class="kw">import</span> Dataset
+ds = Dataset.<span class="fn">from_dict</span>({
+    <span class="st">"text"</span>: [<span class="st">"hello"</span>, <span class="st">"world"</span>],
+    <span class="st">"label"</span>: [<span class="nb">0</span>, <span class="nb">1</span>],
+})
+</pre></div>
+    </div>
+
+    <!-- FORMAT -->
+    <div class="card t6">
+      <div class="card-title">🔄 Format for PyTorch</div>
+      <div class="card-body"><pre>
+<span class="cm"># Set format → tensors on the fly</span>
+ds.<span class="fn">set_format</span>(type=<span class="st">"torch"</span>,
+              columns=[<span class="st">"input_ids"</span>, <span class="st">"attention_mask"</span>, <span class="st">"labels"</span>])
+
+<span class="cm"># or: with_format (returns new dataset)</span>
+ds = ds.<span class="fn">with_format</span>(<span class="st">"torch"</span>)
+
+<span class="cm"># Then wrap in DataLoader</span>
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> DataLoader
+loader = <span class="fn">DataLoader</span>(ds, batch_size=<span class="nb">32</span>, shuffle=<span class="kw">True</span>)
+
+<span class="cm"># Apply transforms lazily (no copy)</span>
+ds = ds.<span class="fn">with_transform</span>(transform_fn)
+
+<span class="cm"># Reset to Python dicts</span>
+ds.<span class="fn">reset_format</span>()
+</pre>
+<span class="c1">⚠️  Always set_format AFTER all map/filter ops, not before.</span>
+</div>
+    </div>
+
+    <!-- SAVE / PUSH -->
+    <div class="card t7">
+      <div class="card-title">💾 Save & Push to Hub</div>
+      <div class="card-body"><pre>
+<span class="cm"># Save locally (Arrow format — fast reload)</span>
+ds.<span class="fn">save_to_disk</span>(<span class="st">"my_dataset"</span>)
+ds = datasets.<span class="fn">load_from_disk</span>(<span class="st">"my_dataset"</span>)
+
+<span class="cm"># Save as CSV / JSON / Parquet</span>
+ds.<span class="fn">to_csv</span>(<span class="st">"out.csv"</span>)
+ds.<span class="fn">to_json</span>(<span class="st">"out.jsonl"</span>)
+ds.<span class="fn">to_parquet</span>(<span class="st">"out.parquet"</span>)
+
+<span class="cm"># Push to Hugging Face Hub</span>
+ds.<span class="fn">push_to_hub</span>(<span class="st">"username/my-dataset"</span>)
+
+<span class="cm"># Login first</span>
+<span class="kw">from</span> huggingface_hub <span class="kw">import</span> notebook_login
+<span class="fn">notebook_login</span>()
+<span class="cm"># or CLI: hf auth login</span>
+</pre></div>
+    </div>
+
+    <!-- TIPS -->
+    <div class="card t8">
+      <div class="card-title">💡 Essential Tips</div>
+      <div class="card-body"><pre>
+<span class="cm"># Check dataset size before loading everything</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"bigdata"</span>, streaming=<span class="kw">True</span>)
+
+<span class="cm"># Speed up map() with multiprocessing</span>
+ds = ds.<span class="fn">map</span>(fn, batched=<span class="kw">True</span>, num_proc=<span class="nb">4</span>)
+
+<span class="cm"># Cast column type</span>
+<span class="kw">from</span> datasets <span class="kw">import</span> ClassLabel, Value
+ds = ds.<span class="fn">cast_column</span>(<span class="st">"label"</span>, ClassLabel(names=[<span class="st">"neg"</span>,<span class="st">"pos"</span>]))
+
+<span class="cm"># Unique values</span>
+ds.<span class="fn">unique</span>(<span class="st">"label"</span>)
+
+<span class="cm"># Dataset info</span>
+ds.<span class="fn">info</span>      <span class="cm"># metadata</span>
+ds.<span class="fn">num_rows</span>  <span class="cm"># row count</span>
+<span class="fn">len</span>(ds)      <span class="cm"># same</span>
+</pre>
+<span class="c2">💡  batched=True in map() is 10-100x faster — always use it.</span>
+</div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

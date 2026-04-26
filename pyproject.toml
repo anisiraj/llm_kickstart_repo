@@ -1,0 +1,57 @@
+[project]
+name = "llm-finetuning-hf-tutorial"
+version = "0.1.0"
+description = "LLM fine-tuning tutorial: PyTorch, HF Transformers, TRL, Unsloth, SageMaker, Bedrock"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Core — always install these
+    "torch>=2.1",
+    "transformers>=4.38",
+    "datasets>=2.18",
+    "trl>=0.15",          # >=0.9 needed for DPO/ORPO/GRPO; removed <0.9.0 pin
+    "peft>=0.10",
+    "accelerate>=0.28",
+    "evaluate",
+    "boto3",
+]
+
+[project.optional-dependencies]
+# GPU fine-tuning with Unsloth (requires CUDA + compatible xformers)
+unsloth = [
+    "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git",
+    "xformers<0.0.27",
+    "bitsandbytes",
+]
+# AWS deployment
+aws = [
+    "sagemaker>=2.200",
+    "boto3",
+]
+# Development tools
+dev = [
+    "ipykernel",
+    "jupyter",
+]
+
+[tool.uv]
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  TWO VENVS — Unsloth pins trl<0.9 which conflicts with DPO/GRPO
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+#  .venv     → Unsloth + SFT   (scripts 01-04, 08)
+#  .venv-rl  → DPO/ORPO/GRPO   (scripts 05-07)
+#
+#  Quick setup (CUDA GPU):
+#    uv venv .venv    && uv pip install --python .venv/bin/python \
+#      --index-url https://download.pytorch.org/whl/cu128 torch torchvision && \
+#      uv pip install --python .venv/bin/python \
+#        "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" \
+#        transformers datasets peft accelerate bitsandbytes evaluate boto3
+#
+#    uv venv .venv-rl && uv pip install --python .venv-rl/bin/python \
+#      --index-url https://download.pytorch.org/whl/cu128 torch torchvision && \
+#      uv pip install --python .venv-rl/bin/python \
+#        "trl>=1.0" transformers>=4.38 datasets peft accelerate evaluate boto3
+#
+#  Or just run:  bash scripts/setup_envs.sh
