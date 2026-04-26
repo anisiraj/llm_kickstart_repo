@@ -1,0 +1,201 @@
+================================================================================
+PLACEHOLDER: Internal Knowledge Base (Confluence-style dump)
+================================================================================
+Replace this file with actual anonymized content from your organization —
+Confluence exports, internal wikis, onboarding docs, runbooks, SOPs.
+
+The purpose is to give the causal LM exposure to your organization's language,
+terminology, processes, and domain knowledge BEFORE supervised fine-tuning.
+================================================================================
+
+
+== Company Overview ==
+
+Brainbox AI is a division within Trane Technologies focused on applying
+artificial intelligence to building automation and HVAC optimization. The core
+product is an autonomous HVAC control system that uses deep reinforcement
+learning to reduce energy consumption in commercial buildings by 20-40% while
+maintaining occupant comfort.
+
+The platform connects to Building Management Systems (BMS) via BACnet and
+Modbus protocols, ingests real-time sensor data (temperature, humidity, CO2,
+occupancy), weather forecasts, and utility rate schedules, then generates
+optimal setpoint commands every 5 minutes.
+
+
+== Key Terminology ==
+
+- AHU: Air Handling Unit — central unit that conditions and circulates air
+  through ductwork. Contains supply fan, return fan, heating/cooling coils,
+  and dampers.
+
+- BMS: Building Management System — central control system for HVAC,
+  lighting, and other building systems. Common vendors: Trane Tracer,
+  Honeywell Niagara, Siemens Desigo, Johnson Controls Metasys.
+
+- BACnet: Building Automation and Control Networks — ISO 16484 standard
+  protocol for building automation. Objects include analog-input (AI),
+  analog-output (AO), binary-input (BI), binary-output (BO).
+
+- VRF: Variable Refrigerant Flow — HVAC technology that uses refrigerant
+  as the cooling/heating medium. Common in multi-zone commercial buildings.
+  Brands: Daikin, Mitsubishi, LG.
+
+- Setpoint: The target value for a controlled variable (e.g., zone
+  temperature setpoint of 72°F). The AI agent adjusts setpoints to
+  minimize energy while respecting comfort bounds.
+
+- Deadband: The range around a setpoint where no corrective action is
+  taken. For example, a 72°F setpoint with 2°F deadband means the system
+  only acts if temperature goes below 70°F or above 74°F.
+
+- COP: Coefficient of Performance — ratio of useful heating/cooling to
+  energy consumed. A COP of 3.0 means 3 kW of cooling per 1 kW of
+  electricity. Higher is better.
+
+- EER: Energy Efficiency Ratio — cooling capacity (BTU/h) divided by
+  power input (W). Used for rating equipment at a specific condition.
+
+- kWh: Kilowatt-hour — unit of energy consumption. Building operators
+  track kWh per square foot as a key efficiency metric.
+
+- Demand Response (DR): Programs where utilities request buildings to
+  reduce load during peak grid stress. Participation earns rebates.
+
+- Chiller: Large refrigeration machine that produces chilled water for
+  air conditioning. Types: centrifugal, screw, scroll, absorption.
+  Trane CenTraVac is a flagship centrifugal chiller.
+
+- RTU: Rooftop Unit — self-contained HVAC unit installed on building
+  roofs. Common in retail, restaurants, small commercial.
+
+- VAV: Variable Air Volume — system that varies airflow to each zone
+  rather than varying temperature. VAV boxes have dampers controlled
+  by zone thermostats.
+
+
+== Data Pipeline Architecture ==
+
+1. Edge Gateway: Raspberry Pi 4 or industrial PC at each building site.
+   Runs a lightweight agent that polls BMS points every 60 seconds via
+   BACnet/IP or Modbus TCP. Data is buffered locally (SQLite) and
+   forwarded to cloud via MQTT over TLS.
+
+2. Ingestion Layer: AWS IoT Core receives MQTT messages. IoT Rules
+   route data to Kinesis Data Streams for real-time processing and
+   S3 for long-term storage (Parquet format, partitioned by
+   site_id/year/month/day).
+
+3. Feature Store: Time-series features computed from raw sensor data.
+   Features include rolling averages (15min, 1h, 4h), rate of change,
+   occupancy patterns, weather forecast integration (OpenWeatherMap API).
+   Stored in DynamoDB for online serving, S3 for offline training.
+
+4. RL Training: PPO (Proximal Policy Optimization) agent trained on
+   historical data using a building energy simulation model (EnergyPlus).
+   Training runs on SageMaker with ml.p3.2xlarge instances. Model
+   artifacts stored in S3 and versioned in MLflow.
+
+5. Inference: Trained policy runs on edge gateway. Every 5 minutes,
+   it reads current state, computes optimal setpoints, and writes
+   them back to BMS. Fallback: if edge loses cloud connectivity for
+   >30 minutes, revert to BMS native schedules.
+
+
+== Incident Response Runbook ==
+
+SEV1 — Critical: Building occupants affected, comfort out of bounds
+  1. Page oncall engineer via PagerDuty
+  2. Check edge gateway connectivity (SSH via Tailscale VPN)
+  3. Verify BACnet point reads are fresh (stale > 5 min = problem)
+  4. If AI agent is commanding extreme setpoints → disable AI override,
+     revert to BMS schedules
+  5. Check recent model deployment — was a new policy pushed in last 24h?
+  6. Document in Jira incident ticket, notify customer CSM
+
+SEV2 — Degraded: Partial loss of data or suboptimal performance
+  1. Acknowledge in PagerDuty within 30 minutes
+  2. Check CloudWatch alarms for pipeline components
+  3. If Kinesis lag > 5 minutes → check consumer Lambda scaling
+  4. If feature computation delayed → check DynamoDB throughput
+  5. Escalate to SEV1 if not resolved in 2 hours
+
+SEV3 — Minor: Non-critical issue, no occupant impact
+  1. Create Jira ticket, assign to team backlog
+  2. Standard SLA: 5 business days
+
+SEV4 — Informational: Enhancement request, question, documentation gap
+  1. Create Jira ticket, label as "improvement"
+  2. Review in weekly triage meeting
+
+
+== Quarterly Business Review (QBR) Metrics ==
+
+For each customer site, the QBR report includes:
+  - Energy savings: kWh reduction vs. baseline (pre-AI) period
+  - Comfort compliance: % of occupied hours where zone temperature
+    stayed within ±1°F of setpoint
+  - Equipment health: number of predictive maintenance alerts generated
+    vs. actual failures prevented
+  - System uptime: % of time AI agent was actively controlling
+  - ROI calculation: energy cost savings minus platform subscription fee
+
+The baseline period is typically the same calendar months from the
+prior year, weather-normalized using heating/cooling degree days (HDD/CDD).
+
+
+== Common SQL Queries (for analysts) ==
+
+-- Revenue by region
+SELECT c.region, SUM(i.amount) as total_revenue
+FROM invoices i JOIN customers c ON i.customer_id = c.customer_id
+WHERE i.status = 'paid' AND i.issue_date >= '2025-01-01'
+GROUP BY c.region ORDER BY total_revenue DESC;
+
+-- Open incidents by severity
+SELECT severity, COUNT(*) as cnt
+FROM incidents WHERE status IN ('open','investigating')
+GROUP BY severity ORDER BY severity;
+
+-- Equipment with most maintenance visits
+SELECT e.equip_name, e.site_id, COUNT(m.log_id) as visits
+FROM equipment e JOIN maintenance_logs m ON e.equip_id = m.equip_id
+WHERE m.log_date >= CURRENT_DATE - INTERVAL '90 days'
+GROUP BY e.equip_name, e.site_id
+ORDER BY visits DESC LIMIT 10;
+
+-- Average hours per employee per project this month
+SELECT p.project_name, e.first_name || ' ' || e.last_name as employee,
+       ROUND(AVG(t.hours), 1) as avg_daily_hours
+FROM timesheets t
+JOIN employees e ON t.emp_id = e.emp_id
+JOIN projects p ON t.project_id = p.project_id
+WHERE t.work_date >= DATE_TRUNC('month', CURRENT_DATE)
+GROUP BY p.project_name, employee
+ORDER BY p.project_name, avg_daily_hours DESC;
+
+
+== Onboarding Checklist (New Data Engineers) ==
+
+Week 1:
+  □ Get AWS SSO access (request via IT ServiceNow portal)
+  □ Set up local dev environment (Python 3.11, uv, Docker)
+  □ Clone repos: platform-core, data-pipeline, ml-training
+  □ Read this knowledge base (you're doing it!)
+  □ Pair with buddy on one Jira ticket
+
+Week 2:
+  □ Deploy a test edge gateway on staging BMS simulator
+  □ Write and ship one data pipeline change (feature branch → PR → merge)
+  □ Attend architecture review meeting
+  □ Complete BACnet protocol training module
+
+Week 3:
+  □ Shadow oncall engineer for one rotation
+  □ Run the RL training pipeline end-to-end on a test building
+  □ Present a 5-minute "what I learned" to the team
+
+Week 4:
+  □ Own a Jira ticket independently (SEV3 or feature)
+  □ First contribution to internal documentation
+  □ 1:1 with manager to set 90-day goals

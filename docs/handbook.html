@@ -158,6 +158,10 @@
     <li class="section">Cloud</li>
     <li><a href="#sagemaker">⑧ SageMaker</a></li>
     <li><a href="#bedrock">⑨ Bedrock</a></li>
+    <li class="section">Practical</li>
+    <li><a href="#evaluation">Evaluation</a></li>
+    <li><a href="#owndata">Bring Your Data</a></li>
+    <li><a href="#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp Exercise</a></li>
     <li class="section">Reference</li>
     <li><a href="#workflow">Full Workflow</a></li>
     <li><a href="#decision">Decision Guide</a></li>
@@ -1248,6 +1252,460 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
   </div>
 </div>
 
+<!-- ══════════════════ EVALUATION ══════════════════ -->
+<div class="chapter" id="evaluation" style="background:#020617; border-top:2px solid #0d9488;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0d9488;">📊</div>
+    <div><div class="chapter-title">How to Know If Fine-Tuning Worked</div><div class="chapter-subtitle">Loss curves · Perplexity · Generation quality · Overfitting detection</div></div>
+  </div>
+
+  <p class="chapter-intro">Fine-tuning without evaluation is flying blind. You need to check at least three things: <strong>is the loss decreasing?</strong>, <strong>is the model generating better outputs?</strong>, and <strong>is it overfitting?</strong> This section gives you the concrete patterns.</p>
+
+  <div class="grid2" style="gap:14px;">
+
+    <div class="card" style="border-color:#0d9488;">
+      <div class="card-title" style="background:#134e4a; color:#99f6e4;">📉 1. Loss Curves</div>
+      <div class="card-body">
+<pre><span class="cm"># After trainer.train(), inspect the log history</span>
+result = trainer.train()
+
+<span class="kw">for</span> entry <span class="kw">in</span> trainer.state.log_history:
+    <span class="kw">if</span> <span class="st">"loss"</span> <span class="kw">in</span> entry <span class="kw">and</span> <span class="st">"eval_loss"</span> <span class="kw">not in</span> entry:
+        <span class="fn">print</span>(<span class="kw">f</span><span class="st">"step {entry['step']:&gt;4d}  loss={entry['loss']:.4f}"</span>)
+    <span class="kw">if</span> <span class="st">"eval_loss"</span> <span class="kw">in</span> entry:
+        <span class="fn">print</span>(<span class="kw">f</span><span class="st">"epoch {entry['epoch']}  eval_loss={entry['eval_loss']:.4f}"</span>)</pre>
+        <div class="tip">Train loss should decrease steadily. If eval loss spikes while train loss drops — you're overfitting.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#0d9488;">
+      <div class="card-title" style="background:#134e4a; color:#99f6e4;">📐 2. Perplexity</div>
+      <div class="card-body">
+<pre><span class="kw">import</span> math
+
+<span class="cm"># Perplexity = exp(eval_loss)</span>
+<span class="cm"># Lower = model assigns higher probability to correct tokens</span>
+metrics = trainer.evaluate()
+ppl = math.<span class="fn">exp</span>(metrics[<span class="st">"eval_loss"</span>])
+<span class="fn">print</span>(<span class="kw">f</span><span class="st">"perplexity: {ppl:.2f}"</span>)
+
+<span class="cm"># Compare before vs after fine-tuning</span>
+<span class="cm"># baseline_ppl=328 → after_ppl=9 = significant improvement</span></pre>
+        <div class="good">Perplexity is the standard LM metric. Always compute it before AND after fine-tuning to measure improvement.</div>
+      </div>
+    </div>
+
+    <div class="card full" style="border-color:#0d9488;">
+      <div class="card-title" style="background:#134e4a; color:#99f6e4;">🔍 3. Generation Quality Check</div>
+      <div class="card-body">
+<pre><span class="cm"># Use the same prompts before and after training</span>
+test_prompts = [<span class="st">"LoRA injects"</span>, <span class="st">"The learning rate"</span>, <span class="st">"GRPO uses"</span>]
+
+<span class="kw">for</span> prompt <span class="kw">in</span> test_prompts:
+    inputs = tok(prompt, return_tensors=<span class="st">"pt"</span>).to(device)
+    <span class="kw">with</span> torch.no_grad():
+        out = model.<span class="fn">generate</span>(**inputs, max_new_tokens=<span class="nb">40</span>, temperature=<span class="nb">0.7</span>)
+    <span class="fn">print</span>(tok.<span class="fn">decode</span>(out[<span class="nb">0</span>], skip_special_tokens=<span class="kw">True</span>))
+
+<span class="cm"># BEFORE: "LoRA injects a new layer of complexity into the game..."  (generic)</span>
+<span class="cm"># AFTER:  "LoRA injects low-rank matrices into transformer..."       (domain-relevant)</span></pre>
+        <div class="tip">Automated metrics don't catch everything. Always eyeball generations from a fixed set of test prompts.</div>
+      </div>
+    </div>
+
+    <div class="card full" style="border-color:#0d9488;">
+      <div class="card-title" style="background:#134e4a; color:#99f6e4;">⚠️ 4. Overfitting Detection</div>
+      <div class="card-body">
+        <div style="font-size:0.82em; color:#94a3b8; line-height:1.9;">
+          <strong style="color:#e2e8f0;">Symptom:</strong> train_loss keeps dropping, but eval_loss starts rising after epoch N.<br>
+          <strong style="color:#e2e8f0;">Cause:</strong> Model is memorizing training examples instead of learning patterns.<br>
+          <strong style="color:#e2e8f0;">Fixes:</strong><br>
+          &nbsp;&nbsp;• Reduce <code>num_train_epochs</code> (often 1–3 is enough for fine-tuning)<br>
+          &nbsp;&nbsp;• Add more training data<br>
+          &nbsp;&nbsp;• Increase <code>weight_decay</code> (e.g., 0.01 → 0.1)<br>
+          &nbsp;&nbsp;• Use <code>eval_strategy="steps"</code> with small <code>eval_steps</code> to catch the turn early
+        </div>
+        <div class="warn" style="margin-top:8px;">Always pass an <code>eval_dataset</code> to the trainer. Without it, you have no way to detect overfitting.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="good" style="margin-top:16px; font-size:0.83em;">
+    <strong>See it in action:</strong> <code>scripts/10_evaluation.py</code> runs a full before/after comparison — loss tracking, perplexity measurement, generation quality checks — all in one script.
+  </div>
+</div>
+
+<!-- ══════════════════ OWN DATA ══════════════════ -->
+<div class="chapter" id="owndata" style="background:#0d1117; border-top:2px solid #7c3aed;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#7c3aed;">📂</div>
+    <div><div class="chapter-title">Bring Your Own Data</div><div class="chapter-subtitle">CSV · JSONL · Plain text → trainer-ready datasets</div></div>
+  </div>
+
+  <p class="chapter-intro">Every trainer expects a specific column layout. This section shows exactly how to get your CSV, JSONL, or plain text files into the right shape — no guessing, just <code>load_dataset()</code> + one <code>.map()</code> call.</p>
+
+  <div class="grid2" style="gap:14px;">
+
+    <div class="card" style="border-color:#7c3aed;">
+      <div class="card-title" style="background:#3b0764; color:#e9d5ff;">📥 Loading Your Files</div>
+      <div class="card-body">
+<pre><span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+<span class="cm"># CSV</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"csv"</span>, data_files=<span class="st">"my_data.csv"</span>)
+
+<span class="cm"># JSONL (one JSON object per line)</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"json"</span>, data_files=<span class="st">"my_data.jsonl"</span>)
+
+<span class="cm"># Plain text (one sample per line)</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"text"</span>, data_files=<span class="st">"corpus.txt"</span>)
+
+<span class="cm"># Multiple files / directory</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"csv"</span>, data_files=<span class="st">"data/*.csv"</span>)</pre>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#7c3aed;">
+      <div class="card-title" style="background:#3b0764; color:#e9d5ff;">🔄 Column Mapping</div>
+      <div class="card-body">
+<pre><span class="cm"># Your CSV has "question" + "answer" columns</span>
+<span class="cm"># SFTTrainer needs "prompt" + "completion"</span>
+
+ds = ds.<span class="fn">map</span>(<span class="kw">lambda</span> x: {
+    <span class="st">"prompt"</span>: x[<span class="st">"question"</span>],
+    <span class="st">"completion"</span>: x[<span class="st">"answer"</span>],
+}, remove_columns=[<span class="st">"question"</span>, <span class="st">"answer"</span>])
+
+<span class="cm"># Or just rename if columns already match</span>
+ds = ds.<span class="fn">rename_columns</span>({
+    <span class="st">"instruction"</span>: <span class="st">"prompt"</span>,
+    <span class="st">"output"</span>: <span class="st">"completion"</span>,
+})</pre>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:14px; font-size:0.7em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px;">Format Cheatsheet — What Each Trainer Expects</div>
+
+  <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; overflow:hidden;">
+    <table style="margin:0;" class="pipe-table">
+      <thead>
+        <tr style="background:#0f172a;">
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Trainer</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Required Columns</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80;">Causal LM</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;"><code>"text"</code></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">{"text": "LoRA injects low-rank matrices..."}</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80;">SFT</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;"><code>"prompt"</code> + <code>"completion"</code><br>or <code>"messages"</code></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">{"prompt": "What is LoRA?", "completion": "LoRA adds..."}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80;">DPO / ORPO</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;"><code>"prompt"</code> + <code>"chosen"</code> + <code>"rejected"</code></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">{"prompt": "...", "chosen": "good", "rejected": "bad"}</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80;">GRPO</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;"><code>"prompt"</code></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">{"prompt": "What is 2+2?"} (reward from functions)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid2" style="gap:14px; margin-top:14px;">
+    <div class="card full" style="border-color:#7c3aed;">
+      <div class="card-title" style="background:#3b0764; color:#e9d5ff;">🧹 Data Hygiene</div>
+      <div class="card-body">
+<pre><span class="cm"># Filter short/empty rows</span>
+ds = ds.<span class="fn">filter</span>(<span class="kw">lambda</span> x: <span class="fn">len</span>(x[<span class="st">"text"</span>]) > <span class="nb">10</span>)
+
+<span class="cm"># Remove duplicates</span>
+seen = <span class="fn">set</span>()
+<span class="kw">def</span> <span class="fn">dedup</span>(x):
+    <span class="kw">if</span> x[<span class="st">"text"</span>] <span class="kw">in</span> seen: <span class="kw">return False</span>
+    seen.<span class="fn">add</span>(x[<span class="st">"text"</span>]); <span class="kw">return True</span>
+ds = ds.<span class="fn">filter</span>(dedup)
+
+<span class="cm"># Train/test split</span>
+splits = ds.<span class="fn">train_test_split</span>(test_size=<span class="nb">0.2</span>, seed=<span class="nb">42</span>)
+
+<span class="cm"># Save for reuse</span>
+ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</span>)</pre>
+        <div class="warn">Always split before training. Without an eval set, you can't detect overfitting.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="good" style="margin-top:16px; font-size:0.83em;">
+    <strong>Full working example:</strong> <code>scripts/11_custom_data.py</code> demonstrates loading CSV, JSONL, and text files, converting to every trainer format, filtering, deduplication, and saving — all runnable with no GPU.
+  </div>
+</div>
+
+<!-- ══════════════════ OPEN BOOTCAMP EXERCISE ══════════════════ -->
+<div class="chapter" id="bootcamp" style="background:#0a0f1a; border-top:3px solid #f59e0b;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#b45309; font-size:0.9em;">🏋️</div>
+    <div><div class="chapter-title" style="color:#fbbf24;">Open Bootcamp Exercise</div><div class="chapter-subtitle">Build an org-aware SQL assistant — from raw knowledge to evaluated model</div></div>
+  </div>
+
+  <p class="chapter-intro">This is your capstone. No code is given — only the workflow and the judgment calls you need to make. You'll fine-tune a model that <strong>understands your organization</strong> (people, equipment, processes), <strong>writes SQL</strong> from natural language, <strong>explains SQL</strong> in plain English, and gets <strong>evaluated against a RAG baseline</strong>. Starter data is in <code>bootcamp/</code>.</p>
+
+  <!-- ── THE GOAL ── -->
+  <div style="background:linear-gradient(135deg,#1a0f00,#1a1400); border:1px solid #92400e; border-radius:10px; padding:18px 20px; margin-bottom:20px;">
+    <div style="font-size:0.72em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#f59e0b; margin-bottom:10px;">The Goal</div>
+    <div style="font-size:0.88em; color:#fde68a; line-height:1.85;">
+      Build a small language model that can:<br>
+      &nbsp;&nbsp;1. Answer questions about your organization using internalized knowledge<br>
+      &nbsp;&nbsp;2. Convert natural language questions into correct SQL queries (text → SQL)<br>
+      &nbsp;&nbsp;3. Explain what a SQL query does in plain English (SQL → text)<br>
+      &nbsp;&nbsp;4. Beat a naive RAG baseline on at least one of these tasks
+    </div>
+  </div>
+
+  <!-- ── STARTER DATA ── -->
+  <div style="font-size:0.7em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px;">Starter Data (in <code style="color:#94a3b8;">bootcamp/</code>)</div>
+
+  <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; overflow:hidden; margin-bottom:20px;">
+    <table style="margin:0;" class="pipe-table">
+      <thead>
+        <tr style="background:#0f172a;">
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">File</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">What it is</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Replace with</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80; font-family:monospace; font-size:0.82em;">company_schema.sql</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">10-table database schema (HR, projects, customers, equipment, incidents)</td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Your org's actual schema (anonymized)</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80; font-family:monospace; font-size:0.82em;">knowledge_dump.txt</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Confluence-style knowledge base — terminology, architecture, runbooks, SOPs</td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Your org's internal wiki export</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80; font-family:monospace; font-size:0.82em;">text_to_sql_pairs.jsonl</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">16 natural language → SQL pairs against the schema</td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Real queries your analysts actually run</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80; font-family:monospace; font-size:0.82em;">sql_to_text_pairs.jsonl</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">10 SQL → plain English explanation pairs</td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Explanations of your common queries</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── THE WORKFLOW ── -->
+  <div style="font-size:0.7em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:12px;">The Workflow — 7 Phases</div>
+
+  <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
+
+    <!-- Phase 1 -->
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#92400e; color:#fef3c7; padding:12px 14px; border-radius:8px 0 0 8px; font-size:0.75em; font-weight:700; min-width:36px; display:flex; align-items:center; justify-content:center;">1</div>
+      <div style="flex:1; background:#1e293b; border:1px solid #334155; border-left:none; border-radius:0 8px 8px 0; padding:14px 18px;">
+        <div style="font-weight:700; color:#fbbf24; font-size:0.88em; margin-bottom:6px;">Prepare your knowledge corpus</div>
+        <div style="font-size:0.82em; color:#94a3b8; line-height:1.85;">
+          Combine <code>knowledge_dump.txt</code> + <code>company_schema.sql</code> (as commented text) into one corpus.<br>
+          Clean it: strip HTML artifacts from Confluence export, remove PII, deduplicate.<br>
+          Split into chunks suitable for causal LM training (paragraphs or ~512 token blocks).<br>
+          Use <code>load_dataset("text")</code> or build from <code>Dataset.from_dict({"text": chunks})</code>.<br>
+          <strong style="color:#e2e8f0;">Decision:</strong> How big is your corpus? If &lt;500 chunks, you'll need more epochs. If &gt;10k, one epoch may suffice.
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 2 -->
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#92400e; color:#fef3c7; padding:12px 14px; border-radius:8px 0 0 8px; font-size:0.75em; font-weight:700; min-width:36px; display:flex; align-items:center; justify-content:center;">2</div>
+      <div style="flex:1; background:#1e293b; border:1px solid #334155; border-left:none; border-radius:0 8px 8px 0; padding:14px 18px;">
+        <div style="font-weight:700; color:#fbbf24; font-size:0.88em; margin-bottom:6px;">Causal LM fine-tune — domain adaptation</div>
+        <div style="font-size:0.82em; color:#94a3b8; line-height:1.85;">
+          Fine-tune on your knowledge corpus using <code>Trainer</code> + <code>DataCollatorForLanguageModeling(mlm=False)</code>.<br>
+          This shifts the model's latent knowledge toward your domain — your terminology, your schema names, your processes.<br>
+          <strong style="color:#e2e8f0;">Try three models:</strong><br>
+          &nbsp;&nbsp;🔹 <strong>GPT-2</strong> (124M) — fast baseline, runs on CPU, everyone can reproduce<br>
+          &nbsp;&nbsp;🔹 <strong>SmolLM-135M</strong> (<code>HuggingFaceTB/SmolLM-135M</code>) — modern small LM, better architecture than GPT-2<br>
+          &nbsp;&nbsp;🔹 <strong>Quantized Llama</strong> — use QLoRA (4-bit via <code>bitsandbytes</code>) on Llama 3.2 1B or 3B. Needs GPU.<br>
+          <strong style="color:#e2e8f0;">Track:</strong> perplexity before vs after. Does the model now assign higher probability to your domain text?
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 3 -->
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#92400e; color:#fef3c7; padding:12px 14px; border-radius:8px 0 0 8px; font-size:0.75em; font-weight:700; min-width:36px; display:flex; align-items:center; justify-content:center;">3</div>
+      <div style="flex:1; background:#1e293b; border:1px solid #334155; border-left:none; border-radius:0 8px 8px 0; padding:14px 18px;">
+        <div style="font-weight:700; color:#fbbf24; font-size:0.88em; margin-bottom:6px;">SFT on text → SQL</div>
+        <div style="font-size:0.82em; color:#94a3b8; line-height:1.85;">
+          Load <code>text_to_sql_pairs.jsonl</code> as <code>{"prompt": instruction, "completion": sql}</code>.<br>
+          Prepend the schema as context in each prompt: <code>"Given this schema: {schema}\n\n{question}"</code><br>
+          Fine-tune the domain-adapted model from Phase 2 using <code>SFTTrainer</code>.<br>
+          <strong style="color:#e2e8f0;">Decision:</strong> How many pairs do you need? Start with the 16 provided. Add more from your real analyst queries. 50–200 high-quality pairs go a long way for a small model.
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 4 -->
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#92400e; color:#fef3c7; padding:12px 14px; border-radius:8px 0 0 8px; font-size:0.75em; font-weight:700; min-width:36px; display:flex; align-items:center; justify-content:center;">4</div>
+      <div style="flex:1; background:#1e293b; border:1px solid #334155; border-left:none; border-radius:0 8px 8px 0; padding:14px 18px;">
+        <div style="font-weight:700; color:#fbbf24; font-size:0.88em; margin-bottom:6px;">SFT on SQL → text</div>
+        <div style="font-size:0.82em; color:#94a3b8; line-height:1.85;">
+          Load <code>sql_to_text_pairs.jsonl</code> as <code>{"prompt": sql, "completion": explanation}</code>.<br>
+          You can either train a separate model or continue fine-tuning the same model on both tasks (multi-task SFT).<br>
+          <strong style="color:#e2e8f0;">Decision:</strong> Single model for both directions or two specialized models? Single is harder but more useful. Try both and compare.
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 5 -->
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#92400e; color:#fef3c7; padding:12px 14px; border-radius:8px 0 0 8px; font-size:0.75em; font-weight:700; min-width:36px; display:flex; align-items:center; justify-content:center;">5</div>
+      <div style="flex:1; background:#1e293b; border:1px solid #334155; border-left:none; border-radius:0 8px 8px 0; padding:14px 18px;">
+        <div style="font-weight:700; color:#fbbf24; font-size:0.88em; margin-bottom:6px;">Build the RAG baseline</div>
+        <div style="font-size:0.82em; color:#94a3b8; line-height:1.85;">
+          No fine-tuning — just retrieval-augmented generation in memory:<br>
+          &nbsp;&nbsp;1. Chunk <code>knowledge_dump.txt</code> + schema into ~200-token passages<br>
+          &nbsp;&nbsp;2. Embed with <code>sentence-transformers</code> (<code>all-MiniLM-L6-v2</code>) — stores in a list, no vector DB needed<br>
+          &nbsp;&nbsp;3. At query time: embed the question, cosine-similarity top-3 chunks, stuff into prompt<br>
+          &nbsp;&nbsp;4. Feed to the <em>same base model</em> (un-fine-tuned GPT-2 / SmolLM / Llama)<br>
+          <strong style="color:#e2e8f0;">This is your control group.</strong> The fine-tuned model must beat this to justify the training cost.
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 6 -->
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#92400e; color:#fef3c7; padding:12px 14px; border-radius:8px 0 0 8px; font-size:0.75em; font-weight:700; min-width:36px; display:flex; align-items:center; justify-content:center;">6</div>
+      <div style="flex:1; background:#1e293b; border:1px solid #334155; border-left:none; border-radius:0 8px 8px 0; padding:14px 18px;">
+        <div style="font-weight:700; color:#fbbf24; font-size:0.88em; margin-bottom:6px;">Evaluate — the honest comparison</div>
+        <div style="font-size:0.82em; color:#94a3b8; line-height:1.85;">
+          Hold out 20% of your text↔SQL pairs as test set. For each test question, generate from:<br>
+          &nbsp;&nbsp;(a) Base model (no fine-tuning, no RAG)<br>
+          &nbsp;&nbsp;(b) Base model + RAG (retrieved context in prompt)<br>
+          &nbsp;&nbsp;(c) Domain-adapted model (Phase 2 only)<br>
+          &nbsp;&nbsp;(d) Fully fine-tuned model (Phase 2 + 3 + 4)<br><br>
+          <strong style="color:#e2e8f0;">Metrics to compare:</strong><br>
+          &nbsp;&nbsp;• <strong>Perplexity</strong> on domain text (lower = better knowledge internalization)<br>
+          &nbsp;&nbsp;• <strong>SQL exact match</strong> — does the generated SQL match the gold query?<br>
+          &nbsp;&nbsp;• <strong>SQL execution match</strong> — does it return the same results? (harder but more fair)<br>
+          &nbsp;&nbsp;• <strong>Explanation quality</strong> — human judgment: is the SQL→text explanation correct?<br>
+          &nbsp;&nbsp;• <strong>Latency</strong> — fine-tuned model generates in one pass; RAG needs embed + retrieve + generate
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 7 -->
+    <div style="display:flex; gap:0; align-items:stretch;">
+      <div style="background:#92400e; color:#fef3c7; padding:12px 14px; border-radius:8px 0 0 8px; font-size:0.75em; font-weight:700; min-width:36px; display:flex; align-items:center; justify-content:center;">7</div>
+      <div style="flex:1; background:#1e293b; border:1px solid #334155; border-left:none; border-radius:0 8px 8px 0; padding:14px 18px;">
+        <div style="font-weight:700; color:#fbbf24; font-size:0.88em; margin-bottom:6px;">Ship it — submit what you built</div>
+        <div style="font-size:0.82em; color:#94a3b8; line-height:1.85;">
+          Push your repo to GitHub. Your submission should include:<br>
+          &nbsp;&nbsp;• Training scripts for each phase (causal LM, SFT text→SQL, SFT SQL→text)<br>
+          &nbsp;&nbsp;• RAG baseline script<br>
+          &nbsp;&nbsp;• Evaluation script with comparison table<br>
+          &nbsp;&nbsp;• A short write-up: what worked, what didn't, which model won, fine-tune vs RAG verdict<br>
+          &nbsp;&nbsp;• Link to your fine-tuned model on HuggingFace Hub (optional but encouraged)<br>
+          <strong style="color:#e2e8f0;">Submit:</strong> Open a PR to this repo with your results, or share the link to your own repo.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── MODEL COMPARISON MATRIX ── -->
+  <div style="font-size:0.7em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px;">Model Comparison Matrix</div>
+
+  <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; overflow:hidden; margin-bottom:16px;">
+    <table style="margin:0;" class="pipe-table">
+      <thead>
+        <tr style="background:#0f172a;">
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Model</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Params</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Hardware</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Fine-tune method</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Why try it</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80;">GPT-2</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">124M</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">CPU / any GPU</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Full fine-tune</td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Fast iteration, everyone can reproduce, good for debugging pipeline</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80;">SmolLM-135M</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">135M</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">CPU / any GPU</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Full fine-tune</td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Modern architecture (2024), better tokenizer, trained on higher-quality data than GPT-2</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap; color:#4ade80;">Llama 3.2 1B (4-bit)</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">1.2B</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">8 GB+ VRAM</td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">QLoRA (4-bit)</td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">10x more capacity, instruction-tuned variant available, realistic production candidate</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── JUDGMENT CALLS ── -->
+  <div class="grid2" style="gap:14px; margin-bottom:16px;">
+    <div style="background:rgba(245,158,11,.06); border:1px solid rgba(245,158,11,.2); border-radius:10px; padding:16px 18px;">
+      <div style="font-size:0.72em; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#f59e0b; margin-bottom:8px;">Judgment calls you'll need to make</div>
+      <div style="font-size:0.82em; color:#94a3b8; line-height:1.9;">
+        How many epochs for domain adaptation?<br>
+        Should schema go in the prompt or in the training data?<br>
+        Single model for both SQL directions or two?<br>
+        How to handle queries the model gets wrong?<br>
+        When does RAG actually win over fine-tuning?<br>
+        Is the small model even capable of SQL generation?
+      </div>
+    </div>
+    <div style="background:rgba(129,140,248,.06); border:1px solid rgba(129,140,248,.2); border-radius:10px; padding:16px 18px;">
+      <div style="font-size:0.72em; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#a78bfa; margin-bottom:8px;">What you'll learn by doing this</div>
+      <div style="font-size:0.82em; color:#94a3b8; line-height:1.9;">
+        Multi-stage fine-tuning pipeline (pretrain → SFT)<br>
+        Data formatting for different trainer types<br>
+        Working with real domain data, not toy examples<br>
+        Fair evaluation methodology (fine-tune vs RAG)<br>
+        Model selection tradeoffs (size vs quality vs cost)<br>
+        When fine-tuning is worth it and when it isn't
+      </div>
+    </div>
+  </div>
+
+  <div class="warn" style="font-size:0.83em;">
+    <strong>No shortcuts.</strong> The point of this exercise is the journey, not the destination. A small model will not produce perfect SQL — that's expected. What matters is: did the fine-tuned model produce <em>better</em> SQL than the base model? Did it beat RAG? Where did it fail? Your write-up is the most valuable part.
+  </div>
+
+  <div class="tip" style="margin-top:10px; font-size:0.83em;">
+    <strong>Scaling up:</strong> Once the pipeline works with GPT-2, swap in SmolLM-135M (zero code change), then Llama with QLoRA (add <code>bitsandbytes</code> + <code>peft</code>). The training code structure stays identical — only the model loading changes.
+  </div>
+
+</div>
+
 <!-- ══════════════════════════════════════════════════════════════════════════
      WORKING SCRIPTS REFERENCE
      ══════════════════════════════════════════════════════════════════════ -->
@@ -1280,7 +1738,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
       <tbody>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">verify_all.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/verify_all.py" target="_blank" class="script-link">verify_all.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Health check — tests every package and API in one shot. Run this first.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1288,7 +1746,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">01_pytorch_basics.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/01_pytorch_basics.py" target="_blank" class="script-link">01_pytorch_basics.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Tensors, autograd, <code>nn.Module</code>, DataLoader, full training loop, checkpoint save/load.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1296,7 +1754,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">02_hf_datasets.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/02_hf_datasets.py" target="_blank" class="script-link">02_hf_datasets.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Build, inspect, map, filter, rename columns, set_format("torch"), save/load from disk.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1304,7 +1762,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">03_hf_transformers.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/03_hf_transformers.py" target="_blank" class="script-link">03_hf_transformers.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Tokenizer, pipeline inference, AutoModel, Trainer with eval_strategy + processing_class.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1312,7 +1770,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">04_causal_lm_finetune.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/04_causal_lm_finetune.py" target="_blank" class="script-link">04_causal_lm_finetune.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">GPT-2 causal LM fine-tune with DataCollatorForLanguageModeling (mlm=False), then generate.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1320,7 +1778,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">05_dpo_example.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/05_dpo_example.py" target="_blank" class="script-link">05_dpo_example.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">DPOTrainer with synthetic preference data (prompt / chosen / rejected). ref_model=None.</td>
           <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
@@ -1328,7 +1786,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">06_orpo_example.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/06_orpo_example.py" target="_blank" class="script-link">06_orpo_example.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">ORPO — folds SFT + preference into one loss, no reference model. Correct trl import path.</td>
           <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
@@ -1336,7 +1794,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">07_grpo_example.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/07_grpo_example.py" target="_blank" class="script-link">07_grpo_example.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">GRPO with two reward functions (correctness + brevity) on a toy math dataset. No internet.</td>
           <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
@@ -1344,7 +1802,23 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">08_unsloth_sft.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/10_evaluation.py" target="_blank" class="script-link">10_evaluation.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Before/after comparison — loss curves, perplexity, generation quality, overfitting detection.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Downloads GPT-2 ~500 MB</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/11_custom_data.py" target="_blank" class="script-link">11_custom_data.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Load CSV/JSONL/text → convert to Causal LM, SFT, DPO, ORPO, GRPO formats. No GPU needed.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">CPU-only · no download</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/08_unsloth_sft.py" target="_blank" class="script-link">08_unsloth_sft.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Full Unsloth workflow: FastLanguageModel → QLoRA → SFTTrainer → inference → GGUF export.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1352,7 +1826,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">09_sagemaker_train.py</a>
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank" class="script-link">09_sagemaker_train.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">SageMaker HuggingFace estimator pattern + Bedrock converse API. Prints templates dry-run.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1366,7 +1840,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
     <strong>Why two virtual environments?</strong><br><br>
     Unsloth hard-pins <code>trl&lt;0.9.0</code> in its dependencies. The DPO, ORPO, and GRPO trainers require <code>trl≥1.0</code> — a completely different API with renamed parameters (<code>max_completion_length</code>, <code>processing_class</code>, etc.) and new trainer classes. These two constraints are <strong>mutually exclusive</strong>: pip cannot satisfy both in the same environment, and installing one silently downgrades or breaks the other.<br><br>
     <strong>The split:</strong><br>
-    &nbsp;&nbsp;<code>.venv</code> &nbsp;&nbsp;&nbsp;→ Unsloth + trl 0.24 + SFT &nbsp;(scripts 01–04, 08–09)<br>
+    &nbsp;&nbsp;<code>.venv</code> &nbsp;&nbsp;&nbsp;→ Unsloth + trl 0.24 + SFT &nbsp;(scripts 01–04, 08–11)<br>
     &nbsp;&nbsp;<code>.venv-rl</code> → trl 1.2 + DPO / ORPO / GRPO &nbsp;(scripts 05–07)<br><br>
     <strong>One-shot setup:</strong> <code>bash scripts/setup_envs.sh</code>
   </div>

@@ -339,7 +339,7 @@
 
   <!-- ── Verified status ────────────────────────────────────────────────── -->
   <div class="status-bar">
-    <span><span class="dot"></span>All scripts verified — 7/7 pass</span>
+    <span><span class="dot"></span>All scripts verified — 9/9 pass</span>
     <span><span class="dot"></span>.venv: torch 2.7+cu128 · trl 0.24 · Unsloth · SFT</span>
     <span><span class="dot"></span>.venv-rl: trl 1.2 · DPO · ORPO · GRPO</span>
     <span><span class="dot"></span>RTX 3080 Ti · CUDA 13.0</span>
@@ -352,14 +352,14 @@
       <div class="card-icon" style="background:linear-gradient(135deg,#0369a1,#4f46e5);">📘</div>
       <div>
         <div class="card-title">LLM Fine-Tuning Handbook</div>
-        <div class="card-desc" style="margin-top:6px;">9 chapters flowing end-to-end: PyTorch → HF Datasets → Transformers → LoRA/QLoRA → Unsloth SFT → Causal LM → DPO / ORPO / GRPO → SageMaker → Bedrock. Every code block verified.</div>
+        <div class="card-desc" style="margin-top:6px;">9 chapters flowing end-to-end: PyTorch → HF Datasets → Transformers → LoRA/QLoRA → Unsloth SFT → Causal LM → DPO / ORPO / GRPO → SageMaker → Bedrock. Plus evaluation patterns, own-data guidance, and a decision guide.</div>
       </div>
     </div>
     <div class="card-footer">
       <span class="tag blue">9 chapters</span>
-      <span class="tag blue">Working examples</span>
+      <span class="tag blue">Evaluation guide</span>
+      <span class="tag blue">Own-data patterns</span>
       <span class="tag blue">Decision guide</span>
-      <span class="tag blue">Dark theme</span>
     </div>
   </a>
 
@@ -455,9 +455,12 @@
   </div>
 
   <!-- ── Scripts ────────────────────────────────────────────────────────── -->
-  <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+  <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
     <div class="section-title" style="margin-bottom:0;">🐍 Working Scripts — All Verified</div>
     <a href="handbook.html#methods" style="font-size:.78em; color:#60a5fa; text-decoration:none; border:1px solid #1e3a5f; border-radius:6px; padding:4px 12px; background:#0c1a2e; white-space:nowrap;">Not sure which method to use? → Handbook §7</a>
+  </div>
+  <div style="font-size:.82em; color:var(--muted); margin-bottom:16px; line-height:1.7; padding:10px 14px; background:rgba(56,189,248,.04); border:1px solid rgba(56,189,248,.1); border-radius:8px;">
+    <strong style="color:var(--text);">Scripts vs Notebook:</strong> Scripts are single-concept, self-contained demos — run one, learn one thing. The <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/notebooks/llama3_finetune_tutorial.ipynb" target="_blank" style="color:var(--accent); text-decoration:none;">Jupyter notebook</a> walks through a full end-to-end fine-tune (Llama 3 + Unsloth + GGUF export) in one flow. Start with scripts to learn the pieces, then use the notebook to see them assembled.
   </div>
   <div class="script-grid">
     <div class="script-row">
@@ -499,6 +502,16 @@
       <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/07_grpo_example.py" target="_blank">07_grpo_example.py</a>
       <span class="script-desc">GRPOTrainer — reward_funcs list, max_completion_length, question→prompt fix</span>
       <span class="script-venv venv-rl">.venv-rl</span>
+    </div>
+    <div class="script-row">
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/10_evaluation.py" target="_blank">10_evaluation.py</a>
+      <span class="script-desc">Before/after: loss curves, perplexity, generation quality, overfitting check</span>
+      <span class="script-venv venv-main">.venv</span>
+    </div>
+    <div class="script-row">
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/11_custom_data.py" target="_blank">11_custom_data.py</a>
+      <span class="script-desc">Load CSV/JSONL/text → convert to every trainer format (Causal, SFT, DPO, GRPO)</span>
+      <span class="script-venv venv-main">.venv</span>
     </div>
     <div class="script-row">
       <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/08_unsloth_sft.py" target="_blank">08_unsloth_sft.py</a>
@@ -595,6 +608,23 @@ uv venv .venv-rl <span class="cm"># DPO / ORPO / GRPO</span>
     <span style="font-size:1.1em;">☁️</span>
     <span><strong style="color:#64748b;">SageMaker &amp; Bedrock</strong> are cloud execution engines — not training methods. Run any of the methods above on SageMaker for scale, or use Bedrock for managed FM inference. See chapters 8–9 in the <a href="handbook.html#sagemaker" style="color:#60a5fa;text-decoration:none;">handbook</a>.</span>
   </div>
+
+  <!-- ── Bootcamp Exercise ──────────────────────────────────────────────── -->
+  <a href="handbook.html#bootcamp" class="card" style="border-color:rgba(245,158,11,.35); background:linear-gradient(135deg,#1a0f00,#1a1400); margin-bottom:48px; display:block; text-decoration:none;">
+    <div class="card-header">
+      <div class="card-icon" style="background:linear-gradient(135deg,#92400e,#b45309); font-size:1.1em;">🏋️</div>
+      <div>
+        <div class="card-title" style="color:#fbbf24;">Open Bootcamp Exercise</div>
+        <div class="card-desc" style="margin-top:6px; color:#94a3b8;">Build an org-aware SQL assistant from scratch. Domain-adapt with your knowledge base, SFT on text↔SQL, compare GPT-2 vs SmolLM-135M vs quantized Llama, evaluate against a RAG baseline. No code given — just the workflow and the judgment calls. Starter data included.</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="tag yellow">7-phase workflow</span>
+      <span class="tag yellow">3 models to compare</span>
+      <span class="tag yellow">Fine-tune vs RAG</span>
+      <span class="tag yellow">Starter data included</span>
+    </div>
+  </a>
 
 </div><!-- /container -->
 
