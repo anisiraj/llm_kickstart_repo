@@ -801,7 +801,7 @@ trainer.<span class="fn">train</span>()
 
   <div class="grid2">
 
-    <div class="card">
+    <div class="card" id="method-causal">
       <div class="card-title" style="background:#0c2a1a; color:#86efac;">🟩 Causal LM Fine-Tuning</div>
       <div class="card-body"><pre>
 <span class="cm"># Train on raw text — no chat template needed.
@@ -843,7 +843,7 @@ trainer.<span class="fn">train</span>()
 </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="method-dpo">
       <div class="card-title" style="background:#1e3a8a; color:#bfdbfe;">🔵 DPO — Direct Preference Optimization</div>
       <div class="card-body"><pre>
 <span class="cm"># Data: {prompt, chosen, rejected}</span>
@@ -879,7 +879,7 @@ trainer.<span class="fn">train</span>()
 </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="method-orpo">
       <div class="card-title" style="background:#14532d; color:#bbf7d0;">🟢 ORPO — One-Pass SFT + Alignment</div>
       <div class="card-body"><pre>
 <span class="cm"># Same data format as DPO but trains SFT + alignment together.</span>
@@ -914,7 +914,7 @@ trainer.<span class="fn">train</span>()
 </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="method-grpo">
       <div class="card-title" style="background:#7c2d12; color:#fed7aa;">🟠 GRPO — RL from Reward (DeepSeek-R1 style)</div>
       <div class="card-body"><pre>
 <span class="cm"># GRPO = model generates multiple responses per prompt,</span>
