@@ -1208,124 +1208,110 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
     </a>
   </div>
 
-  <div class="card-grid">
+  <p class="chapter-intro">Each script is self-contained and verified. Click the filename to view the source on GitHub. The <span style="background:#0f3460;color:#38bdf8;padding:1px 7px;border-radius:4px;font-size:0.85em;font-family:monospace;">.venv</span> / <span style="background:#1a0f3c;color:#a78bfa;padding:1px 7px;border-radius:4px;font-size:0.85em;font-family:monospace;">.venv-rl</span> badge tells you which environment to use.</p>
 
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">verify_all.py</div>
-      <div class="card-body">
-        <p style="margin:0 0 8px; font-size:0.85em; color:#94a3b8;">Run first to confirm your environment is ready.</p>
-        <pre><span class="cm"># Checks all packages + APIs in one shot</span>
-python scripts/verify_all.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Expected: 23+/26 pass (unsloth requires GPU + install)</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">01_pytorch_basics.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># Tensors, autograd, nn.Module,
-# DataLoader, training loop, save/load</span>
-python scripts/01_pytorch_basics.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">CPU-only · no internet needed</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">02_hf_datasets.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># from_dict, map, filter, split,
-# rename, set_format, save_to_disk</span>
-python scripts/02_hf_datasets.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">CPU-only · no internet needed</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">03_hf_transformers.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># Tokenizer, pipeline, Trainer,
-# eval_strategy, processing_class</span>
-python scripts/03_hf_transformers.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Downloads distilbert (~66MB) on first run</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">04_causal_lm_finetune.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># GPT-2 + DataCollatorForLanguageModeling
-# mlm=False → labels auto-set, then generate</span>
-python scripts/04_causal_lm_finetune.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Downloads GPT-2 (~500MB) on first run</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">05_dpo_example.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># DPOTrainer + DPOConfig
-# ref_model=None → implicit reference</span>
-python scripts/05_dpo_example.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Requires trl&gt;=0.9 · synthetic dataset</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">06_orpo_example.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># Correct import:</span>
-<span class="kw">from</span> trl.experimental.orpo <span class="kw">import</span> ORPOTrainer, ORPOConfig
-<span class="cm"># NOT: from trl import ORPOTrainer</span>
-python scripts/06_orpo_example.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">No ref_model needed · synthetic dataset</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">07_grpo_example.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># Key fixes vs. naive examples:
-# • gsm8k "question" → renamed to "prompt"
-# • reward_funcs is a LIST
-# • num_generations ≤ batch_size</span>
-python scripts/07_grpo_example.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Toy math dataset · no internet needed</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">08_unsloth_sft.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># Full Unsloth workflow (reference):
-# FastLanguageModel → get_peft_model
-# → SFTTrainer → inference → save/GGUF</span>
-python scripts/08_unsloth_sft.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Prints full code pattern · runs Unsloth if available</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title" style="background:#1e3a5f; color:#bae6fd;">09_sagemaker_train.py</div>
-      <div class="card-body">
-        <pre><span class="cm"># SageMaker training script pattern +
-# HuggingFace estimator + Bedrock converse</span>
-python scripts/09_sagemaker_train.py</pre>
-        <p style="margin:8px 0 0; font-size:0.8em; color:#64748b;">Prints patterns · AWS creds needed to run live</p>
-      </div>
-    </div>
-
+  <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; overflow:hidden; margin-bottom:16px;">
+    <table style="margin:0;">
+      <thead>
+        <tr style="background:#0f172a;">
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Script</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">What it demonstrates</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Run with</th>
+          <th style="padding:10px 14px; color:#475569; font-size:0.75em;">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/verify_all.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">verify_all.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Health check — tests every package and API in one shot. Run this first.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Expected 23+/26 pass</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/01_pytorch_basics.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">01_pytorch_basics.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Tensors, autograd, <code>nn.Module</code>, DataLoader, full training loop, checkpoint save/load.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">CPU-only · no download</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/02_hf_datasets.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">02_hf_datasets.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Build, inspect, map, filter, rename columns, set_format("torch"), save/load from disk.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">CPU-only · no download</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/03_hf_transformers.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">03_hf_transformers.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Tokenizer, pipeline inference, AutoModel, Trainer with eval_strategy + processing_class.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Downloads distilbert ~66 MB</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/04_causal_lm_finetune.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">04_causal_lm_finetune.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">GPT-2 causal LM fine-tune with DataCollatorForLanguageModeling (mlm=False), then generate.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Downloads GPT-2 ~500 MB</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/05_dpo_example.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">05_dpo_example.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">DPOTrainer with synthetic preference data (prompt / chosen / rejected). ref_model=None.</td>
+          <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">trl ≥ 1.0 · no download</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/06_orpo_example.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">06_orpo_example.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">ORPO — folds SFT + preference into one loss, no reference model. Correct trl import path.</td>
+          <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">trl ≥ 1.0 · no download</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/07_grpo_example.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">07_grpo_example.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">GRPO with two reward functions (correctness + brevity) on a toy math dataset. No internet.</td>
+          <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">trl ≥ 1.0 · no download</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/08_unsloth_sft.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">08_unsloth_sft.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Full Unsloth workflow: FastLanguageModel → QLoRA → SFTTrainer → inference → GGUF export.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">Runs if Unsloth installed</td>
+        </tr>
+        <tr style="background:#0d1117;">
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">09_sagemaker_train.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">SageMaker HuggingFace estimator pattern + Bedrock converse API. Prints templates dry-run.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">AWS creds for live run</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
-  <div class="tip" style="margin-top:16px;">
-    <strong>Two venvs required</strong> — Unsloth pins <code>trl&lt;0.9</code>, which conflicts with DPO/ORPO/GRPO (<code>trl≥1.0</code>).<br><br>
-    <code>.venv</code> &nbsp;→ Unsloth + SFT (scripts 01–04, 08) &nbsp;|&nbsp; <code>.venv-rl</code> &nbsp;→ DPO / ORPO / GRPO (scripts 05–07)<br><br>
-    <strong>One-shot setup:</strong> <code>bash scripts/setup_envs.sh</code><br><br>
-    <strong>Run scripts:</strong><br>
-    <code>.venv/bin/python scripts/01_pytorch_basics.py</code><br>
-    <code>.venv/bin/python scripts/08_unsloth_sft.py</code><br>
-    <code>.venv-rl/bin/python scripts/05_dpo_example.py</code><br>
-    <code>.venv-rl/bin/python scripts/06_orpo_example.py</code><br>
-    <code>.venv-rl/bin/python scripts/07_grpo_example.py</code>
+  <div class="warn" style="margin-top:16px; font-size:0.83em; line-height:1.85;">
+    <strong>Why two virtual environments?</strong><br><br>
+    Unsloth hard-pins <code>trl&lt;0.9.0</code> in its dependencies. The DPO, ORPO, and GRPO trainers require <code>trl≥1.0</code> — a completely different API with renamed parameters (<code>max_completion_length</code>, <code>processing_class</code>, etc.) and new trainer classes. These two constraints are <strong>mutually exclusive</strong>: pip cannot satisfy both in the same environment, and installing one silently downgrades or breaks the other.<br><br>
+    <strong>The split:</strong><br>
+    &nbsp;&nbsp;<code>.venv</code> &nbsp;&nbsp;&nbsp;→ Unsloth + trl 0.24 + SFT &nbsp;(scripts 01–04, 08–09)<br>
+    &nbsp;&nbsp;<code>.venv-rl</code> → trl 1.2 + DPO / ORPO / GRPO &nbsp;(scripts 05–07)<br><br>
+    <strong>One-shot setup:</strong> <code>bash scripts/setup_envs.sh</code>
   </div>
 
   <div style="margin-top:16px; text-align:center; font-size:0.75em; color:#475569; padding-top:12px; border-top:1px solid #1e293b;">
