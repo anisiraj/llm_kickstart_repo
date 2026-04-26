@@ -179,9 +179,12 @@
     <a class="step" href="#lora">LoRA / QLoRA</a><span class="arr">→</span>
     <a class="step" href="#unsloth">Unsloth SFT</a><span class="arr">→</span>
     <a class="step" href="#causal">Causal LM / Pretrain</a><span class="arr">→</span>
-    <a class="step" href="#methods">FT Methods</a><span class="arr">→</span>
-    <a class="step" href="#sagemaker">SageMaker</a><span class="arr">→</span>
-    <a class="step" href="#bedrock">Bedrock</a>
+    <a class="step" href="#methods">FT Methods</a>
+    <span style="color:#334155; font-size:0.85em; margin:0 4px;">│</span>
+    <span style="font-size:0.65em; color:#475569; text-transform:uppercase; letter-spacing:0.1em; align-self:center;">Cloud Engines</span>
+    <span class="arr">→</span>
+    <a class="step" href="#sagemaker" style="background:#1e3a5f;">SageMaker</a><span class="arr">→</span>
+    <a class="step" href="#bedrock" style="background:#3b0f0f;">Bedrock</a>
   </div>
 </div>
 
@@ -797,6 +800,48 @@ trainer.<span class="fn">train</span>()
   </div>
 
   <div class="grid2">
+
+    <div class="card">
+      <div class="card-title" style="background:#0c2a1a; color:#86efac;">🟩 Causal LM Fine-Tuning</div>
+      <div class="card-body"><pre>
+<span class="cm"># Train on raw text — no chat template needed.
+# DataCollatorForLanguageModeling shifts labels automatically.
+# Use when: domain adaptation, style transfer, continued pretraining.</span>
+<span class="kw">from</span> transformers <span class="kw">import</span> (AutoTokenizer, AutoModelForCausalLM,
+    DataCollatorForLanguageModeling, Trainer, TrainingArguments)
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+tok = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"gpt2"</span>)
+tok.pad_token = tok.eos_token
+model = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(<span class="st">"gpt2"</span>)
+model.config.pad_token_id = tok.eos_token_id
+
+<span class="cm"># Your domain text — one document per row in "text" column</span>
+ds = <span class="fn">load_dataset</span>(<span class="st">"text"</span>, data_files=<span class="st">"corpus.txt"</span>, split=<span class="st">"train"</span>)
+ds = ds.<span class="fn">map</span>(<span class="kw">lambda</span> x: tok(x[<span class="st">"text"</span>], truncation=<span class="kw">True</span>, max_length=<span class="nb">512</span>),
+          batched=<span class="kw">True</span>, remove_columns=[<span class="st">"text"</span>])
+
+collator = <span class="fn">DataCollatorForLanguageModeling</span>(tok, mlm=<span class="kw">False</span>)
+<span class="cm"># mlm=False → next-token prediction; labels = input_ids shifted by 1</span>
+
+trainer = <span class="fn">Trainer</span>(
+    model=model,
+    args=<span class="fn">TrainingArguments</span>(
+        output_dir=<span class="st">"./clm-out"</span>,
+        num_train_epochs=<span class="nb">3</span>,
+        per_device_train_batch_size=<span class="nb">4</span>,
+        learning_rate=<span class="nb">2e-5</span>,
+        fp16=torch.cuda.<span class="fn">is_available</span>(),
+    ),
+    train_dataset=ds,
+    data_collator=collator,
+    processing_class=tok,
+)
+trainer.<span class="fn">train</span>()
+</pre>
+<div class="tip">Use Causal LM FT to shift the model's knowledge and style <em>before</em> SFT. Run on domain corpus first, then SFT on instruction pairs.</div>
+</div>
+    </div>
 
     <div class="card">
       <div class="card-title" style="background:#1e3a8a; color:#bfdbfe;">🔵 DPO — Direct Preference Optimization</div>
