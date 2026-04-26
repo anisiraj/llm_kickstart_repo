@@ -159,6 +159,7 @@
     <li><a href="#sagemaker">⑧ SageMaker</a></li>
     <li><a href="#bedrock">⑨ Bedrock</a></li>
     <li class="section">Practical</li>
+    <li><a href="#datastack">Dataset Zoo</a></li>
     <li><a href="#evaluation">Evaluation</a></li>
     <li><a href="#owndata">Bring Your Data</a></li>
     <li><a href="#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp Exercise</a></li>
@@ -175,7 +176,7 @@
 <!-- HERO -->
 <div class="hero">
   <h1>LLM Fine-Tuning<br><span>End-to-End Handbook</span></h1>
-  <p>Everything you need — from raw tensors to a deployed fine-tuned model in the cloud. No fluff, no missing steps. Each section is self-sufficient and flows into the next.</p>
+  <p>For senior developers who can write production code but haven't fine-tuned a model yet. Build first, understand deeper after — each chapter is runnable before it's readable.</p>
   <div class="flow-bar">
     <a class="step" href="#pytorch">PyTorch</a><span class="arr">→</span>
     <a class="step" href="#datasets">HF Datasets</a><span class="arr">→</span>
@@ -1249,6 +1250,217 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
 
   <div style="margin-top:16px; text-align:center; font-size:0.75em; color:#475569; padding-top:12px; border-top:1px solid #1e293b;">
     LLM Fine-Tuning Handbook &nbsp;·&nbsp; PyTorch · HF Datasets · HF Transformers · Unsloth · LoRA / QLoRA · SageMaker · Bedrock
+  </div>
+</div>
+
+<!-- ══════════════════ DATASET ECOSYSTEM ══════════════════ -->
+<div class="chapter" id="datastack" style="background:#0d1117; border-top:2px solid #f97316;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#c2410c; font-size:0.75em;">🗄️</div>
+    <div><div class="chapter-title" style="color:#fb923c;">The Dataset Zoo</div><div class="chapter-subtitle">PyTorch Dataset → DataLoader → HF Dataset → DataCollator — untangled</div></div>
+  </div>
+  <p class="chapter-intro">Four things called "dataset" and nobody explains how they connect. This is the single biggest source of confusion when coming from general Python/ML into the HuggingFace fine-tuning stack. Here's the complete picture — what each layer does, when you need it, and what the Trainer hides from you.</p>
+
+  <div class="grid2">
+
+    <!-- PyTorch Dataset -->
+    <div class="card">
+      <div class="card-title" style="color:#f97316;">🔶 PyTorch Dataset</div>
+      <div class="card-body">
+<pre>
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> Dataset
+
+<span class="kw">class</span> <span class="fn">MyDataset</span>(Dataset):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, texts, tokenizer):
+        self.texts = texts
+        self.tokenizer = tokenizer
+
+    <span class="kw">def</span> <span class="fn">__len__</span>(self):
+        <span class="kw">return</span> <span class="fn">len</span>(self.texts)
+
+    <span class="kw">def</span> <span class="fn">__getitem__</span>(self, idx):
+        <span class="kw">return</span> self.tokenizer(self.texts[idx])
+</pre>
+        <div style="font-size:0.8em; color:#94a3b8; margin-top:6px; line-height:1.6;">
+          <strong style="color:#f97316;">What:</strong> Abstract base class. You subclass it, implement <code>__len__</code> + <code>__getitem__</code>.<br>
+          <strong style="color:#f97316;">Storage:</strong> Row-oriented, in-memory (everything in RAM).<br>
+          <strong style="color:#f97316;">Use when:</strong> Custom data sources, non-text data, legacy code.<br>
+          <strong style="color:#fb923c;">For LLM fine-tuning:</strong> Almost never needed — HF Dataset replaces this.
+        </div>
+      </div>
+    </div>
+
+    <!-- HF Dataset -->
+    <div class="card">
+      <div class="card-title" style="color:#38bdf8;">🔷 HF datasets.Dataset</div>
+      <div class="card-body">
+<pre>
+<span class="kw">from</span> datasets <span class="kw">import</span> Dataset, load_dataset
+
+ds = <span class="fn">load_dataset</span>(<span class="st">"json"</span>, data_files=<span class="st">"data.jsonl"</span>)
+ds = Dataset.<span class="fn">from_dict</span>({<span class="st">"text"</span>: [<span class="st">"hi"</span>, <span class="st">"bye"</span>]})
+
+<span class="cm"># Transform without subclassing</span>
+ds = ds.<span class="fn">map</span>(tokenize_fn, batched=<span class="kw">True</span>)
+ds = ds.<span class="fn">filter</span>(<span class="kw">lambda</span> x: <span class="fn">len</span>(x[<span class="st">"text"</span>]) > <span class="nb">10</span>)
+
+<span class="cm"># Make it act like a PyTorch Dataset</span>
+ds.<span class="fn">set_format</span>(<span class="st">"torch"</span>)
+</pre>
+        <div style="font-size:0.8em; color:#94a3b8; margin-top:6px; line-height:1.6;">
+          <strong style="color:#38bdf8;">What:</strong> Column-oriented, Arrow-backed, memory-mapped from disk.<br>
+          <strong style="color:#38bdf8;">Storage:</strong> Doesn't load everything into RAM. 50GB dataset? No problem.<br>
+          <strong style="color:#38bdf8;">Has:</strong> <code>.map()</code>, <code>.filter()</code>, <code>.select()</code> — no subclassing needed.<br>
+          <strong style="color:#60a5fa;">Key insight:</strong> It implements <code>__getitem__</code> + <code>__len__</code>, so DataLoader and Trainer accept it directly.
+        </div>
+      </div>
+    </div>
+
+    <!-- DataLoader -->
+    <div class="card">
+      <div class="card-title" style="color:#a78bfa;">🔀 DataLoader</div>
+      <div class="card-body">
+<pre>
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> DataLoader
+
+loader = <span class="fn">DataLoader</span>(
+    dataset,            <span class="cm"># any Dataset (PyTorch or HF)</span>
+    batch_size=<span class="nb">8</span>,
+    shuffle=<span class="kw">True</span>,
+    num_workers=<span class="nb">4</span>,
+    collate_fn=collator <span class="cm"># ← this is where collators plug in</span>
+)
+
+<span class="kw">for</span> batch <span class="kw">in</span> loader:
+    outputs = model(**batch)
+</pre>
+        <div style="font-size:0.8em; color:#94a3b8; margin-top:6px; line-height:1.6;">
+          <strong style="color:#a78bfa;">What:</strong> Wraps a Dataset. Handles batching, shuffling, parallel loading.<br>
+          <strong style="color:#a78bfa;">collate_fn:</strong> Takes a list of individual samples → returns one batch dict.<br>
+          <strong style="color:#c4b5fd;">You rarely create one.</strong> Trainer builds it internally from your dataset + collator.
+        </div>
+      </div>
+    </div>
+
+    <!-- DataCollator -->
+    <div class="card">
+      <div class="card-title" style="color:#34d399;">📦 DataCollator</div>
+      <div class="card-body">
+<pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> (
+    DataCollatorWithPadding,          <span class="cm"># classification</span>
+    DataCollatorForLanguageModeling,  <span class="cm"># causal LM / MLM</span>
+    DataCollatorForSeq2Seq,           <span class="cm"># encoder-decoder</span>
+)
+<span class="kw">from</span> trl <span class="kw">import</span> DataCollatorForCompletionOnlyLM <span class="cm"># SFT</span>
+
+collator = <span class="fn">DataCollatorForLanguageModeling</span>(
+    tokenizer=tok, mlm=<span class="kw">False</span>)   <span class="cm"># causal LM</span>
+</pre>
+        <div style="font-size:0.8em; color:#94a3b8; margin-top:6px; line-height:1.6;">
+          <strong style="color:#34d399;">What:</strong> A fancy <code>collate_fn</code>. Takes list of examples → returns padded + labeled batch.<br>
+          <strong style="color:#34d399;">Dynamic padding:</strong> Pads to longest in batch, not global max (saves compute).<br>
+          <strong style="color:#34d399;">Creates labels:</strong> For causal LM, <code>labels = input_ids</code> with <code>-100</code> on padding.<br>
+          <strong style="color:#6ee7b7;">Key detail:</strong> The label shift for next-token prediction happens <em>inside the model</em>, not in the collator.
+        </div>
+      </div>
+    </div>
+
+    <!-- Full-width: The Wiring Diagram -->
+    <div class="card full">
+      <div class="card-title" style="color:#fbbf24;">⚡ How Trainer Wires It All Together</div>
+      <div class="card-body">
+<pre style="font-size:0.85em; line-height:1.7;">
+<span class="cm">You provide:</span>                          <span class="cm">Trainer creates internally:</span>
+<span class="cm">─────────────</span>                          <span class="cm">──────────────────────────</span>
+train_dataset  (HF Dataset)         →  DataLoader(
+  +                                        dataset=train_dataset,
+data_collator  (e.g. LM collator)   →      collate_fn=data_collator,
+  +                                        batch_size=args.per_device_train_batch_size,
+TrainingArguments                    →      sampler=RandomSampler,
+                                       )
+
+<span class="cm"># The Trainer's default collator selection:</span>
+<span class="cm"># 1. You provide data_collator           → uses that</span>
+<span class="cm"># 2. You provide tokenizer, no collator  → DataCollatorWithPadding</span>
+<span class="cm"># 3. Neither                             → default_data_collator (just stacks)</span>
+
+<span class="cm"># SFTTrainer goes even further:</span>
+trainer = <span class="fn">SFTTrainer</span>(
+    model=<span class="st">"Qwen/Qwen3-0.6B"</span>,
+    train_dataset=ds,           <span class="cm"># just needs a "text" or "messages" column</span>
+    args=<span class="fn">SFTConfig</span>(output_dir=<span class="st">"./out"</span>),
+)
+<span class="cm"># SFTTrainer handles: tokenization → collation → label masking → training</span>
+<span class="cm"># You never write a collator or DataLoader.</span>
+</pre>
+      </div>
+    </div>
+
+    <!-- Collator Cheatsheet -->
+    <div class="card full">
+      <div class="card-title" style="color:#e2e8f0;">📋 Which Collator For What?</div>
+      <div class="card-body">
+        <table style="width:100%; font-size:0.82em; border-collapse:collapse;">
+          <tr style="border-bottom:1px solid #334155;">
+            <th style="text-align:left; padding:6px 10px; color:#94a3b8; font-weight:600;">Collator</th>
+            <th style="text-align:left; padding:6px 10px; color:#94a3b8; font-weight:600;">Task</th>
+            <th style="text-align:left; padding:6px 10px; color:#94a3b8; font-weight:600;">What It Does</th>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#38bdf8; font-family:'Fira Mono',monospace; font-size:0.9em;">DataCollatorWithPadding</td>
+            <td style="padding:6px 10px;">Classification</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Dynamic padding only. No label manipulation.</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#34d399; font-family:'Fira Mono',monospace; font-size:0.9em;">DataCollatorForLanguageModeling</td>
+            <td style="padding:6px 10px;">Causal LM / MLM</td>
+            <td style="padding:6px 10px; color:#94a3b8;"><code>mlm=False</code>: labels = input_ids, -100 on padding. <code>mlm=True</code>: masks 15% of tokens.</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#a78bfa; font-family:'Fira Mono',monospace; font-size:0.9em;">DataCollatorForSeq2Seq</td>
+            <td style="padding:6px 10px;">Translation, Summarization</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Pads both input and decoder labels. -100 on label padding.</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#fbbf24; font-family:'Fira Mono',monospace; font-size:0.9em;">DataCollatorForCompletionOnlyLM</td>
+            <td style="padding:6px 10px;">SFT (instruction tuning)</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Masks prompt tokens with -100. Only completion contributes to loss.</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px; color:#64748b; font-family:'Fira Mono',monospace; font-size:0.9em;">default_data_collator</td>
+            <td style="padding:6px 10px;">Pre-padded data</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Just stacks tensors. No padding. Requires uniform sequence lengths.</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Common Gotchas -->
+    <div class="card full">
+      <div class="card-title" style="color:#f87171;">⚠️ Common Gotchas</div>
+      <div class="card-body" style="font-size:0.82em; color:#94a3b8; line-height:1.8;">
+        <strong style="color:#f87171;">1. "I padded in .map() — why do I need a collator?"</strong><br>
+        You don't <em>need</em> one, but fixed padding wastes compute. A batch of [12, 18, 15]-token sequences pads to 18, not 512. That's the collator's job.<br><br>
+
+        <strong style="color:#f87171;">2. "I wrote a PyTorch Dataset subclass"</strong><br>
+        You almost certainly didn't need to. <code>Dataset.from_dict()</code> or <code>load_dataset()</code> + <code>.map()</code> covers 99% of fine-tuning.<br><br>
+
+        <strong style="color:#f87171;">3. "HF Dataset vs PyTorch Dataset — which am I using?"</strong><br>
+        They're different classes from different libraries. HF <code>datasets.Dataset</code> is NOT a subclass of <code>torch.utils.data.Dataset</code>. It just implements the same interface (duck typing). Both work with DataLoader.<br><br>
+
+        <strong style="color:#f87171;">4. "Where does the label shift happen for next-token prediction?"</strong><br>
+        Not in the collator. The collator sets <code>labels = input_ids</code>. The one-position shift happens inside <code>model.forward()</code>. The model handles its own architecture.<br><br>
+
+        <strong style="color:#f87171;">5. "Loss doesn't decrease despite training"</strong><br>
+        Check labels. If you set labels manually AND use a LM collator, they may conflict. Let the collator handle labels, or don't use one.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="good" style="margin-top:16px; font-size:0.83em;">
+    <strong>Full working example:</strong> <code>scripts/12_dataset_ecosystem.py</code> walks through all four layers with live code — PyTorch Dataset, DataLoader, HF Dataset, every collator type, and shows what Trainer builds internally.
   </div>
 </div>
 

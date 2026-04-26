@@ -278,6 +278,7 @@
       <li><a href="handbook.html#unsloth">⑤ Unsloth SFT</a></li>
       <li><a href="handbook.html#causal">⑥ Causal LM</a></li>
       <li><a href="handbook.html#methods">⑦ Methods</a></li>
+      <li><a href="handbook.html#datastack">🗄️ Dataset Zoo</a></li>
       <li><a href="handbook.html#evaluation">📊 Evaluation</a></li>
       <li><a href="handbook.html#owndata">📂 Your Data</a></li>
       <li><a href="handbook.html#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp</a></li>
@@ -311,8 +312,8 @@
 <!-- ── Hero (compact) ──────────────────────────────────────────────────── -->
 <div class="hero">
   <div class="hero-badge">LLM Fine-Tuning Kickstart Repo</div>
-  <h1>From Tensors to<br>Deployed LLMs</h1>
-  <p>A self-sufficient learning kit — PyTorch, HuggingFace, LoRA, Unsloth, DPO, GRPO, SageMaker, Bedrock. No fluff, all working code. 9/9 scripts verified.</p>
+  <h1>You can code.<br>Now fine-tune.</h1>
+  <p>Built for senior developers who know software but haven't fine-tuned a model yet. Skip the theory-first spiral — run working code in minutes, understand why it works after. PyTorch → LoRA → Unsloth → DPO → GRPO → Cloud. 10/10 scripts verified.</p>
 </div>
 
 <!-- ── Philosophy (condensed banner) ───────────────────────────────────── -->
@@ -362,11 +363,12 @@
         <div class="card-icon" style="background:linear-gradient(135deg,#0369a1,#4f46e5);">📘</div>
         <div>
           <div class="card-title">LLM Fine-Tuning Handbook</div>
-          <div class="card-desc" style="margin-top:4px;">9 chapters: PyTorch → Datasets → Transformers → LoRA → Unsloth → Causal LM → DPO / ORPO / GRPO → Cloud. Plus evaluation, own-data guidance, and decision guide.</div>
+          <div class="card-desc" style="margin-top:4px;">9 chapters: PyTorch → Datasets → Transformers → LoRA → Unsloth → Causal LM → DPO / ORPO / GRPO → Cloud. Plus the Dataset Zoo, evaluation, own-data guidance, and decision guide.</div>
         </div>
       </div>
       <div class="card-footer">
         <span class="tag blue">9 chapters</span>
+        <span class="tag blue">Dataset Zoo</span>
         <span class="tag blue">Evaluation</span>
         <span class="tag blue">Own-data</span>
       </div>
@@ -468,7 +470,7 @@
     <div>
       <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:6px;">
         <div class="section-title" style="margin-bottom:0;" id="scripts">🐍 Working Scripts</div>
-        <span style="font-size:.68em; color:var(--green); font-family:monospace;">9/9 verified</span>
+        <span style="font-size:.68em; color:var(--green); font-family:monospace;">10/10 verified</span>
       </div>
       <div style="font-size:.74em; color:var(--muted); margin-bottom:10px; line-height:1.6;">
         Scripts = single-concept demos. <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/notebooks/llama3_finetune_tutorial.ipynb" target="_blank" style="color:var(--accent); text-decoration:none;">Notebook</a> = full end-to-end flow (Llama 3 + Unsloth + GGUF).
@@ -517,6 +519,11 @@
         <div class="script-row">
           <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/11_custom_data.py" target="_blank">11_custom_data.py</a>
           <span class="script-desc">CSV/JSONL → every trainer format</span>
+          <span class="script-venv venv-main">.venv</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/12_dataset_ecosystem.py" target="_blank">12_dataset_ecosystem.py</a>
+          <span class="script-desc">PyTorch Dataset vs HF Dataset vs DataCollator</span>
           <span class="script-venv venv-main">.venv</span>
         </div>
       </div>
