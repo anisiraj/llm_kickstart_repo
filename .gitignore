@@ -26,6 +26,10 @@ model_gguf/
 # HF cache
 .cache/
 
+# Unsloth compiled kernel cache (auto-generated, machine-specific)
+unsloth_compiled_cache/
+**/unsloth_compiled_cache/
+
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
