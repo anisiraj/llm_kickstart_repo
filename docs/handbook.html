@@ -160,6 +160,7 @@
     <li><a href="#bedrock">⑨ Bedrock</a></li>
     <li class="section">Practical</li>
     <li><a href="#datastack">Dataset Zoo</a></li>
+    <li><a href="#pytorchinternals">Module Internals</a></li>
     <li><a href="#evaluation">Evaluation</a></li>
     <li><a href="#owndata">Bring Your Data</a></li>
     <li><a href="#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp Exercise</a></li>
@@ -1461,6 +1462,241 @@ trainer = <span class="fn">SFTTrainer</span>(
 
   <div class="good" style="margin-top:16px; font-size:0.83em;">
     <strong>Full working example:</strong> <code>scripts/12_dataset_ecosystem.py</code> walks through all four layers with live code — PyTorch Dataset, DataLoader, HF Dataset, every collator type, and shows what Trainer builds internally.
+  </div>
+</div>
+
+<!-- ══════════════════ PYTORCH INTERNALS ══════════════════ -->
+<div class="chapter" id="pytorchinternals" style="background:#0a0f1a; border-top:2px solid #ef4444;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#b91c1c; font-size:0.75em;">🔧</div>
+    <div><div class="chapter-title" style="color:#f87171;">PyTorch Module Internals</div><div class="chapter-subtitle">nn.Module · ModuleList gotcha · Weight surgery · HF head swapping</div></div>
+  </div>
+  <p class="chapter-intro">PyTorch's module system is deceptively simple — until you store layers in a plain Python list and nothing trains. This chapter covers the mechanics that senior developers trip over: how <code>nn.Module</code> discovers parameters, why <code>nn.ModuleList</code> exists, how to freeze/unfreeze layers, and what HuggingFace actually does when you call <code>AutoModelForSequenceClassification</code>.</p>
+
+  <div class="grid2">
+
+    <!-- ModuleList Gotcha -->
+    <div class="card">
+      <div class="card-title" style="color:#f87171;">⚠️ The ModuleList Gotcha — #1 Silent Bug</div>
+      <div class="card-body">
+<pre>
+<span class="cm"># WRONG — layers are INVISIBLE to PyTorch</span>
+<span class="kw">class</span> <span class="fn">BrokenNet</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        super().__init__()
+        self.layers = [nn.Linear(<span class="nb">10</span>, <span class="nb">10</span>)
+                        <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(<span class="nb">3</span>)]
+        <span class="cm"># ↑ plain list: .parameters() returns NOTHING</span>
+        <span class="cm"># Won't train, won't save, won't move to GPU</span>
+
+<span class="cm"># CORRECT — use nn.ModuleList</span>
+<span class="kw">class</span> <span class="fn">FixedNet</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        super().__init__()
+        self.layers = nn.<span class="fn">ModuleList</span>([
+            nn.Linear(<span class="nb">10</span>, <span class="nb">10</span>) <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(<span class="nb">3</span>)
+        ])
+        <span class="cm"># ↑ registered! .parameters() finds all 6 tensors</span>
+
+<span class="cm"># Same for dicts: use nn.ModuleDict, not {}</span>
+self.heads = nn.<span class="fn">ModuleDict</span>({
+    <span class="st">"cls"</span>: nn.Linear(<span class="nb">10</span>, <span class="nb">2</span>),
+    <span class="st">"reg"</span>: nn.Linear(<span class="nb">10</span>, <span class="nb">1</span>),
+})
+</pre>
+        <div style="font-size:0.8em; color:#fca5a5; margin-top:6px; line-height:1.6;">
+          <strong>Rule:</strong> If it has parameters, it must be an <code>nn.Module</code> attribute — not inside a plain Python list or dict.
+        </div>
+      </div>
+    </div>
+
+    <!-- Non-Linear Forward -->
+    <div class="card">
+      <div class="card-title" style="color:#a78bfa;">🔀 Non-Linear Forward Pass</div>
+      <div class="card-body">
+<pre>
+<span class="kw">class</span> <span class="fn">ResidualBlock</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, dim):
+        super().__init__()
+        self.ff = nn.Sequential(
+            nn.Linear(dim, dim * <span class="nb">4</span>),
+            nn.GELU(),
+            nn.Linear(dim * <span class="nb">4</span>, dim),
+        )
+        self.norm = nn.LayerNorm(dim)
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        <span class="kw">return</span> self.norm(x + self.ff(x))
+        <span class="cm"># ↑ skip connection: input goes TWO paths</span>
+
+<span class="cm"># Multi-head: shared backbone, different task heads</span>
+<span class="kw">class</span> <span class="fn">MultiTaskModel</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x, task=<span class="st">"cls"</span>):
+        features = self.backbone(x)  <span class="cm"># shared</span>
+        <span class="kw">if</span> task == <span class="st">"cls"</span>:
+            <span class="kw">return</span> self.classifier(features)
+        <span class="kw">return</span> self.regressor(features)
+</pre>
+        <div style="font-size:0.8em; color:#94a3b8; margin-top:6px; line-height:1.6;">
+          <code>forward()</code> is just Python. Skip connections, branches, conditionals, shared layers — all fine. <code>nn.Sequential</code> is a convenience, not a requirement.
+        </div>
+      </div>
+    </div>
+
+    <!-- Weight Surgery -->
+    <div class="card">
+      <div class="card-title" style="color:#34d399;">🔬 Weight Surgery — Freeze, Modify, Replace</div>
+      <div class="card-body">
+<pre>
+<span class="cm"># Freeze a layer</span>
+<span class="kw">for</span> p <span class="kw">in</span> model.layer1.<span class="fn">parameters</span>():
+    p.requires_grad = <span class="kw">False</span>
+
+<span class="cm"># Freeze ALL, then unfreeze just the head</span>
+<span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>():
+    p.requires_grad = <span class="kw">False</span>
+<span class="kw">for</span> p <span class="kw">in</span> model.head.<span class="fn">parameters</span>():
+    p.requires_grad = <span class="kw">True</span>
+
+<span class="cm"># Inspect weights</span>
+w = model.layer1.weight         <span class="cm"># tensor</span>
+<span class="fn">print</span>(w.shape, w.data.mean())
+
+<span class="cm"># Modify weights directly</span>
+<span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+    model.layer1.bias.<span class="fn">zero_</span>()
+    model.layer1.weight.<span class="fn">copy_</span>(other_model.layer1.weight)
+
+<span class="cm"># Replace a layer entirely</span>
+model.head = nn.Linear(<span class="nb">768</span>, <span class="nb">10</span>)  <span class="cm"># new, trainable</span>
+
+<span class="cm"># Save / load weights</span>
+torch.<span class="fn">save</span>(model.<span class="fn">state_dict</span>(), <span class="st">"w.pt"</span>)
+model.<span class="fn">load_state_dict</span>(torch.<span class="fn">load</span>(<span class="st">"w.pt"</span>))
+</pre>
+      </div>
+    </div>
+
+    <!-- HF Head Swapping -->
+    <div class="card">
+      <div class="card-title" style="color:#38bdf8;">🔄 HuggingFace Head Swapping</div>
+      <div class="card-body">
+<pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> (
+    AutoModel,
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+)
+
+<span class="cm"># Same "gpt2" backbone, different heads:</span>
+base = <span class="fn">AutoModel</span>.from_pretrained(<span class="st">"gpt2"</span>)
+<span class="cm">#   → GPT2Model (no head, raw hidden states)</span>
+
+causal = <span class="fn">AutoModelForCausalLM</span>.from_pretrained(<span class="st">"gpt2"</span>)
+<span class="cm">#   → GPT2Model + lm_head (768 → 50257)</span>
+<span class="cm">#     lm_head = pretrained (came with the model)</span>
+
+clf = <span class="fn">AutoModelForSequenceClassification</span>.from_pretrained(
+    <span class="st">"gpt2"</span>, num_labels=<span class="nb">3</span>)
+<span class="cm">#   → GPT2Model + score (768 → 3)</span>
+<span class="cm">#     score = RANDOMLY INITIALIZED ← train this!</span>
+</pre>
+        <div style="font-size:0.8em; color:#94a3b8; margin-top:6px; line-height:1.6;">
+          HF strips the original head and adds a task-specific one. The backbone weights are identical. The new head is random — you <strong>must</strong> fine-tune it.
+        </div>
+      </div>
+    </div>
+
+    <!-- Full-width: AutoModelFor* table -->
+    <div class="card full">
+      <div class="card-title" style="color:#e2e8f0;">📋 AutoModelFor* — Which Class Adds Which Head</div>
+      <div class="card-body">
+        <table style="width:100%; font-size:0.82em; border-collapse:collapse;">
+          <tr style="border-bottom:1px solid #334155;">
+            <th style="text-align:left; padding:6px 10px; color:#94a3b8; font-weight:600;">Class</th>
+            <th style="text-align:left; padding:6px 10px; color:#94a3b8; font-weight:600;">Head Added</th>
+            <th style="text-align:left; padding:6px 10px; color:#94a3b8; font-weight:600;">Output Shape</th>
+            <th style="text-align:left; padding:6px 10px; color:#94a3b8; font-weight:600;">Task</th>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#38bdf8; font-family:'Fira Mono',monospace; font-size:0.9em;">AutoModel</td>
+            <td style="padding:6px 10px;">None</td>
+            <td style="padding:6px 10px; color:#94a3b8;">[batch, seq, hidden]</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Raw features / embeddings</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#34d399; font-family:'Fira Mono',monospace; font-size:0.9em;">AutoModelForCausalLM</td>
+            <td style="padding:6px 10px;">lm_head</td>
+            <td style="padding:6px 10px; color:#94a3b8;">[batch, seq, vocab]</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Next token prediction</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#a78bfa; font-family:'Fira Mono',monospace; font-size:0.9em;">AutoModelForSequenceClassification</td>
+            <td style="padding:6px 10px;">score / classifier</td>
+            <td style="padding:6px 10px; color:#94a3b8;">[batch, num_labels]</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Sentiment, intent, topic</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#fbbf24; font-family:'Fira Mono',monospace; font-size:0.9em;">AutoModelForTokenClassification</td>
+            <td style="padding:6px 10px;">classifier</td>
+            <td style="padding:6px 10px; color:#94a3b8;">[batch, seq, num_labels]</td>
+            <td style="padding:6px 10px; color:#94a3b8;">NER, POS tagging</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#fb923c; font-family:'Fira Mono',monospace; font-size:0.9em;">AutoModelForQuestionAnswering</td>
+            <td style="padding:6px 10px;">qa_outputs</td>
+            <td style="padding:6px 10px; color:#94a3b8;">[batch, seq, 2]</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Extractive QA (start/end)</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:6px 10px; color:#f87171; font-family:'Fira Mono',monospace; font-size:0.9em;">AutoModelForMaskedLM</td>
+            <td style="padding:6px 10px;">cls</td>
+            <td style="padding:6px 10px; color:#94a3b8;">[batch, seq, vocab]</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Fill-in-the-blank (BERT)</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px; color:#94a3b8; font-family:'Fira Mono',monospace; font-size:0.9em;">AutoModelForSeq2SeqLM</td>
+            <td style="padding:6px 10px;">lm_head (decoder)</td>
+            <td style="padding:6px 10px; color:#94a3b8;">[batch, seq, vocab]</td>
+            <td style="padding:6px 10px; color:#94a3b8;">Translation, summarization</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- nn.Module Discovery -->
+    <div class="card full">
+      <div class="card-title" style="color:#fb923c;">🔍 Inspecting Any Model's Architecture</div>
+      <div class="card-body">
+<pre>
+model = AutoModelForCausalLM.from_pretrained(<span class="st">"gpt2"</span>)
+
+<span class="cm"># See the full tree</span>
+<span class="fn">print</span>(model)
+
+<span class="cm"># Top-level children + param counts</span>
+<span class="kw">for</span> name, child <span class="kw">in</span> model.<span class="fn">named_children</span>():
+    n = <span class="fn">sum</span>(p.<span class="fn">numel</span>() <span class="kw">for</span> p <span class="kw">in</span> child.<span class="fn">parameters</span>())
+    <span class="fn">print</span>(f<span class="st">"{name}: {type(child).__name__}  params={n:,}"</span>)
+<span class="cm"># �� transformer: GPT2Model  params=124,439,808</span>
+<span class="cm"># → lm_head:     Linear     params=38,597,376</span>
+
+<span class="cm"># Every parameter name + shape</span>
+<span class="kw">for</span> name, p <span class="kw">in</span> model.<span class="fn">named_parameters</span>():
+    <span class="fn">print</span>(f<span class="st">"{name:40s} {list(p.shape)}"</span>)
+
+<span class="cm"># Count trainable vs frozen</span>
+trainable = <span class="fn">sum</span>(p.<span class="fn">numel</span>() <span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>() <span class="kw">if</span> p.requires_grad)
+total = <span class="fn">sum</span>(p.<span class="fn">numel</span>() <span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>())
+<span class="fn">print</span>(f<span class="st">"Trainable: {trainable:,} / {total:,}"</span>)
+</pre>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="good" style="margin-top:16px; font-size:0.83em;">
+    <strong>Full working example:</strong> <code>scripts/13_pytorch_internals.py</code> demonstrates every concept above with live code — the ModuleList bug, weight surgery, head swapping comparison, and model inspection.
   </div>
 </div>
 
