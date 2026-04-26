@@ -26,7 +26,8 @@
   .hero h1 span { color: #38bdf8; }
   .hero p { color: #94a3b8; margin-top: 12px; max-width: 620px; line-height: 1.7; font-size: 0.95em; }
   .flow-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 24px; }
-  .flow-bar .step { background: #1e40af; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.75em; font-weight: 600; }
+  .flow-bar .step { background: #1e40af; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.75em; font-weight: 600; text-decoration: none; transition: background 0.15s, transform 0.1s; }
+  .flow-bar .step:hover { background: #2563eb; transform: translateY(-1px); }
   .flow-bar .arr { color: #475569; font-size: 1.1em; }
 
   /* SECTIONS */
@@ -158,15 +159,15 @@
   <h1>LLM Fine-Tuning<br><span>End-to-End Handbook</span></h1>
   <p>Everything you need — from raw tensors to a deployed fine-tuned model in the cloud. No fluff, no missing steps. Each section is self-sufficient and flows into the next.</p>
   <div class="flow-bar">
-    <span class="step">PyTorch</span><span class="arr">→</span>
-    <span class="step">HF Datasets</span><span class="arr">→</span>
-    <span class="step">Transformers</span><span class="arr">→</span>
-    <span class="step">LoRA / QLoRA</span><span class="arr">→</span>
-    <span class="step">Unsloth SFT</span><span class="arr">→</span>
-    <span class="step">Causal LM / Pretrain</span><span class="arr">→</span>
-    <span class="step">FT Methods</span><span class="arr">→</span>
-    <span class="step">SageMaker</span><span class="arr">→</span>
-    <span class="step">Bedrock</span>
+    <a class="step" href="#pytorch">PyTorch</a><span class="arr">→</span>
+    <a class="step" href="#datasets">HF Datasets</a><span class="arr">→</span>
+    <a class="step" href="#transformers">Transformers</a><span class="arr">→</span>
+    <a class="step" href="#lora">LoRA / QLoRA</a><span class="arr">→</span>
+    <a class="step" href="#unsloth">Unsloth SFT</a><span class="arr">→</span>
+    <a class="step" href="#causal">Causal LM / Pretrain</a><span class="arr">→</span>
+    <a class="step" href="#methods">FT Methods</a><span class="arr">→</span>
+    <a class="step" href="#sagemaker">SageMaker</a><span class="arr">→</span>
+    <a class="step" href="#bedrock">Bedrock</a>
   </div>
 </div>
 
