@@ -315,40 +315,46 @@
 <!-- ── Hero (compact) ──────────────────────────────────────────────────── -->
 <div class="hero">
   <a href="https://github.com/anisiraj/llm_kickstart_repo" target="_blank" class="hero-badge" style="text-decoration:none; cursor:pointer;">Finetune Handbook for Busy Developers</a>
-  <h1>Own Your Model.</h1>
-  <p style="max-width:620px;">GPT-4 and Claude are brilliant generalists — but your org's schema, your compliance rules, your edge cases? That's where a small, specialized model you own outperforms the biggest API. Build first, understand deeper after.</p>
+  <h1>Best Is Not Always Better.</h1>
+  <p style="max-width:640px;">Yes, large models with massive context windows can pull in a lot of knowledge at inference time. But they're not appropriate for everything — and the world is moving toward more AI, not less.</p>
 </div>
 
-<!-- ── Philosophy (condensed banner) ───────────────────────────────────── -->
+<!-- ── Why fine-tune? (the real argument) ─────────────────────────────── -->
 <div class="philosophy">
   <div style="max-width:900px;">
 
     <div style="display:flex; align-items:center; gap:16px; margin-bottom:18px; flex-wrap:wrap;">
-      <span style="display:inline-block; background:rgba(129,140,248,.12); border:1px solid rgba(129,140,248,.3); color:#a78bfa; font-size:.65em; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:3px 12px; border-radius:20px;">Learning Philosophy</span>
-      <span style="font-size:1.15em; font-weight:800; color:#f1f5f9;">AI-Powered, Self-Driven <span style="color:#818cf8;">Nano Bootcamps</span></span>
+      <span style="display:inline-block; background:rgba(129,140,248,.12); border:1px solid rgba(129,140,248,.3); color:#a78bfa; font-size:.65em; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:3px 12px; border-radius:20px;">Why Fine-Tune?</span>
+      <span style="font-size:1.15em; font-weight:800; color:#f1f5f9;">The case for <span style="color:#818cf8;">small, specialized models</span></span>
     </div>
 
     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:14px;">
       <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; border-top:2px solid #38bdf8;">
-        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#38bdf8; margin-bottom:4px;">1. Fundamentals</div>
-        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Tensors, loss, tokenizers — the concepts, not the syntax.</div>
+        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#38bdf8; margin-bottom:4px;">Edge &amp; Embedded</div>
+        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Medical devices, HVAC controllers, drones, cars — you can't call an API at 30,000 feet. The model runs on the device or it doesn't run.</div>
       </div>
       <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; border-top:2px solid #818cf8;">
-        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#818cf8; margin-bottom:4px;">2. Your Problem</div>
-        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Pick a real problem you own. Ownership drives motivation.</div>
+        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#818cf8; margin-bottom:4px;">Cost &amp; Latency</div>
+        <div style="font-size:.74em; color:#64748b; line-height:1.6;">A 1B model serving 10M requests/day costs a fraction of API calls. Sub-10ms inference, no rate limits, no vendor lock-in.</div>
       </div>
       <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; border-top:2px solid #34d399;">
-        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#34d399; margin-bottom:4px;">3. Build with AI</div>
-        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Start before you're ready. AI handles syntax; you set direction.</div>
+        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#34d399; margin-bottom:4px;">Privacy &amp; Compliance</div>
+        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Patient records, financial data, classified ops — some data can never leave your infrastructure. The model comes to the data.</div>
       </div>
       <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; border-top:2px solid #fb923c;">
-        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#fb923c; margin-bottom:4px;">4. Depth on Demand</div>
-        <div style="font-size:.74em; color:#64748b; line-height:1.6;">OOM → learn quantisation. Bad outputs → learn alignment.</div>
+        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#fb923c; margin-bottom:4px;">AI Maturity</div>
+        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Calling an API is consuming AI. Fine-tuning is building AI capability. That's the difference between using a tool and owning the toolchain.</div>
       </div>
     </div>
 
     <div style="padding:10px 14px; background:rgba(129,140,248,.06); border-left:2px solid #818cf8; border-radius:0 6px 6px 0; font-size:.78em; color:#a5b4fc; line-height:1.6; font-style:italic;">
-      "Pick the destination, then use every tool available to get there — including AI."
+      "A 400B model knows everything about nothing you do. A 1B model trained on your data knows exactly what matters."
+    </div>
+
+    <!-- Learning approach -->
+    <div style="margin-top:16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+      <span style="display:inline-block; background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.3); color:#34d399; font-size:.65em; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:3px 12px; border-radius:20px;">How This Works</span>
+      <span style="font-size:.82em; color:#94a3b8;">Build first, understand after. Each script runs before you read the explanation.</span>
     </div>
 
   </div>
