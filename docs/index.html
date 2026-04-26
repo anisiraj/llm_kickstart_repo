@@ -529,44 +529,46 @@ uv venv .venv-rl <span class="cm"># DPO / ORPO / GRPO</span>
   </div>
 
   <!-- ── Method comparison ──────────────────────────────────────────────── -->
-  <div class="section-title">🧭 Which method should I use?</div>
-  <div class="grid grid-3" style="margin-bottom: 48px;">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
-      <div style="font-size:1.4em;margin-bottom:8px;">🎓</div>
-      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">SFT</div>
-      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Teaching a model to follow instructions. First step for any fine-tune. Use Unsloth for speed.</div>
-      <div style="margin-top:10px;font-size:.72em;color:var(--green);font-family:monospace;">SFTTrainer</div>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+    <div class="section-title" style="margin-bottom:0;">🧭 Which fine-tuning method should I use?</div>
+    <a href="handbook.html#methods" style="font-size:.78em;color:#60a5fa;text-decoration:none;border:1px solid #1e3a5f;border-radius:6px;padding:4px 12px;background:#0c1a2e;white-space:nowrap;">Full comparison table → Handbook §7</a>
+  </div>
+  <div class="grid grid-3" style="margin-bottom:20px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:18px;">
+      <div style="font-size:1.2em;margin-bottom:6px;">🎓</div>
+      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">Causal LM / Pretrain</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Domain adaptation on raw text. Shifts the model's knowledge before SFT. No labels needed.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--green);font-family:monospace;">Trainer + DataCollatorForLM</div>
     </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
-      <div style="font-size:1.4em;margin-bottom:8px;">🏆</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:18px;">
+      <div style="font-size:1.2em;margin-bottom:6px;">📋</div>
+      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">SFT</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Teach instruction-following from prompt/response pairs. First step for any assistant. Use Unsloth for speed.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--accent);font-family:monospace;">SFTTrainer</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:10px;padding:18px;">
+      <div style="font-size:1.2em;margin-bottom:6px;">🏆</div>
       <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">DPO</div>
-      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Aligning to human preferences using chosen/rejected pairs. No reward model needed.</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Align to human preferences from chosen/rejected pairs. Run after SFT. No reward model needed.</div>
       <div style="margin-top:10px;font-size:.72em;color:var(--purple);font-family:monospace;">DPOTrainer</div>
     </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
-      <div style="font-size:1.4em;margin-bottom:8px;">⚡</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:10px;padding:18px;">
+      <div style="font-size:1.2em;margin-bottom:6px;">⚡</div>
       <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">ORPO</div>
-      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">SFT + alignment in one pass from a BASE model. Faster, no ref model, less memory.</div>
-      <div style="margin-top:10px;font-size:.72em;color:var(--accent);font-family:monospace;">trl.experimental.orpo</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">SFT + alignment in one pass from a base model. No reference model, less memory, faster.</div>
+      <div style="margin-top:10px;font-size:.72em;color:#f59e0b;font-family:monospace;">ORPOTrainer</div>
     </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
-      <div style="font-size:1.4em;margin-bottom:8px;">🧮</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:10px;padding:18px;">
+      <div style="font-size:1.2em;margin-bottom:6px;">🧮</div>
       <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">GRPO</div>
-      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Group reward optimisation. Best for math, code, any verifiable task. Used in DeepSeek-R1.</div>
-      <div style="margin-top:10px;font-size:.72em;color:var(--yellow);font-family:monospace;">GRPOTrainer</div>
+      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">RL from verifiable rewards. Best for math, code, structured output. Powers DeepSeek-R1.</div>
+      <div style="margin-top:10px;font-size:.72em;color:var(--orange);font-family:monospace;">GRPOTrainer</div>
     </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
-      <div style="font-size:1.4em;margin-bottom:8px;">☁️</div>
-      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">SageMaker</div>
-      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Train at scale, deploy TGI endpoints. Use spot instances for 70% cost savings.</div>
-      <div style="margin-top:10px;font-size:.72em;color:var(--orange);font-family:monospace;">HuggingFace estimator</div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
-      <div style="font-size:1.4em;margin-bottom:8px;">🪨</div>
-      <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">Bedrock</div>
-      <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Managed FM API — Claude, Llama, Titan. Fine-tune Titan/Command, no infra to manage.</div>
-      <div style="margin-top:10px;font-size:.72em;color:var(--orange);font-family:monospace;">bedrock.converse()</div>
-    </div>
+  </div>
+
+  <div style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:10px;padding:14px 18px;margin-bottom:48px;font-size:.82em;color:#475569;display:flex;align-items:center;gap:12px;">
+    <span style="font-size:1.1em;">☁️</span>
+    <span><strong style="color:#64748b;">SageMaker &amp; Bedrock</strong> are cloud execution engines — not training methods. Run any of the methods above on SageMaker for scale, or use Bedrock for managed FM inference. See chapters 8–9 in the <a href="handbook.html#sagemaker" style="color:#60a5fa;text-decoration:none;">handbook</a>.</span>
   </div>
 
 </div><!-- /container -->
