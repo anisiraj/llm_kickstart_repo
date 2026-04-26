@@ -17,6 +17,7 @@
     --orange:  #fb923c;
     --purple:  #a78bfa;
     --yellow:  #fbbf24;
+    --sidebar: 210px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -26,14 +27,80 @@
     min-height: 100vh;
   }
 
-  /* ── Hero ── */
+  /* ── Left sidebar ── */
+  .sidebar {
+    position: fixed; top: 0; left: 0;
+    width: var(--sidebar); height: 100vh;
+    background: #1e293b;
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    overflow-y: auto;
+    z-index: 100;
+    display: flex; flex-direction: column;
+  }
+  .sidebar .logo {
+    padding: 0 16px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: .82em; font-weight: 800; color: #f8fafc; line-height: 1.3;
+  }
+  .sidebar .logo span { color: var(--accent); }
+
+  .sidebar nav { flex: 1; }
+  .sidebar nav ul { list-style: none; margin-top: 12px; }
+  .sidebar nav li a {
+    display: block; padding: 7px 16px;
+    color: var(--muted); text-decoration: none;
+    font-size: .78em; font-weight: 500;
+    border-left: 3px solid transparent;
+    transition: all .15s;
+  }
+  .sidebar nav li a:hover { color: #f8fafc; background: #334155; border-left-color: var(--accent); }
+  .sidebar nav li.section-label {
+    padding: 14px 16px 4px;
+    font-size: .62em; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .12em; color: #475569;
+  }
+
+  .sidebar .env-block {
+    padding: 14px 16px 0;
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+  }
+  .sidebar .env-block .env-label {
+    font-size: .6em; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .1em; color: #475569; margin-bottom: 8px;
+  }
+  .sidebar .env-pill {
+    display: inline-block;
+    background: rgba(255,255,255,.04); border: 1px solid var(--border);
+    color: #64748b; font-size: .68em; font-family: monospace;
+    padding: 2px 8px; border-radius: 4px; margin: 0 4px 5px 0;
+  }
+  .sidebar .curator {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-size: .68em; color: #475569; line-height: 1.6;
+  }
+  .sidebar .curator strong { color: var(--muted); font-weight: 600; }
+  .sidebar .gh-link {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 16px; margin: 0 10px 10px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--border);
+    border-radius: 6px; text-decoration: none;
+    color: var(--muted); font-size: .72em; font-weight: 600;
+    transition: all .15s;
+  }
+  .sidebar .gh-link:hover { background: rgba(255,255,255,.08); border-color: var(--accent); color: #f8fafc; }
+
+  /* ── Main area ── */
+  main { margin-left: var(--sidebar); }
+
+  /* ── Hero (compact) ── */
   .hero {
     background: linear-gradient(135deg, #0c1a2e 0%, #0f2944 50%, #0c1a2e 100%);
     border-bottom: 1px solid var(--border);
-    padding: 64px 32px 48px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
+    padding: 40px 32px 32px;
+    position: relative; overflow: hidden;
   }
   .hero::before {
     content: '';
@@ -44,100 +111,75 @@
   }
   .hero-badge {
     display: inline-block;
-    background: rgba(56,189,248,.12);
-    border: 1px solid rgba(56,189,248,.3);
-    color: var(--accent);
-    font-size: .72em;
-    font-weight: 600;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    padding: 4px 14px;
-    border-radius: 20px;
-    margin-bottom: 20px;
+    background: rgba(56,189,248,.12); border: 1px solid rgba(56,189,248,.3);
+    color: var(--accent); font-size: .7em; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase;
+    padding: 3px 12px; border-radius: 20px; margin-bottom: 14px;
   }
   .hero h1 {
-    font-size: clamp(2em, 5vw, 3.2em);
-    font-weight: 800;
-    line-height: 1.1;
+    font-size: clamp(1.6em, 4vw, 2.4em); font-weight: 800; line-height: 1.15;
     background: linear-gradient(135deg, #e2e8f0, var(--accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 16px;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 12px;
   }
   .hero p {
-    color: var(--muted);
-    font-size: 1.05em;
-    max-width: 620px;
-    margin: 0 auto 32px;
-    line-height: 1.7;
-  }
-  .hero-pills { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-  .pill {
-    background: rgba(255,255,255,.06);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: .78em;
-    padding: 5px 14px;
-    border-radius: 20px;
-    font-family: monospace;
+    color: var(--muted); font-size: .92em;
+    max-width: 580px; line-height: 1.7;
   }
 
-  /* ── Layout ── */
-  .container { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
+  /* ── Philosophy (inline banner) ── */
+  .philosophy {
+    background: linear-gradient(135deg,#0c1a2e,#0d1f35);
+    border-bottom: 1px solid #1e3a5f;
+    padding: 28px 32px;
+  }
+
+  /* ── Container ── */
+  .container { max-width: 1000px; padding: 32px 28px; }
 
   /* ── Section titles ── */
   .section-title {
-    font-size: .72em;
-    font-weight: 700;
-    letter-spacing: .12em;
-    text-transform: uppercase;
+    font-size: .7em; font-weight: 700;
+    letter-spacing: .12em; text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 20px;
-    padding-bottom: 10px;
+    margin-bottom: 14px; padding-bottom: 8px;
     border-bottom: 1px solid var(--border);
   }
 
   /* ── Cards ── */
-  .grid { display: grid; gap: 16px; margin-bottom: 48px; }
-  .grid-2 { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .grid { display: grid; gap: 12px; margin-bottom: 32px; }
+  .grid-2 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 
   .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
     transition: border-color .2s, transform .15s, box-shadow .2s;
-    text-decoration: none;
-    display: block;
+    text-decoration: none; display: block;
   }
   .card:hover {
-    border-color: var(--accent);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(56,189,248,.1);
+    border-color: var(--accent); transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(56,189,248,.1);
   }
   .card-header {
-    padding: 18px 20px 12px;
-    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 16px 10px;
+    display: flex; align-items: flex-start; gap: 12px;
   }
   .card-icon {
-    width: 40px; height: 40px; border-radius: 10px;
+    width: 36px; height: 36px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.2em; flex-shrink: 0;
+    font-size: 1.1em; flex-shrink: 0;
   }
-  .card-title { font-size: .95em; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-  .card-desc  { font-size: .8em; color: var(--muted); line-height: 1.5; }
+  .card-title { font-size: .88em; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .card-desc  { font-size: .76em; color: var(--muted); line-height: 1.5; }
   .card-footer {
-    padding: 10px 20px 14px;
-    display: flex; gap: 8px; flex-wrap: wrap;
+    padding: 8px 16px 12px;
+    display: flex; gap: 6px; flex-wrap: wrap;
   }
   .tag {
-    font-size: .7em; font-family: monospace;
-    background: rgba(255,255,255,.05);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    padding: 2px 8px; border-radius: 4px;
+    font-size: .65em; font-family: monospace;
+    background: rgba(255,255,255,.05); border: 1px solid var(--border);
+    color: var(--muted); padding: 2px 7px; border-radius: 4px;
   }
   .tag.green  { color: var(--green);  border-color: rgba(52,211,153,.3); background: rgba(52,211,153,.07); }
   .tag.blue   { color: var(--accent); border-color: rgba(56,189,248,.3); background: rgba(56,189,248,.07); }
@@ -145,260 +187,221 @@
   .tag.yellow { color: var(--yellow); border-color: rgba(251,191,36,.3);  background: rgba(251,191,36,.07); }
   .tag.orange { color: var(--orange); border-color: rgba(251,146,60,.3);  background: rgba(251,146,60,.07); }
 
-  /* handbook card — full width, prominent */
+  /* ── Prominent cards ── */
   .card-main {
     background: linear-gradient(135deg, #0c2d4a, #1a1040);
     border-color: rgba(56,189,248,.25);
   }
-  .card-main:hover { border-color: var(--accent); box-shadow: 0 12px 40px rgba(56,189,248,.15); }
-  .card-main .card-title { font-size: 1.25em; }
-  .card-main .card-desc  { font-size: .88em; max-width: 560px; }
+  .card-main:hover { border-color: var(--accent); box-shadow: 0 8px 32px rgba(56,189,248,.15); }
+  .card-main .card-title { font-size: 1.05em; }
 
-  /* ── Script table ── */
-  .script-grid { display: grid; gap: 10px; margin-bottom: 48px; }
-  .script-row {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 18px;
-    display: grid;
-    grid-template-columns: 200px 1fr auto;
-    align-items: center;
-    gap: 16px;
+  .card-bootcamp {
+    background: linear-gradient(135deg,#1a0f00,#1a1400);
+    border-color: rgba(245,158,11,.4);
   }
-  .script-name { font-family: monospace; font-size: .85em; color: var(--accent); text-decoration: none; }
+  .card-bootcamp:hover { border-color: var(--yellow); box-shadow: 0 8px 32px rgba(245,158,11,.12); }
+
+  /* ── Script rows ── */
+  .script-grid { display: grid; gap: 6px; margin-bottom: 32px; }
+  .script-row {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 14px;
+    display: grid; grid-template-columns: 190px 1fr auto;
+    align-items: center; gap: 12px;
+  }
+  .script-name { font-family: monospace; font-size: .8em; color: var(--accent); text-decoration: none; }
   .script-name:hover { text-decoration: underline; color: #7dd3fc; }
-  .script-desc { font-size: .82em; color: var(--muted); }
+  .script-desc { font-size: .76em; color: var(--muted); }
   .script-venv {
-    font-size: .72em; font-family: monospace; font-weight: 600;
-    padding: 3px 10px; border-radius: 4px; white-space: nowrap;
+    font-size: .68em; font-family: monospace; font-weight: 600;
+    padding: 2px 8px; border-radius: 4px; white-space: nowrap;
   }
   .venv-main { background: rgba(52,211,153,.1); color: var(--green); border: 1px solid rgba(52,211,153,.3); }
   .venv-rl   { background: rgba(167,139,250,.1); color: var(--purple); border: 1px solid rgba(167,139,250,.3); }
 
   /* ── Setup box ── */
   .setup-box {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 24px 28px;
-    margin-bottom: 48px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 22px; margin-bottom: 32px;
   }
-  .setup-box h3 { font-size: .85em; color: var(--accent); font-weight: 700; margin-bottom: 14px; letter-spacing: .06em; text-transform: uppercase; }
+  .setup-box h3 { font-size: .78em; color: var(--accent); font-weight: 700; margin-bottom: 10px; letter-spacing: .06em; text-transform: uppercase; }
   .setup-box pre {
-    background: #0a1628;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px 18px;
-    font-size: .8em;
-    color: #a5f3fc;
-    overflow-x: auto;
-    line-height: 1.8;
+    background: #0a1628; border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 14px;
+    font-size: .75em; color: #a5f3fc; overflow-x: auto; line-height: 1.8;
   }
   .setup-box pre .cm { color: #475569; }
-  .setup-box pre .kw { color: #7dd3fc; }
 
-  /* ── Status bar ── */
-  .status-bar {
-    background: rgba(52,211,153,.06);
-    border: 1px solid rgba(52,211,153,.2);
-    border-radius: 8px;
-    padding: 12px 18px;
-    display: flex; gap: 24px; flex-wrap: wrap;
-    font-size: .8em; color: var(--green);
-    margin-bottom: 48px;
-    align-items: center;
-  }
-  .status-bar .dot { display: inline-block; width: 8px; height: 8px; background: var(--green); border-radius: 50%; margin-right: 6px; }
+  /* ── Method cards ── */
+  a.method-card { display:block; text-decoration:none; color:inherit; border-radius:10px; transition:transform .15s, box-shadow .15s; }
+  a.method-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.4); }
 
   /* ── Footer ── */
   footer {
     border-top: 1px solid var(--border);
-    padding: 24px 32px;
-    text-align: center;
-    color: var(--muted);
-    font-size: .78em;
+    padding: 18px 28px; text-align: center;
+    color: var(--muted); font-size: .72em;
   }
   footer a { color: var(--accent); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
 
-  @media (max-width: 640px) {
+  /* ── Mobile ── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    main { margin-left: 0; }
     .script-row { grid-template-columns: 1fr; }
-    .hero { padding: 40px 20px 32px; }
+    .hero { padding: 32px 20px 24px; }
   }
-
-  a.hero-gh { display:inline-flex; align-items:center; gap:8px; background:rgba(255,255,255,.06); border:1px solid #334155; border-radius:8px; padding:9px 18px; text-decoration:none; color:#94a3b8; font-size:.83em; font-weight:600; transition:all .15s; }
-  a.hero-gh:hover { background:rgba(255,255,255,.1); border-color:#38bdf8; color:#f1f5f9; }
-
-
-  a.method-card { display:block; text-decoration:none; color:inherit; border-radius:10px; transition:transform .15s, box-shadow .15s; }
-  a.method-card:hover { transform:translateY(-2px); box-shadow:0 4px 20px rgba(0,0,0,.4); }
-
 </style>
 </head>
 <body>
 
-<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+<!-- ═══════════════════ LEFT SIDEBAR ═══════════════════ -->
+<div class="sidebar">
+  <div class="logo">🤖 LLM Fine-Tuning<br><span>Kickstart</span></div>
+
+  <nav>
+    <ul>
+      <li class="section-label">Start Here</li>
+      <li><a href="#learn">📘 Handbook</a></li>
+      <li><a href="#bootcamp-section" style="color:#f59e0b;">🏋️ Bootcamp Exercise</a></li>
+      <li class="section-label">Reference</li>
+      <li><a href="#cheatsheets">🗂 Cheatsheets</a></li>
+      <li><a href="#scripts">🐍 Scripts</a></li>
+      <li><a href="#methods">🧭 Methods</a></li>
+      <li><a href="#setup">⚙️ Setup</a></li>
+      <li class="section-label">Handbook Chapters</li>
+      <li><a href="handbook.html#pytorch">① PyTorch</a></li>
+      <li><a href="handbook.html#datasets">② Datasets</a></li>
+      <li><a href="handbook.html#transformers">③ Transformers</a></li>
+      <li><a href="handbook.html#lora">④ LoRA / QLoRA</a></li>
+      <li><a href="handbook.html#unsloth">⑤ Unsloth SFT</a></li>
+      <li><a href="handbook.html#causal">⑥ Causal LM</a></li>
+      <li><a href="handbook.html#methods">⑦ Methods</a></li>
+      <li><a href="handbook.html#evaluation">📊 Evaluation</a></li>
+      <li><a href="handbook.html#owndata">📂 Your Data</a></li>
+      <li><a href="handbook.html#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp</a></li>
+    </ul>
+  </nav>
+
+  <div class="env-block">
+    <div class="env-label">Our humble setup</div>
+    <span class="env-pill">PyTorch 2.7</span>
+    <span class="env-pill">Transformers 5.x</span>
+    <span class="env-pill">TRL 1.x</span>
+    <span class="env-pill">Unsloth</span>
+    <span class="env-pill">RTX 3080 Ti</span>
+    <span class="env-pill">CUDA 13</span>
+  </div>
+
+  <div class="curator">
+    <strong>Anirban Bhattacharjee, Dr. rer. nat.</strong><br>
+    Brainbox AI · Data Intelligence<br>Trane Technologies
+  </div>
+
+  <a href="https://github.com/anisiraj/llm_kickstart_repo" target="_blank" class="gh-link">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    anisiraj/llm_kickstart_repo
+  </a>
+</div>
+
+<!-- ═══════════════════ MAIN CONTENT ═══════════════════ -->
+<main>
+
+<!-- ── Hero (compact) ──────────────────────────────────────────────────── -->
 <div class="hero">
   <div class="hero-badge">LLM Fine-Tuning Kickstart Repo</div>
   <h1>From Tensors to<br>Deployed LLMs</h1>
-  <p>A self-sufficient learning kit — PyTorch, HuggingFace, LoRA, Unsloth, DPO, GRPO, SageMaker, Bedrock. No fluff, all working code.</p>
-  <div style="font-size:.72em; color:#475569; letter-spacing:.06em; text-transform:uppercase; font-weight:600; margin-bottom:10px;">Our humble setup</div>
-  <div class="hero-pills">
-    <span class="pill">PyTorch 2.7</span>
-    <span class="pill">Transformers 5.x</span>
-    <span class="pill">TRL 1.x</span>
-    <span class="pill">Unsloth</span>
-    <span class="pill">RTX 3080 Ti · CUDA 13</span>
-    <span class="pill">GitHub Pages</span>
-  </div>
-  <div style="margin-top:22px; font-size:.78em; color:#475569; line-height:1.8;">
-    Curated by <strong style="color:#94a3b8;">Anirban Bhattacharjee, Dr. rer. nat.</strong>
-   
-    &nbsp;·&nbsp; <span style="color:#64748b;">Brainbox AI · Data Intelligence · Trane Technologies</span>
-  </div>
-  <div style="margin-top:16px;">
-    <a href="https://github.com/anisiraj/llm_kickstart_repo" target="_blank" class="hero-gh">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      anisiraj/llm_kickstart_repo
-    </a>
-  </div>
+  <p>A self-sufficient learning kit — PyTorch, HuggingFace, LoRA, Unsloth, DPO, GRPO, SageMaker, Bedrock. No fluff, all working code. 9/9 scripts verified.</p>
 </div>
 
-<!-- ── Learning Philosophy ─────────────────────────────────────────────── -->
-<div style="background:linear-gradient(135deg,#0c1a2e,#0d1f35); border-top:1px solid #1e3a5f; border-bottom:1px solid #1e3a5f; padding:52px 24px;">
-  <div style="max-width:860px; margin:0 auto;">
+<!-- ── Philosophy (condensed banner) ───────────────────────────────────── -->
+<div class="philosophy">
+  <div style="max-width:900px;">
 
-    <div style="display:inline-block; background:rgba(129,140,248,.12); border:1px solid rgba(129,140,248,.3); color:#a78bfa; font-size:.7em; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:4px 14px; border-radius:20px; margin-bottom:20px;">Learning Philosophy</div>
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:18px; flex-wrap:wrap;">
+      <span style="display:inline-block; background:rgba(129,140,248,.12); border:1px solid rgba(129,140,248,.3); color:#a78bfa; font-size:.65em; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:3px 12px; border-radius:20px;">Learning Philosophy</span>
+      <span style="font-size:1.15em; font-weight:800; color:#f1f5f9;">AI-Powered, Self-Driven <span style="color:#818cf8;">Nano Bootcamps</span></span>
+    </div>
 
-    <h2 style="font-size:clamp(1.5em,3vw,2.1em); font-weight:800; line-height:1.2; color:#f1f5f9; margin-bottom:14px;">
-      AI-Powered, Self-Driven<br><span style="color:#818cf8;">Nano Bootcamps</span>
-    </h2>
-
-    <p style="color:#94a3b8; line-height:1.85; font-size:.95em; max-width:700px; margin-bottom:10px;">
-      Traditional learning paths front-load syntax and defer building. That's backwards. In today's landscape, AI handles syntax — what you actually need is a solid grip on <strong style="color:#cbd5e1;">fundamentals</strong>, a <strong style="color:#cbd5e1;">real problem</strong> you care about, and the willingness to start before you feel ready.
-    </p>
-    <p style="color:#64748b; line-height:1.8; font-size:.88em; max-width:680px; margin-bottom:36px;">
-      Depth isn't pre-loaded from a course — it arrives on demand, driven by the specific wall you hit while building your thing. That's far more efficient, and it actually sticks.
-    </p>
-
-    <!-- four steps -->
-    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-bottom:28px;">
-      <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:18px 16px; border-top:3px solid #38bdf8; position:relative;">
-        <div style="font-size:.68em; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#38bdf8; margin-bottom:8px;">Step 1</div>
-        <div style="font-weight:700; color:#f1f5f9; font-size:.92em; margin-bottom:8px;">Grasp the fundamentals</div>
-        <div style="font-size:.8em; color:#64748b; line-height:1.7;">How does a tensor flow through a model? What is a loss? What does a tokenizer actually do? These concepts are load-bearing — syntax isn't.</div>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:14px;">
+      <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; border-top:2px solid #38bdf8;">
+        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#38bdf8; margin-bottom:4px;">1. Fundamentals</div>
+        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Tensors, loss, tokenizers — the concepts, not the syntax.</div>
       </div>
-      <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:18px 16px; border-top:3px solid #818cf8;">
-        <div style="font-size:.68em; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#818cf8; margin-bottom:8px;">Step 2</div>
-        <div style="font-weight:700; color:#f1f5f9; font-size:.92em; margin-bottom:8px;">Pick a problem you own</div>
-        <div style="font-size:.8em; color:#64748b; line-height:1.7;">A domain, a dataset, a frustration. Not a tutorial problem — yours. Ownership creates the motivation that carries you through the hard parts.</div>
+      <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; border-top:2px solid #818cf8;">
+        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#818cf8; margin-bottom:4px;">2. Your Problem</div>
+        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Pick a real problem you own. Ownership drives motivation.</div>
       </div>
-      <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:18px 16px; border-top:3px solid #34d399;">
-        <div style="font-size:.68em; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#34d399; margin-bottom:8px;">Step 3</div>
-        <div style="font-weight:700; color:#f1f5f9; font-size:.92em; margin-bottom:8px;">Build headfirst with AI</div>
-        <div style="font-size:.8em; color:#64748b; line-height:1.7;">Start. Use an AI assistant to handle boilerplate, look up APIs, and unblock you in real time. You set the direction; AI handles the syntax.</div>
+      <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; border-top:2px solid #34d399;">
+        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#34d399; margin-bottom:4px;">3. Build with AI</div>
+        <div style="font-size:.74em; color:#64748b; line-height:1.6;">Start before you're ready. AI handles syntax; you set direction.</div>
       </div>
-      <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:18px 16px; border-top:3px solid #fb923c;">
-        <div style="font-size:.68em; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#fb923c; margin-bottom:8px;">Step 4</div>
-        <div style="font-weight:700; color:#f1f5f9; font-size:.92em; margin-bottom:8px;">Let the problem teach you</div>
-        <div style="font-size:.8em; color:#64748b; line-height:1.7;">OOM error → you learn quantisation. Hallucinating outputs → you learn alignment. Depth arrives exactly where you need it, when you need it.</div>
+      <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; border-top:2px solid #fb923c;">
+        <div style="font-size:.6em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#fb923c; margin-bottom:4px;">4. Depth on Demand</div>
+        <div style="font-size:.74em; color:#64748b; line-height:1.6;">OOM → learn quantisation. Bad outputs → learn alignment.</div>
       </div>
     </div>
 
-    <!-- manifesto callout -->
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-      <div style="background:rgba(56,189,248,.05); border:1px solid rgba(56,189,248,.15); border-radius:10px; padding:16px 18px;">
-        <div style="font-size:.72em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#38bdf8; margin-bottom:8px;">What AI handles for you</div>
-        <div style="font-size:.82em; color:#64748b; line-height:1.9;">
-          API syntax &amp; parameter names<br>
-          Boilerplate setup code<br>
-          Debugging tracebacks<br>
-          Library version differences
-        </div>
-      </div>
-      <div style="background:rgba(129,140,248,.05); border:1px solid rgba(129,140,248,.15); border-radius:10px; padding:16px 18px;">
-        <div style="font-size:.72em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#a78bfa; margin-bottom:8px;">What you must own</div>
-        <div style="font-size:.82em; color:#64748b; line-height:1.9;">
-          Why the model is doing what it's doing<br>
-          Which method fits your problem<br>
-          What "good" looks like for your task<br>
-          The judgment to direct the build
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-top:20px; padding:14px 18px; background:rgba(129,140,248,.07); border-left:3px solid #818cf8; border-radius:0 8px 8px 0; font-size:.85em; color:#c4b5fd; line-height:1.8; font-style:italic;">
-      "Don't study the map until you've decided where you're going. Pick the destination, then use every tool available to get there — including AI."
+    <div style="padding:10px 14px; background:rgba(129,140,248,.06); border-left:2px solid #818cf8; border-radius:0 6px 6px 0; font-size:.78em; color:#a5b4fc; line-height:1.6; font-style:italic;">
+      "Pick the destination, then use every tool available to get there — including AI."
     </div>
 
   </div>
 </div>
 
+<!-- ── Main content ────────────────────────────────────────────────────── -->
 <div class="container">
 
-  <!-- ── Verified status ────────────────────────────────────────────────── -->
-  <div class="status-bar">
-    <span><span class="dot"></span>All scripts verified — 9/9 pass</span>
-    <span><span class="dot"></span>.venv: torch 2.7+cu128 · trl 0.24 · Unsloth · SFT</span>
-    <span><span class="dot"></span>.venv-rl: trl 1.2 · DPO · ORPO · GRPO</span>
-    <span><span class="dot"></span>RTX 3080 Ti · CUDA 13.0</span>
-  </div>
-
-  <!-- ── Handbook + Bootcamp (side by side) ──────────────────────────────── -->
-  <div class="section-title">📖 Learn, then build</div>
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:48px;">
+  <!-- ── Learn + Build (Handbook + Bootcamp) ─────────────────────────────── -->
+  <div class="section-title" id="learn">📖 Learn, then build</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:32px;" id="bootcamp-section">
 
     <a href="handbook.html" class="card card-main" style="margin-bottom:0;">
       <div class="card-header">
         <div class="card-icon" style="background:linear-gradient(135deg,#0369a1,#4f46e5);">📘</div>
         <div>
           <div class="card-title">LLM Fine-Tuning Handbook</div>
-          <div class="card-desc" style="margin-top:6px;">9 chapters end-to-end: PyTorch → Datasets → Transformers → LoRA → Unsloth → Causal LM → DPO / ORPO / GRPO → Cloud. Plus evaluation, own-data guidance, and decision guide.</div>
+          <div class="card-desc" style="margin-top:4px;">9 chapters: PyTorch → Datasets → Transformers → LoRA → Unsloth → Causal LM → DPO / ORPO / GRPO → Cloud. Plus evaluation, own-data guidance, and decision guide.</div>
         </div>
       </div>
       <div class="card-footer">
         <span class="tag blue">9 chapters</span>
         <span class="tag blue">Evaluation</span>
         <span class="tag blue">Own-data</span>
-        <span class="tag blue">Decision guide</span>
       </div>
     </a>
 
-    <a href="handbook.html#bootcamp" class="card" style="margin-bottom:0; border-color:rgba(245,158,11,.4); background:linear-gradient(135deg,#1a0f00,#1a1400);">
+    <a href="handbook.html#bootcamp" class="card card-bootcamp" style="margin-bottom:0;">
       <div class="card-header">
         <div class="card-icon" style="background:linear-gradient(135deg,#92400e,#b45309);">🏋️</div>
         <div>
           <div class="card-title" style="color:#fbbf24;">Open Bootcamp Exercise</div>
-          <div class="card-desc" style="margin-top:6px;">Build an org-aware SQL assistant. Domain-adapt on your knowledge base, SFT on text↔SQL, try GPT-2 / SmolLM / Llama, evaluate against RAG. No code — just workflow + judgment calls.</div>
+          <div class="card-desc" style="margin-top:4px;">Build an org-aware SQL assistant. Domain-adapt → SFT text↔SQL → compare GPT-2 / SmolLM / Llama → evaluate vs RAG. Starter data included.</div>
         </div>
       </div>
       <div class="card-footer">
         <span class="tag yellow">7 phases</span>
         <span class="tag yellow">3 models</span>
         <span class="tag yellow">vs RAG</span>
-        <span class="tag yellow">Starter data</span>
       </div>
     </a>
 
   </div>
 
   <!-- ── Cheatsheets ────────────────────────────────────────────────────── -->
-  <div class="section-title">🗂 One-Page Cheatsheets</div>
-  <div class="grid grid-2" style="margin-bottom: 48px;">
+  <div class="section-title" id="cheatsheets">🗂 One-Page Cheatsheets</div>
+  <div class="grid grid-2" style="margin-bottom:32px;">
 
     <a href="cheatsheet_pytorch.html" class="card">
       <div class="card-header">
         <div class="card-icon" style="background:linear-gradient(135deg,#7c2d12,#c2410c);">🔥</div>
         <div>
           <div class="card-title">PyTorch</div>
-          <div class="card-desc">Tensors, autograd, nn.Module, DataLoader, training loop, save/load, GPU tips</div>
+          <div class="card-desc">Tensors, autograd, nn.Module, DataLoader, training loop, save/load</div>
         </div>
       </div>
-      <div class="card-footer">
-        <span class="tag orange">8 cards</span>
-        <span class="tag orange">Print-ready</span>
-      </div>
+      <div class="card-footer"><span class="tag orange">8 cards</span><span class="tag orange">Print-ready</span></div>
     </a>
 
     <a href="cheatsheet_hf_datasets.html" class="card">
@@ -409,10 +412,7 @@
           <div class="card-desc">load_dataset, map, filter, split, format, save_to_disk, push_to_hub</div>
         </div>
       </div>
-      <div class="card-footer">
-        <span class="tag green">8 cards</span>
-        <span class="tag green">Print-ready</span>
-      </div>
+      <div class="card-footer"><span class="tag green">8 cards</span><span class="tag green">Print-ready</span></div>
     </a>
 
     <a href="cheatsheet_hf_transformers.html" class="card">
@@ -420,13 +420,10 @@
         <div class="card-icon" style="background:linear-gradient(135deg,#3b0764,#6d28d9);">🤖</div>
         <div>
           <div class="card-title">HF Transformers</div>
-          <div class="card-desc">pipeline, tokenizer, AutoModel, Trainer, eval_strategy, processing_class, metrics</div>
+          <div class="card-desc">pipeline, tokenizer, AutoModel, Trainer, eval_strategy, metrics</div>
         </div>
       </div>
-      <div class="card-footer">
-        <span class="tag purple">8 cards</span>
-        <span class="tag purple">Print-ready</span>
-      </div>
+      <div class="card-footer"><span class="tag purple">8 cards</span><span class="tag purple">Print-ready</span></div>
     </a>
 
     <a href="cheatsheet_unsloth_lora.html" class="card">
@@ -434,13 +431,10 @@
         <div class="card-icon" style="background:linear-gradient(135deg,#713f12,#ca8a04);">⚡</div>
         <div>
           <div class="card-title">Unsloth + LoRA / QLoRA</div>
-          <div class="card-desc">FastLanguageModel, get_peft_model, SFTTrainer, train_on_responses_only, GGUF export</div>
+          <div class="card-desc">FastLanguageModel, get_peft_model, SFTTrainer, GGUF export</div>
         </div>
       </div>
-      <div class="card-footer">
-        <span class="tag yellow">6-step workflow</span>
-        <span class="tag yellow">Print-ready</span>
-      </div>
+      <div class="card-footer"><span class="tag yellow">6-step workflow</span><span class="tag yellow">Print-ready</span></div>
     </a>
 
     <a href="cheatsheet_aws_sagemaker_bedrock.html" class="card">
@@ -448,14 +442,10 @@
         <div class="card-icon" style="background:linear-gradient(135deg,#7c2d12,#ea580c);">☁️</div>
         <div>
           <div class="card-title">AWS SageMaker + Bedrock</div>
-          <div class="card-desc">HuggingFace estimator, TGI deploy, converse API, fine-tune jobs, provisioned throughput</div>
+          <div class="card-desc">HuggingFace estimator, TGI deploy, converse API, fine-tune jobs</div>
         </div>
       </div>
-      <div class="card-footer">
-        <span class="tag orange">SageMaker</span>
-        <span class="tag orange">Bedrock</span>
-        <span class="tag orange">Print-ready</span>
-      </div>
+      <div class="card-footer"><span class="tag orange">SageMaker</span><span class="tag orange">Bedrock</span></div>
     </a>
 
     <a href="vscode_shortcuts.html" class="card">
@@ -463,189 +453,149 @@
         <div class="card-icon" style="background:linear-gradient(135deg,#1e3a5f,#0369a1);">⌨️</div>
         <div>
           <div class="card-title">VSCode Shortcuts</div>
-          <div class="card-desc">Panel navigation, terminal toggle, editor tabs, split views — the ones that actually save mouse movements</div>
+          <div class="card-desc">Panel navigation, terminal toggle, editor tabs, split views</div>
         </div>
       </div>
-      <div class="card-footer">
-        <span class="tag blue">20 shortcuts</span>
-        <span class="tag blue">Print-ready</span>
-      </div>
+      <div class="card-footer"><span class="tag blue">20 shortcuts</span></div>
     </a>
 
   </div>
 
-  <!-- ── Scripts ────────────────────────────────────────────────────────── -->
-  <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-    <div class="section-title" style="margin-bottom:0;">🐍 Working Scripts — All Verified</div>
-    <a href="handbook.html#methods" style="font-size:.78em; color:#60a5fa; text-decoration:none; border:1px solid #1e3a5f; border-radius:6px; padding:4px 12px; background:#0c1a2e; white-space:nowrap;">Not sure which method to use? → Handbook §7</a>
-  </div>
-  <div style="font-size:.82em; color:var(--muted); margin-bottom:16px; line-height:1.7; padding:10px 14px; background:rgba(56,189,248,.04); border:1px solid rgba(56,189,248,.1); border-radius:8px;">
-    <strong style="color:var(--text);">Scripts vs Notebook:</strong> Scripts are single-concept, self-contained demos — run one, learn one thing. The <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/notebooks/llama3_finetune_tutorial.ipynb" target="_blank" style="color:var(--accent); text-decoration:none;">Jupyter notebook</a> walks through a full end-to-end fine-tune (Llama 3 + Unsloth + GGUF export) in one flow. Start with scripts to learn the pieces, then use the notebook to see them assembled.
-  </div>
-  <div class="script-grid">
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/verify_all.py" target="_blank">verify_all.py</a>
-      <span class="script-desc">Full environment health check — 25/26 pass (.venv), 24/26 (.venv-rl)</span>
-      <span class="script-venv venv-main">.venv / .venv-rl</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/01_pytorch_basics.py" target="_blank">01_pytorch_basics.py</a>
-      <span class="script-desc">Tensors, autograd, nn.Module, DataLoader, training loop, save/load</span>
-      <span class="script-venv venv-main">.venv</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/02_hf_datasets.py" target="_blank">02_hf_datasets.py</a>
-      <span class="script-desc">from_dict, map, filter, split, rename, set_format, save_to_disk</span>
-      <span class="script-venv venv-main">.venv</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/03_hf_transformers.py" target="_blank">03_hf_transformers.py</a>
-      <span class="script-desc">Tokenizer, pipeline, Trainer with eval_strategy + processing_class</span>
-      <span class="script-venv venv-main">.venv</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/04_causal_lm_finetune.py" target="_blank">04_causal_lm_finetune.py</a>
-      <span class="script-desc">GPT-2 CLM with DataCollatorForLanguageModeling + text generation</span>
-      <span class="script-venv venv-main">.venv</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/05_dpo_example.py" target="_blank">05_dpo_example.py</a>
-      <span class="script-desc">DPOTrainer + DPOConfig — ref_model=None implicit reference</span>
-      <span class="script-venv venv-rl">.venv-rl</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/06_orpo_example.py" target="_blank">06_orpo_example.py</a>
-      <span class="script-desc">ORPOTrainer from trl.experimental.orpo — SFT + alignment in one pass</span>
-      <span class="script-venv venv-rl">.venv-rl</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/07_grpo_example.py" target="_blank">07_grpo_example.py</a>
-      <span class="script-desc">GRPOTrainer — reward_funcs list, max_completion_length, question→prompt fix</span>
-      <span class="script-venv venv-rl">.venv-rl</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/10_evaluation.py" target="_blank">10_evaluation.py</a>
-      <span class="script-desc">Before/after: loss curves, perplexity, generation quality, overfitting check</span>
-      <span class="script-venv venv-main">.venv</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/11_custom_data.py" target="_blank">11_custom_data.py</a>
-      <span class="script-desc">Load CSV/JSONL/text → convert to every trainer format (Causal, SFT, DPO, GRPO)</span>
-      <span class="script-venv venv-main">.venv</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/08_unsloth_sft.py" target="_blank">08_unsloth_sft.py</a>
-      <span class="script-desc">Full Unsloth workflow — FastLanguageModel → LoRA → SFT → GGUF (reference)</span>
-      <span class="script-venv venv-main">.venv</span>
-    </div>
-    <div class="script-row">
-      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank">09_sagemaker_train.py</a>
-      <span class="script-desc">SageMaker training script + HF estimator + Bedrock converse patterns</span>
-      <span class="script-venv venv-main">.venv</span>
-    </div>
-  </div>
+  <!-- ── Scripts + Methods (two-column) ────────────────────────────────── -->
+  <div style="display:grid; grid-template-columns:1fr 320px; gap:24px; margin-bottom:32px;">
 
-  <!-- ── Setup ──────────────────────────────────────────────────────────── -->
-  <div class="section-title">⚙️ Quick Setup</div>
-  <div class="setup-box">
-    <h3>Why two venvs?</h3>
-    <p style="font-size:.84em; color:var(--muted); margin-bottom:16px; line-height:1.7;">
-      Unsloth pins <code style="color:var(--accent)">trl&lt;0.9</code>, which is incompatible with DPO/ORPO/GRPO trainers (need <code style="color:var(--accent)">trl≥1.0</code>).
-      <strong style="color:var(--text)"> .venv</strong> handles Unsloth+SFT; <strong style="color:var(--purple)">.venv-rl</strong> handles alignment methods.
-    </p>
-    <pre><span class="cm"># One-shot setup (CUDA GPU required)</span>
-bash scripts/setup_envs.sh
-
-<span class="cm"># Or manually:</span>
-uv venv .venv    <span class="cm"># SFT + Unsloth</span>
-uv venv .venv-rl <span class="cm"># DPO / ORPO / GRPO</span>
-
-<span class="cm"># Run scripts</span>
-.venv/bin/python    scripts/verify_all.py
-.venv-rl/bin/python scripts/verify_all.py
-
-<span class="cm"># Notebook kernels (registered automatically)</span>
-<span class="cm"># Ctrl+Shift+P → Notebook: Select Kernel</span>
-<span class="cm">#   → Python (.venv — Unsloth+SFT)      for sections 1-6</span>
-<span class="cm">#   → Python (.venv-rl — DPO/ORPO/GRPO)  for sections 7-9</span></pre>
-  </div>
-
-  <!-- ── Method comparison ──────────────────────────────────────────────── -->
-  <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-    <div class="section-title" style="margin-bottom:0;">🧭 Which fine-tuning method should I use?</div>
-    <a href="handbook.html#methods" style="font-size:.78em;color:#60a5fa;text-decoration:none;border:1px solid #1e3a5f;border-radius:6px;padding:4px 12px;background:#0c1a2e;white-space:nowrap;">Full comparison table → Handbook §7</a>
-  </div>
-  <div class="grid grid-3" style="margin-bottom:20px;">
-
-    <a href="handbook.html#method-causal" class="method-card">
-      <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:18px;">
-        <div style="font-size:1.2em;margin-bottom:6px;">🎓</div>
-        <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">Causal LM / Pretrain</div>
-        <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Domain adaptation on raw text. Shifts the model's knowledge before SFT. No labels needed.</div>
-        <div style="margin-top:10px;font-size:.72em;color:var(--green);font-family:monospace;">Trainer + DataCollatorForLM</div>
+    <!-- Left: Scripts -->
+    <div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:6px;">
+        <div class="section-title" style="margin-bottom:0;" id="scripts">🐍 Working Scripts</div>
+        <span style="font-size:.68em; color:var(--green); font-family:monospace;">9/9 verified</span>
       </div>
-    </a>
-
-    <a href="handbook.html#unsloth" class="method-card">
-      <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:18px;">
-        <div style="font-size:1.2em;margin-bottom:6px;">📋</div>
-        <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">SFT</div>
-        <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Teach instruction-following from prompt/response pairs. First step for any assistant. Use Unsloth for speed.</div>
-        <div style="margin-top:10px;font-size:.72em;color:var(--accent);font-family:monospace;">SFTTrainer</div>
+      <div style="font-size:.74em; color:var(--muted); margin-bottom:10px; line-height:1.6;">
+        Scripts = single-concept demos. <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/notebooks/llama3_finetune_tutorial.ipynb" target="_blank" style="color:var(--accent); text-decoration:none;">Notebook</a> = full end-to-end flow (Llama 3 + Unsloth + GGUF).
       </div>
-    </a>
-
-    <a href="handbook.html#method-dpo" class="method-card">
-      <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:10px;padding:18px;">
-        <div style="font-size:1.2em;margin-bottom:6px;">🏆</div>
-        <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">DPO</div>
-        <div style="font-size:.78em;color:var(--muted);line-height:1.6;">Align to human preferences from chosen/rejected pairs. Run after SFT. No reward model needed.</div>
-        <div style="margin-top:10px;font-size:.72em;color:var(--purple);font-family:monospace;">DPOTrainer</div>
+      <div class="script-grid">
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/01_pytorch_basics.py" target="_blank">01_pytorch_basics.py</a>
+          <span class="script-desc">Tensors, autograd, nn.Module, training loop</span>
+          <span class="script-venv venv-main">.venv</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/02_hf_datasets.py" target="_blank">02_hf_datasets.py</a>
+          <span class="script-desc">from_dict, map, filter, split, save_to_disk</span>
+          <span class="script-venv venv-main">.venv</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/03_hf_transformers.py" target="_blank">03_hf_transformers.py</a>
+          <span class="script-desc">Tokenizer, pipeline, Trainer</span>
+          <span class="script-venv venv-main">.venv</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/04_causal_lm_finetune.py" target="_blank">04_causal_lm_finetune.py</a>
+          <span class="script-desc">GPT-2 CLM + DataCollator + generation</span>
+          <span class="script-venv venv-main">.venv</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/05_dpo_example.py" target="_blank">05_dpo_example.py</a>
+          <span class="script-desc">DPOTrainer — preference alignment</span>
+          <span class="script-venv venv-rl">.venv-rl</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/06_orpo_example.py" target="_blank">06_orpo_example.py</a>
+          <span class="script-desc">ORPOTrainer — SFT + alignment in one pass</span>
+          <span class="script-venv venv-rl">.venv-rl</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/07_grpo_example.py" target="_blank">07_grpo_example.py</a>
+          <span class="script-desc">GRPOTrainer — reward functions</span>
+          <span class="script-venv venv-rl">.venv-rl</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/10_evaluation.py" target="_blank">10_evaluation.py</a>
+          <span class="script-desc">Loss curves, perplexity, before/after</span>
+          <span class="script-venv venv-main">.venv</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/11_custom_data.py" target="_blank">11_custom_data.py</a>
+          <span class="script-desc">CSV/JSONL → every trainer format</span>
+          <span class="script-venv venv-main">.venv</span>
+        </div>
       </div>
-    </a>
-
-    <a href="handbook.html#method-orpo" class="method-card">
-      <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:10px;padding:18px;">
-        <div style="font-size:1.2em;margin-bottom:6px;">⚡</div>
-        <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">ORPO</div>
-        <div style="font-size:.78em;color:var(--muted);line-height:1.6;">SFT + alignment in one pass from a base model. No reference model, less memory, faster.</div>
-        <div style="margin-top:10px;font-size:.72em;color:#f59e0b;font-family:monospace;">ORPOTrainer</div>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/08_unsloth_sft.py" target="_blank" style="font-size:.72em;">08_unsloth_sft.py</a>
+        <span style="color:#334155;">·</span>
+        <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank" style="font-size:.72em;">09_sagemaker_train.py</a>
+        <span style="color:#334155;">·</span>
+        <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/verify_all.py" target="_blank" style="font-size:.72em;">verify_all.py</a>
       </div>
-    </a>
+    </div>
 
-    <a href="handbook.html#method-grpo" class="method-card">
-      <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:10px;padding:18px;">
-        <div style="font-size:1.2em;margin-bottom:6px;">🧮</div>
-        <div style="font-weight:700;font-size:.9em;margin-bottom:6px;">GRPO</div>
-        <div style="font-size:.78em;color:var(--muted);line-height:1.6;">RL from verifiable rewards. Best for math, code, structured output. Powers DeepSeek-R1.</div>
-        <div style="margin-top:10px;font-size:.72em;color:var(--orange);font-family:monospace;">GRPOTrainer</div>
+    <!-- Right: Methods + Setup -->
+    <div>
+      <div class="section-title" id="methods">🧭 Which method?</div>
+
+      <a href="handbook.html#method-causal" class="method-card" style="margin-bottom:8px;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:12px;">
+          <div style="font-weight:700;font-size:.82em;margin-bottom:3px;">🎓 Causal LM / Pretrain</div>
+          <div style="font-size:.72em;color:var(--muted);line-height:1.5;">Domain adaptation on raw text. No labels.</div>
+        </div>
+      </a>
+      <a href="handbook.html#unsloth" class="method-card" style="margin-bottom:8px;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:12px;">
+          <div style="font-weight:700;font-size:.82em;margin-bottom:3px;">📋 SFT (Supervised Fine-Tuning)</div>
+          <div style="font-size:.72em;color:var(--muted);line-height:1.5;">Prompt/response pairs. Use Unsloth for speed.</div>
+        </div>
+      </a>
+      <a href="handbook.html#method-dpo" class="method-card" style="margin-bottom:8px;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:8px;padding:12px;">
+          <div style="font-weight:700;font-size:.82em;margin-bottom:3px;">🏆 DPO (Direct Preference)</div>
+          <div style="font-size:.72em;color:var(--muted);line-height:1.5;">Chosen/rejected pairs. Run after SFT.</div>
+        </div>
+      </a>
+      <a href="handbook.html#method-orpo" class="method-card" style="margin-bottom:8px;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:8px;padding:12px;">
+          <div style="font-weight:700;font-size:.82em;margin-bottom:3px;">⚡ ORPO (SFT + alignment)</div>
+          <div style="font-size:.72em;color:var(--muted);line-height:1.5;">One pass from base. No reference model.</div>
+        </div>
+      </a>
+      <a href="handbook.html#method-grpo" class="method-card" style="margin-bottom:8px;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:8px;padding:12px;">
+          <div style="font-weight:700;font-size:.82em;margin-bottom:3px;">🧮 GRPO (RL from rewards)</div>
+          <div style="font-size:.72em;color:var(--muted);line-height:1.5;">Math, code, structured output. Powers DeepSeek-R1.</div>
+        </div>
+      </a>
+
+      <div style="margin-top:12px; font-size:.72em; color:#475569; padding:8px 10px; background:#0c1a2e; border:1px solid #1e3a5f; border-radius:6px;">
+        ☁️ <strong style="color:#64748b;">SageMaker &amp; Bedrock</strong> are cloud engines, not methods. <a href="handbook.html#sagemaker" style="color:#60a5fa; text-decoration:none;">Ch. 8–9</a>
       </div>
-    </a>
 
-  </div>
+      <div class="section-title" style="margin-top:20px;" id="setup">⚙️ Setup</div>
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-size:.74em; color:var(--muted); line-height:1.8;">
+        <strong style="color:var(--text);">.venv</strong> → Unsloth + trl 0.24 + SFT<br>
+        <strong style="color:var(--purple);">.venv-rl</strong> → trl 1.2 + DPO/ORPO/GRPO<br>
+        <div style="margin-top:8px; padding:8px 10px; background:#0a1628; border-radius:4px; font-family:monospace; font-size:.9em; color:#a5f3fc;">
+          <span style="color:#475569;"># one-shot</span><br>
+          bash scripts/setup_envs.sh
+        </div>
+      </div>
+    </div>
 
-  <div style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:10px;padding:14px 18px;margin-bottom:48px;font-size:.82em;color:#475569;display:flex;align-items:center;gap:12px;">
-    <span style="font-size:1.1em;">☁️</span>
-    <span><strong style="color:#64748b;">SageMaker &amp; Bedrock</strong> are cloud execution engines — not training methods. Run any of the methods above on SageMaker for scale, or use Bedrock for managed FM inference. See chapters 8–9 in the <a href="handbook.html#sagemaker" style="color:#60a5fa;text-decoration:none;">handbook</a>.</span>
   </div>
 
 </div><!-- /container -->
 
 <footer>
-  <div style="margin-bottom:8px;">
-    <a href="handbook.html">Handbook</a> &nbsp;·&nbsp;
-    <a href="cheatsheet_pytorch.html">PyTorch</a> &nbsp;·&nbsp;
-    <a href="cheatsheet_hf_datasets.html">Datasets</a> &nbsp;·&nbsp;
-    <a href="cheatsheet_hf_transformers.html">Transformers</a> &nbsp;·&nbsp;
-    <a href="cheatsheet_unsloth_lora.html">Unsloth</a> &nbsp;·&nbsp;
-    <a href="cheatsheet_aws_sagemaker_bedrock.html">AWS</a> &nbsp;·&nbsp;
-    <a href="vscode_shortcuts.html">VSCode</a>
-  </div>
-  LLM Fine-Tuning Kickstart &nbsp;·&nbsp; torch 2.7+cu128 · transformers 5.x · trl 1.x · RTX 3080 Ti
-  <div style="margin-top:8px; font-size:.85em; color:#334155;">
-    Curated by Anirban Bhattacharjee, Dr. rer. nat. &nbsp;·&nbsp; Brainbox AI · Data Intelligence · Trane Technologies
+  <a href="handbook.html">Handbook</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_pytorch.html">PyTorch</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_hf_datasets.html">Datasets</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_hf_transformers.html">Transformers</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_unsloth_lora.html">Unsloth</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_aws_sagemaker_bedrock.html">AWS</a> &nbsp;·&nbsp;
+  <a href="vscode_shortcuts.html">VSCode</a>
+  <div style="margin-top:6px; color:#334155;">
+    LLM Fine-Tuning Kickstart · torch 2.7 · transformers 5.x · trl 1.x
   </div>
 </footer>
 
+</main>
 </body>
 </html>
