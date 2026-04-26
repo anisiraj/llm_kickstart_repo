@@ -402,13 +402,14 @@
         <div class="card-icon" style="background:linear-gradient(135deg,#0369a1,#4f46e5);">📘</div>
         <div>
           <div class="card-title">Finetune Handbook</div>
-          <div class="card-desc" style="margin-top:4px;">9 chapters: PyTorch → Datasets → Transformers → LoRA → Unsloth → Causal LM → DPO / ORPO / GRPO → Cloud. Plus the Dataset Zoo, evaluation, own-data guidance, and decision guide.</div>
+          <div class="card-desc" style="margin-top:4px;">9 chapters: PyTorch → Datasets → Transformers → LoRA → Unsloth → Causal LM → DPO / ORPO / GRPO → Cloud. Plus the Dataset Zoo, evaluation, adapter patterns, own-data guidance, and decision guide.</div>
         </div>
       </div>
       <div class="card-footer">
         <span class="tag blue">9 chapters</span>
         <span class="tag blue">Dataset Zoo</span>
         <span class="tag blue">Internals</span>
+        <span class="tag blue">Adapters</span>
         <span class="tag blue">Evaluation</span>
         <span class="tag blue">Own-data</span>
       </div>
@@ -434,7 +435,7 @@
   <!-- ── Advanced Concepts ────────────────────────────────────────────── -->
   <div class="section-title" id="advanced">🔬 Advanced Concepts — Where Silent Bugs Live</div>
   <div style="font-size:.78em; color:var(--muted); margin:-8px 0 14px; line-height:1.6;">
-    The core chapters teach you to fine-tune. These chapters save you from the bugs that waste days — invisible parameters, wasted compute on padding, and heads that don't train because you didn't know they were randomly initialized.
+    The core chapters teach you to fine-tune. These chapters save you from the bugs that waste days — invisible parameters, wasted compute on padding, heads that don't train because you didn't know they were randomly initialized, and adapters that silently load the wrong weights.
   </div>
   <div class="grid grid-2" style="margin-bottom:32px;">
 
@@ -495,6 +496,21 @@
         <span class="tag purple">Format table</span>
         <span class="tag purple">Data hygiene</span>
         <span class="tag purple">Script 11</span>
+      </div>
+    </a>
+
+    <a href="handbook.html#adapters" class="card" style="border-left:3px solid #38bdf8;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#0c4a6e,#0284c7);">🔌</div>
+        <div>
+          <div class="card-title">Adapter Patterns</div>
+          <div class="card-desc">Save, reload, merge, and hot-swap LoRA adapters. One base model + many adapters = many specialists for ~1% storage cost. Push/pull from the HuggingFace Hub.</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag blue">Hub integration</span>
+        <span class="tag blue">Multi-adapter</span>
+        <span class="tag blue">Script 14</span>
       </div>
     </a>
 
@@ -579,7 +595,7 @@
     <div>
       <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:6px;">
         <div class="section-title" style="margin-bottom:0;" id="scripts">🐍 Working Scripts</div>
-        <span style="font-size:.68em; color:var(--green); font-family:monospace;">11/11 verified</span>
+        <span style="font-size:.68em; color:var(--green); font-family:monospace;">12/12 verified</span>
       </div>
       <div style="font-size:.74em; color:var(--muted); margin-bottom:10px; line-height:1.6;">
         Scripts = single-concept demos. <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/notebooks/llama3_finetune_tutorial.ipynb" target="_blank" style="color:var(--accent); text-decoration:none;">Notebook</a> = full end-to-end flow (Llama 3 + Unsloth + GGUF).
@@ -638,6 +654,11 @@
         <div class="script-row">
           <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/13_pytorch_internals.py" target="_blank">13_pytorch_internals.py</a>
           <span class="script-desc">nn.Module, ModuleList gotcha, weight surgery, HF heads</span>
+          <span class="script-venv venv-main">.venv</span>
+        </div>
+        <div class="script-row">
+          <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/14_adapter_save_load.py" target="_blank">14_adapter_save_load.py</a>
+          <span class="script-desc">Save, reload, merge, swap LoRA adapters + Hub</span>
           <span class="script-venv venv-main">.venv</span>
         </div>
       </div>

@@ -161,6 +161,7 @@
     <li class="section">Practical</li>
     <li><a href="#datastack">Dataset Zoo</a></li>
     <li><a href="#pytorchinternals">Module Internals</a></li>
+    <li><a href="#adapters">Adapter Patterns</a></li>
     <li><a href="#evaluation">Evaluation</a></li>
     <li><a href="#owndata">Bring Your Data</a></li>
     <li><a href="#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp Exercise</a></li>
@@ -1697,6 +1698,166 @@ total = <span class="fn">sum</span>(p.<span class="fn">numel</span>() <span clas
 
   <div class="good" style="margin-top:16px; font-size:0.83em;">
     <strong>Full working example:</strong> <code>scripts/13_pytorch_internals.py</code> demonstrates every concept above with live code — the ModuleList bug, weight surgery, head swapping comparison, and model inspection.
+  </div>
+</div>
+
+<!-- ══════════════════ ADAPTER PATTERNS ══════════════════ -->
+<div class="chapter" id="adapters" style="background:#0a1628; border-top:2px solid #38bdf8;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0284c7;">🔌</div>
+    <div><div class="chapter-title">Adapter Patterns — Save, Load, Swap</div><div class="chapter-subtitle">One base model · Many specialists · Hub integration · Merge for deploy</div></div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px;">
+
+    <!-- Card 1: Why adapters -->
+    <div class="card" style="border-left:3px solid #38bdf8;">
+      <div class="card-header"><div>
+        <div class="card-title">Why Adapters Matter</div>
+        <div class="card-desc" style="margin-top:6px; line-height:1.7;">
+          A LoRA adapter is <strong>~1% the size of the base model</strong>. Save it, share it, swap it — without duplicating the base weights.<br><br>
+          <code>Base model (~500 MB) + 10 adapters (~10 MB) = 10 specialized models</code><br><br>
+          This is how production systems work: one base loaded in memory, adapters hot-swapped per request.
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Card 2: Save & Load -->
+    <div class="card" style="border-left:3px solid #818cf8;">
+      <div class="card-header"><div>
+        <div class="card-title">Save & Reload</div>
+        <div class="card-desc" style="margin-top:6px; line-height:1.7;">
+          <strong>Save</strong> — only adapter weights, not the full model:<br>
+          <code style="font-size:.85em;">model.save_pretrained("./my-adapter/")</code><br><br>
+          Creates just two files: <code>adapter_config.json</code> (~1 KB) + <code>adapter_model.safetensors</code> (~MB).<br><br>
+          <strong>Reload</strong> onto a fresh base:<br>
+          <code style="font-size:.85em;">PeftModel.from_pretrained(base, "./my-adapter/")</code><br><br>
+          <span style="color:#f87171;">Gotcha:</span> Use <code>PeftModel.from_pretrained()</code> to <em>load</em>. <code>get_peft_model()</code> is for <em>creating</em> a new adapter.
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Card 3: Merge & Unload -->
+    <div class="card" style="border-left:3px solid #34d399;">
+      <div class="card-header"><div>
+        <div class="card-title">Merge for Deployment</div>
+        <div class="card-desc" style="margin-top:6px; line-height:1.7;">
+          Bake adapter weights into the base model — no PEFT dependency at inference:<br>
+          <code style="font-size:.85em;">model = model.merge_and_unload()</code><br><br>
+          Result: a plain transformers model. Ship it, export to GGUF, deploy anywhere.<br><br>
+          <span style="color:#f87171;">Gotcha:</span> <code>merge_and_unload()</code> is <strong>not</strong> in-place. You must assign the return value.<br><br>
+          Trade-off: merged model = full size again. Can't swap adapters anymore.
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Card 4: Hub -->
+    <div class="card" style="border-left:3px solid #fb923c;">
+      <div class="card-header"><div>
+        <div class="card-title">HuggingFace Hub</div>
+        <div class="card-desc" style="margin-top:6px; line-height:1.7;">
+          Adapters live on the Hub just like full models. Push ~5 MB instead of ~5 GB:<br>
+          <code style="font-size:.85em;">model.push_to_hub("my-org/hvac-adapter")</code><br><br>
+          Pull from anywhere:<br>
+          <code style="font-size:.85em;">PeftModel.from_pretrained(base, "my-org/hvac-adapter")</code><br><br>
+          Or auto-detect the base model:<br>
+          <code style="font-size:.85em;">AutoPeftModelForCausalLM.from_pretrained("my-org/hvac-adapter")</code><br><br>
+          Real example: <a href="https://huggingface.co/ybelkada/opt-350m-lora" target="_blank" style="color:#38bdf8;">ybelkada/opt-350m-lora</a> — a 6 MB adapter for OPT-350M.
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Card 5: Multi-adapter swap -->
+    <div class="card" style="border-left:3px solid #a78bfa;">
+      <div class="card-header"><div>
+        <div class="card-title">Multi-Adapter Swap</div>
+        <div class="card-desc" style="margin-top:6px; line-height:1.7;">
+          Load multiple adapters onto one base model and switch per request:<br><br>
+          <code style="font-size:.85em;">model = PeftModel.from_pretrained(base, path_a, adapter_name="hvac")</code><br>
+          <code style="font-size:.85em;">model.load_adapter(path_b, adapter_name="energy")</code><br>
+          <code style="font-size:.85em;">model.set_adapter("hvac")&nbsp;&nbsp;&nbsp;# → HVAC specialist</code><br>
+          <code style="font-size:.85em;">model.set_adapter("energy") # → energy specialist</code><br><br>
+          <span style="color:#f87171;">Gotcha:</span> <code>load_adapter()</code> does <strong>not</strong> activate the adapter. Always call <code>set_adapter()</code> after loading.
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Card 6: Cheatsheet -->
+    <div class="card" style="border-left:3px solid #64748b;">
+      <div class="card-header"><div>
+        <div class="card-title">Quick Reference</div>
+        <div class="card-desc" style="margin-top:6px; line-height:1.7;">
+          <table style="width:100%; font-size:.85em; border-collapse:collapse;">
+            <tr style="border-bottom:1px solid #334155;">
+              <td style="padding:4px 0; color:#94a3b8;">Create adapter</td>
+              <td style="padding:4px 0;"><code>get_peft_model(base, config)</code></td>
+            </tr>
+            <tr style="border-bottom:1px solid #334155;">
+              <td style="padding:4px 0; color:#94a3b8;">Save</td>
+              <td style="padding:4px 0;"><code>model.save_pretrained(path)</code></td>
+            </tr>
+            <tr style="border-bottom:1px solid #334155;">
+              <td style="padding:4px 0; color:#94a3b8;">Load</td>
+              <td style="padding:4px 0;"><code>PeftModel.from_pretrained(base, path)</code></td>
+            </tr>
+            <tr style="border-bottom:1px solid #334155;">
+              <td style="padding:4px 0; color:#94a3b8;">Push to Hub</td>
+              <td style="padding:4px 0;"><code>model.push_to_hub(repo_id)</code></td>
+            </tr>
+            <tr style="border-bottom:1px solid #334155;">
+              <td style="padding:4px 0; color:#94a3b8;">Auto-load</td>
+              <td style="padding:4px 0;"><code>AutoPeftModelForCausalLM.from_pretrained(repo_id)</code></td>
+            </tr>
+            <tr style="border-bottom:1px solid #334155;">
+              <td style="padding:4px 0; color:#94a3b8;">Merge</td>
+              <td style="padding:4px 0;"><code>model = model.merge_and_unload()</code></td>
+            </tr>
+            <tr style="border-bottom:1px solid #334155;">
+              <td style="padding:4px 0; color:#94a3b8;">Add adapter</td>
+              <td style="padding:4px 0;"><code>model.load_adapter(path, name)</code></td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0; color:#94a3b8;">Switch</td>
+              <td style="padding:4px 0;"><code>model.set_adapter(name)</code></td>
+            </tr>
+          </table>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+
+  </div>
+
+  <!-- Adapter Registry Pattern -->
+  <div style="margin-top:18px; background:#1e293b; border:1px solid #334155; border-radius:10px; padding:18px 20px; border-left:3px solid #fbbf24;">
+    <div style="font-size:.7em; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#fbbf24; margin-bottom:8px;">The Adapter Registry Pattern</div>
+    <div style="font-size:.82em; color:#e2e8f0; line-height:1.7; margin-bottom:10px;">
+      One base model + named adapters = an <strong>organizational knowledge registry</strong>. Each adapter encodes domain expertise that lives independently — versioned, auditable, swappable.
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:12px;">
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; text-align:center;">
+        <div style="font-size:.65em; color:#fbbf24; font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Add knowledge</div>
+        <div style="font-size:.74em; color:#94a3b8; margin-top:4px;">Train a new adapter</div>
+      </div>
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; text-align:center;">
+        <div style="font-size:.65em; color:#fbbf24; font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Retire knowledge</div>
+        <div style="font-size:.74em; color:#94a3b8; margin-top:4px;">Delete the adapter</div>
+      </div>
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; text-align:center;">
+        <div style="font-size:.65em; color:#fbbf24; font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Update knowledge</div>
+        <div style="font-size:.74em; color:#94a3b8; margin-top:4px;">Retrain, push new version</div>
+      </div>
+    </div>
+    <div style="font-size:.78em; color:#a5b4fc; line-height:1.6; font-style:italic; padding:8px 12px; background:rgba(129,140,248,.06); border-left:2px solid #818cf8; border-radius:0 4px 4px 0;">
+      An organization that maintains an adapter registry <strong>owns</strong> its AI knowledge — versioned like code, auditable like data, independent of any vendor. That's the difference between consuming AI and building AI capability.
+    </div>
+  </div>
+
+  <div style="margin-top:14px; font-size:.76em; color:#475569;">
+    Script: <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/14_adapter_save_load.py" target="_blank" style="color:#38bdf8;">14_adapter_save_load.py</a> — all patterns above, runnable.
+    &nbsp;·&nbsp; Ref: <a href="https://huggingface.co/docs/peft" target="_blank" style="color:#38bdf8;">PEFT docs</a>
+    &nbsp;·&nbsp; <a href="https://arxiv.org/abs/2106.09685" target="_blank" style="color:#38bdf8;">LoRA paper</a>
   </div>
 </div>
 
