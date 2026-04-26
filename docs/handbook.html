@@ -105,6 +105,20 @@
   .ref-card a { font-size: 0.75em; color: #60a5fa; text-decoration: none; word-break: break-all; }
   .ref-card a:hover { text-decoration: underline; color: #93c5fd; }
 
+
+  /* GitHub repo button hover (scripts header) */
+  a.gh-btn:hover { color: #f8fafc !important; border-color: #38bdf8 !important; background: rgba(255,255,255,.1) !important; }
+
+  /* Script table filename links */
+  .script-link { color: #60a5fa; text-decoration: none; font-family: 'Fira Mono', monospace; font-size: 0.82em; }
+  .script-link:hover { text-decoration: underline; color: #93c5fd; }
+
+  /* Reference card links */
+  .ref-card a:hover { text-decoration: underline; color: #93c5fd; }
+
+  /* Hero GitHub button */
+  a.hero-gh:hover { background: rgba(255,255,255,.1) !important; border-color: #38bdf8 !important; color: #f1f5f9 !important; }
+
   @media print {
     nav { display: none; }
     main { margin-left: 0; }
@@ -1199,10 +1213,8 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
       <div class="chapter-title">Working Scripts</div>
       <div class="chapter-subtitle">Runnable examples — each script is self-contained and verified</div>
     </div>
-    <a href="https://github.com/anisiraj/llm_kickstart_repo" target="_blank"
-       style="margin-left:auto; display:flex; align-items:center; gap:6px; background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 12px; text-decoration:none; font-size:0.75em; color:#94a3b8; white-space:nowrap; transition:all 0.15s;"
-       onmouseover="this.style.color='#f8fafc';this.style.borderColor='#38bdf8'"
-       onmouseout="this.style.color='#94a3b8';this.style.borderColor='#334155'">
+    <a href="https://github.com/anisiraj/llm_kickstart_repo" target="_blank" class="gh-btn"
+       style="margin-left:auto; display:flex; align-items:center; gap:6px; background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 12px; text-decoration:none; font-size:0.75em; color:#94a3b8; white-space:nowrap; transition:all 0.15s;">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
       anisiraj/llm_kickstart_repo
     </a>
@@ -1223,7 +1235,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
       <tbody>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/verify_all.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">verify_all.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">verify_all.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Health check — tests every package and API in one shot. Run this first.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1231,7 +1243,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/01_pytorch_basics.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">01_pytorch_basics.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">01_pytorch_basics.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Tensors, autograd, <code>nn.Module</code>, DataLoader, full training loop, checkpoint save/load.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1239,7 +1251,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/02_hf_datasets.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">02_hf_datasets.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">02_hf_datasets.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Build, inspect, map, filter, rename columns, set_format("torch"), save/load from disk.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1247,7 +1259,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/03_hf_transformers.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">03_hf_transformers.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">03_hf_transformers.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Tokenizer, pipeline inference, AutoModel, Trainer with eval_strategy + processing_class.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1255,7 +1267,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/04_causal_lm_finetune.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">04_causal_lm_finetune.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">04_causal_lm_finetune.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">GPT-2 causal LM fine-tune with DataCollatorForLanguageModeling (mlm=False), then generate.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1263,7 +1275,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/05_dpo_example.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">05_dpo_example.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">05_dpo_example.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">DPOTrainer with synthetic preference data (prompt / chosen / rejected). ref_model=None.</td>
           <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
@@ -1271,7 +1283,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/06_orpo_example.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">06_orpo_example.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">06_orpo_example.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">ORPO — folds SFT + preference into one loss, no reference model. Correct trl import path.</td>
           <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
@@ -1279,7 +1291,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/07_grpo_example.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">07_grpo_example.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">07_grpo_example.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">GRPO with two reward functions (correctness + brevity) on a toy math dataset. No internet.</td>
           <td style="padding:10px 14px;"><span style="background:#1a0f3c;color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv-rl</span></td>
@@ -1287,7 +1299,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr>
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/08_unsloth_sft.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">08_unsloth_sft.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">08_unsloth_sft.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Full Unsloth workflow: FastLanguageModel → QLoRA → SFTTrainer → inference → GGUF export.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
@@ -1295,7 +1307,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         </tr>
         <tr style="background:#0d1117;">
           <td style="padding:10px 14px; white-space:nowrap;">
-            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank" style="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">09_sagemaker_train.py</a>
+            <a href="color:#60a5fa; text-decoration:none; font-family:'Fira Mono',monospace; font-size:0.82em;" target="_blank" class="script-link" style=">09_sagemaker_train.py</a>
           </td>
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">SageMaker HuggingFace estimator pattern + Bedrock converse API. Prints templates dry-run.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
