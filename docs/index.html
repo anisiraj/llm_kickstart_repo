@@ -166,7 +166,8 @@
     align-items: center;
     gap: 16px;
   }
-  .script-name { font-family: monospace; font-size: .85em; color: var(--accent); }
+  .script-name { font-family: monospace; font-size: .85em; color: var(--accent); text-decoration: none; }
+  .script-name:hover { text-decoration: underline; color: #7dd3fc; }
   .script-desc { font-size: .82em; color: var(--muted); }
   .script-venv {
     font-size: .72em; font-family: monospace; font-weight: 600;
@@ -447,52 +448,52 @@
   <div class="section-title">🐍 Working Scripts — All Verified</div>
   <div class="script-grid">
     <div class="script-row">
-      <span class="script-name">verify_all.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/verify_all.py" target="_blank">verify_all.py</a>
       <span class="script-desc">Full environment health check — 25/26 pass (.venv), 24/26 (.venv-rl)</span>
       <span class="script-venv venv-main">.venv / .venv-rl</span>
     </div>
     <div class="script-row">
-      <span class="script-name">01_pytorch_basics.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/01_pytorch_basics.py" target="_blank">01_pytorch_basics.py</a>
       <span class="script-desc">Tensors, autograd, nn.Module, DataLoader, training loop, save/load</span>
       <span class="script-venv venv-main">.venv</span>
     </div>
     <div class="script-row">
-      <span class="script-name">02_hf_datasets.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/02_hf_datasets.py" target="_blank">02_hf_datasets.py</a>
       <span class="script-desc">from_dict, map, filter, split, rename, set_format, save_to_disk</span>
       <span class="script-venv venv-main">.venv</span>
     </div>
     <div class="script-row">
-      <span class="script-name">03_hf_transformers.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/03_hf_transformers.py" target="_blank">03_hf_transformers.py</a>
       <span class="script-desc">Tokenizer, pipeline, Trainer with eval_strategy + processing_class</span>
       <span class="script-venv venv-main">.venv</span>
     </div>
     <div class="script-row">
-      <span class="script-name">04_causal_lm_finetune.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/04_causal_lm_finetune.py" target="_blank">04_causal_lm_finetune.py</a>
       <span class="script-desc">GPT-2 CLM with DataCollatorForLanguageModeling + text generation</span>
       <span class="script-venv venv-main">.venv</span>
     </div>
     <div class="script-row">
-      <span class="script-name">05_dpo_example.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/05_dpo_example.py" target="_blank">05_dpo_example.py</a>
       <span class="script-desc">DPOTrainer + DPOConfig — ref_model=None implicit reference</span>
       <span class="script-venv venv-rl">.venv-rl</span>
     </div>
     <div class="script-row">
-      <span class="script-name">06_orpo_example.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/06_orpo_example.py" target="_blank">06_orpo_example.py</a>
       <span class="script-desc">ORPOTrainer from trl.experimental.orpo — SFT + alignment in one pass</span>
       <span class="script-venv venv-rl">.venv-rl</span>
     </div>
     <div class="script-row">
-      <span class="script-name">07_grpo_example.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/07_grpo_example.py" target="_blank">07_grpo_example.py</a>
       <span class="script-desc">GRPOTrainer — reward_funcs list, max_completion_length, question→prompt fix</span>
       <span class="script-venv venv-rl">.venv-rl</span>
     </div>
     <div class="script-row">
-      <span class="script-name">08_unsloth_sft.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/08_unsloth_sft.py" target="_blank">08_unsloth_sft.py</a>
       <span class="script-desc">Full Unsloth workflow — FastLanguageModel → LoRA → SFT → GGUF (reference)</span>
       <span class="script-venv venv-main">.venv</span>
     </div>
     <div class="script-row">
-      <span class="script-name">09_sagemaker_train.py</span>
+      <a class="script-name" href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank">09_sagemaker_train.py</a>
       <span class="script-desc">SageMaker training script + HF estimator + Bedrock converse patterns</span>
       <span class="script-venv venv-main">.venv</span>
     </div>
