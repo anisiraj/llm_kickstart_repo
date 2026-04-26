@@ -345,23 +345,43 @@
     <span><span class="dot"></span>RTX 3080 Ti · CUDA 13.0</span>
   </div>
 
-  <!-- ── Handbook ───────────────────────────────────────────────────────── -->
-  <div class="section-title">📖 End-to-End Handbook</div>
-  <a href="handbook.html" class="card card-main" style="margin-bottom: 48px;">
-    <div class="card-header">
-      <div class="card-icon" style="background:linear-gradient(135deg,#0369a1,#4f46e5);">📘</div>
-      <div>
-        <div class="card-title">LLM Fine-Tuning Handbook</div>
-        <div class="card-desc" style="margin-top:6px;">9 chapters flowing end-to-end: PyTorch → HF Datasets → Transformers → LoRA/QLoRA → Unsloth SFT → Causal LM → DPO / ORPO / GRPO → SageMaker → Bedrock. Plus evaluation patterns, own-data guidance, and a decision guide.</div>
+  <!-- ── Handbook + Bootcamp (side by side) ──────────────────────────────── -->
+  <div class="section-title">📖 Learn, then build</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:48px;">
+
+    <a href="handbook.html" class="card card-main" style="margin-bottom:0;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#0369a1,#4f46e5);">📘</div>
+        <div>
+          <div class="card-title">LLM Fine-Tuning Handbook</div>
+          <div class="card-desc" style="margin-top:6px;">9 chapters end-to-end: PyTorch → Datasets → Transformers → LoRA → Unsloth → Causal LM → DPO / ORPO / GRPO → Cloud. Plus evaluation, own-data guidance, and decision guide.</div>
+        </div>
       </div>
-    </div>
-    <div class="card-footer">
-      <span class="tag blue">9 chapters</span>
-      <span class="tag blue">Evaluation guide</span>
-      <span class="tag blue">Own-data patterns</span>
-      <span class="tag blue">Decision guide</span>
-    </div>
-  </a>
+      <div class="card-footer">
+        <span class="tag blue">9 chapters</span>
+        <span class="tag blue">Evaluation</span>
+        <span class="tag blue">Own-data</span>
+        <span class="tag blue">Decision guide</span>
+      </div>
+    </a>
+
+    <a href="handbook.html#bootcamp" class="card" style="margin-bottom:0; border-color:rgba(245,158,11,.4); background:linear-gradient(135deg,#1a0f00,#1a1400);">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#92400e,#b45309);">🏋️</div>
+        <div>
+          <div class="card-title" style="color:#fbbf24;">Open Bootcamp Exercise</div>
+          <div class="card-desc" style="margin-top:6px;">Build an org-aware SQL assistant. Domain-adapt on your knowledge base, SFT on text↔SQL, try GPT-2 / SmolLM / Llama, evaluate against RAG. No code — just workflow + judgment calls.</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="tag yellow">7 phases</span>
+        <span class="tag yellow">3 models</span>
+        <span class="tag yellow">vs RAG</span>
+        <span class="tag yellow">Starter data</span>
+      </div>
+    </a>
+
+  </div>
 
   <!-- ── Cheatsheets ────────────────────────────────────────────────────── -->
   <div class="section-title">🗂 One-Page Cheatsheets</div>
@@ -608,23 +628,6 @@ uv venv .venv-rl <span class="cm"># DPO / ORPO / GRPO</span>
     <span style="font-size:1.1em;">☁️</span>
     <span><strong style="color:#64748b;">SageMaker &amp; Bedrock</strong> are cloud execution engines — not training methods. Run any of the methods above on SageMaker for scale, or use Bedrock for managed FM inference. See chapters 8–9 in the <a href="handbook.html#sagemaker" style="color:#60a5fa;text-decoration:none;">handbook</a>.</span>
   </div>
-
-  <!-- ── Bootcamp Exercise ──────────────────────────────────────────────── -->
-  <a href="handbook.html#bootcamp" class="card" style="border-color:rgba(245,158,11,.35); background:linear-gradient(135deg,#1a0f00,#1a1400); margin-bottom:48px; display:block; text-decoration:none;">
-    <div class="card-header">
-      <div class="card-icon" style="background:linear-gradient(135deg,#92400e,#b45309); font-size:1.1em;">🏋️</div>
-      <div>
-        <div class="card-title" style="color:#fbbf24;">Open Bootcamp Exercise</div>
-        <div class="card-desc" style="margin-top:6px; color:#94a3b8;">Build an org-aware SQL assistant from scratch. Domain-adapt with your knowledge base, SFT on text↔SQL, compare GPT-2 vs SmolLM-135M vs quantized Llama, evaluate against a RAG baseline. No code given — just the workflow and the judgment calls. Starter data included.</div>
-      </div>
-    </div>
-    <div class="card-footer">
-      <span class="tag yellow">7-phase workflow</span>
-      <span class="tag yellow">3 models to compare</span>
-      <span class="tag yellow">Fine-tune vs RAG</span>
-      <span class="tag yellow">Starter data included</span>
-    </div>
-  </a>
 
 </div><!-- /container -->
 
