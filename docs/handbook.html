@@ -87,6 +87,23 @@
   .decision-col h4 { margin-bottom: 6px; }
   .decision-col ul { padding-left: 14px; color: #94a3b8; line-height: 1.8; }
 
+
+  /* Active breadcrumb */
+  nav ul li a.active { color: #f8fafc !important; background: #1e3a5f !important; border-left-color: #38bdf8 !important; }
+
+  /* Chapter intro blurb */
+  .chapter-intro { font-size: 0.85em; color: #94a3b8; line-height: 1.75; margin-bottom: 18px; max-width: 820px; border-left: 3px solid #334155; padding-left: 12px; }
+  .chapter-intro strong { color: #cbd5e1; }
+
+  /* References section */
+  .ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 14px; }
+  .ref-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; }
+  .ref-card .ref-tag { font-size: 0.65em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #38bdf8; margin-bottom: 4px; }
+  .ref-card .ref-title { font-size: 0.82em; font-weight: 600; color: #f1f5f9; margin-bottom: 2px; }
+  .ref-card .ref-authors { font-size: 0.75em; color: #64748b; margin-bottom: 5px; }
+  .ref-card a { font-size: 0.75em; color: #60a5fa; text-decoration: none; word-break: break-all; }
+  .ref-card a:hover { text-decoration: underline; color: #93c5fd; }
+
   @media print {
     nav { display: none; }
     main { margin-left: 0; }
@@ -130,6 +147,7 @@
     <li><a href="#workflow">Full Workflow</a></li>
     <li><a href="#decision">Decision Guide</a></li>
     <li><a href="#scripts">Working Scripts</a></li>
+    <li><a href="#references">References</a></li>
   </ul>
 </nav>
 
@@ -158,6 +176,7 @@
     <div class="chapter-num">1</div>
     <div><div class="chapter-title">PyTorch Core</div><div class="chapter-subtitle">Tensors · Autograd · Models · Training loop</div></div>
   </div>
+  <p class="chapter-intro">PyTorch is the foundation everything else is built on. Before loading any model you need to understand how <strong>tensors</strong> move between devices, how <strong>autograd</strong> tracks gradients, and how a training loop ties loss, backprop, and optimizer step together. These patterns repeat verbatim inside every Trainer you'll ever use.</p>
   <div class="grid2">
 
     <div class="card">
@@ -245,6 +264,7 @@ model.<span class="fn">load_state_dict</span>(torch.<span class="fn">load</span>
     <div class="chapter-num" style="background:#92400e;">2</div>
     <div><div class="chapter-title">HF Datasets</div><div class="chapter-subtitle">Load · Inspect · Map · Filter · Format for training</div></div>
   </div>
+  <p class="chapter-intro">The Hugging Face <strong>Datasets</strong> library gives you a single, memory-mapped interface to thousands of public datasets and your own files. Arrow-backed columns mean map/filter transforms run fast even on datasets too large for RAM. Getting data into the right shape — renaming columns, applying chat templates, setting the format to torch — is typically 80% of a fine-tuning project.</p>
   <div class="grid2">
 
     <div class="card">
@@ -322,6 +342,7 @@ ds = ds.<span class="fn">map</span>(fn, batched=<span class="kw">True</span>, nu
     <div class="chapter-num" style="background:#6d28d9;">3</div>
     <div><div class="chapter-title">HF Transformers</div><div class="chapter-subtitle">Pipeline · Tokenizer · AutoModel · Trainer · Push to Hub</div></div>
   </div>
+  <p class="chapter-intro"><strong>Transformers</strong> is the model zoo: tokenizers, AutoModel classes, and the Trainer API in one package. The <em>pipeline</em> abstraction lets you call any model in two lines; <em>AutoTokenizer / AutoModelForCausalLM</em> give you full control. The Trainer handles the training loop, gradient accumulation, mixed precision, and checkpointing automatically.</p>
   <div class="grid2">
 
     <div class="card">
@@ -391,6 +412,7 @@ trainer.<span class="fn">push_to_hub</span>(<span class="st">"username/my-model"
     <div class="chapter-num" style="background:#0f766e;">4</div>
     <div><div class="chapter-title">LoRA &amp; QLoRA Concepts</div><div class="chapter-subtitle">Parameter-efficient fine-tuning — the theory you need</div></div>
   </div>
+  <p class="chapter-intro"><strong>LoRA</strong> (Hu et al., 2021) freezes the original weight matrix W and adds a low-rank bypass ΔW = BA (rank r ≪ d). Only A and B are trained — typically 0.1–1% of total parameters — cutting VRAM by 60-80%. <strong>QLoRA</strong> (Dettmers et al., 2023) goes further: quantise the frozen base to 4-bit NF4, then apply LoRA on top. These two papers made 70B fine-tuning on a single consumer GPU practical.</p>
   <div class="grid3">
 
     <div class="card">
@@ -445,6 +467,7 @@ trainer.<span class="fn">push_to_hub</span>(<span class="st">"username/my-model"
     <div class="chapter-num" style="background:#0d9488;">5</div>
     <div><div class="chapter-title">Unsloth — Fast SFT Fine-Tuning</div><div class="chapter-subtitle">2× faster · 60% less VRAM · Full end-to-end workflow</div></div>
   </div>
+  <p class="chapter-intro"><strong>Unsloth</strong> re-implements the hot kernels (RoPE, attention, cross-entropy) in Triton and patches them into Hugging Face models at load time — no model changes required. The result is ~2× faster training and ~60% less VRAM versus a plain PEFT/QLoRA setup. It's the go-to choice for supervised fine-tuning on a single GPU with limited memory.</p>
   <div class="grid2">
 
     <div class="card">
@@ -544,6 +567,7 @@ model.<span class="fn">push_to_hub_merged</span>(<span class="st">"user/MyModel"
     <div class="chapter-num" style="background:#0369a1;">6</div>
     <div><div class="chapter-title">Causal LM Fine-Tuning &amp; Continued Pretraining</div><div class="chapter-subtitle">Raw text training · next-token prediction · domain adaptation</div></div>
   </div>
+  <p class="chapter-intro"><strong>Causal language modelling</strong> trains the model to predict the next token from raw text — no labels needed. It's the right approach when you want to adapt the model's knowledge or writing style rather than teach it a specific instruction format. <em>Continued pretraining</em> on domain text (medical, legal, code) shifts the model's priors before you apply SFT on top. <code>DataCollatorForLanguageModeling(mlm=False)</code> auto-constructs the shifted labels from your input tokens.</p>
   <div class="grid2">
 
     <div class="card">
@@ -701,6 +725,7 @@ trainer.<span class="fn">train</span>()
     <div class="chapter-num" style="background:#7c3aed;">7</div>
     <div><div class="chapter-title">Fine-Tuning Methods — Full Comparison</div><div class="chapter-subtitle">SFT · Causal LM · DPO · ORPO · GRPO · Pretraining — know which to reach for</div></div>
   </div>
+  <p class="chapter-intro">Choosing the wrong training method wastes GPU hours. <strong>SFT</strong> teaches format; <strong>Causal LM</strong> teaches domain knowledge; <strong>DPO / ORPO</strong> align the model to human preferences without a live reward model; <strong>GRPO</strong> uses verifiable rewards (math answers, code execution) for self-improvement. The table below shows exactly when each method applies and what data it needs.</p>
 
   <!-- Comparison table -->
   <div class="card full" style="margin-bottom:14px;">
@@ -908,6 +933,7 @@ trainer.<span class="fn">train</span>()
     <div class="chapter-num" style="background:#1e3a5f;">8</div>
     <div><div class="chapter-title">AWS SageMaker</div><div class="chapter-subtitle">Train &amp; deploy HF models in the cloud — full control</div></div>
   </div>
+  <p class="chapter-intro"><strong>SageMaker</strong> manages compute provisioning, distributed training, spot interruption recovery, and model artifact storage. You write a standard training script, wrap it in a <em>HuggingFace estimator</em>, and SageMaker handles everything else. It's the right choice when your dataset or model is too large for a local GPU — or when you need reproducible, auditable training runs at scale.</p>
   <div class="grid2">
 
     <div class="card">
@@ -985,6 +1011,7 @@ predictor.<span class="fn">delete_endpoint</span>()   <span class="cm"># ← alw
     <div class="chapter-num" style="background:#7f1d1d;">9</div>
     <div><div class="chapter-title">AWS Bedrock</div><div class="chapter-subtitle">Managed FM inference + fine-tuning — no infra, pay per token</div></div>
   </div>
+  <p class="chapter-intro"><strong>Bedrock</strong> is AWS's fully-managed foundation model service — no servers, no CUDA drivers, no model downloads. You call an API, pick a model (Claude, Titan, Llama…), and pay per token. For custom models you can import fine-tuned weights or trigger Bedrock's own fine-tuning job. It's the fastest path to a production inference endpoint with zero infrastructure ownership.</p>
   <div class="grid2">
 
     <div class="card">
@@ -1298,6 +1325,173 @@ python scripts/09_sagemaker_train.py</pre>
   </div>
 </div>
 
+
+<!-- ══════════════════ REFERENCES ══════════════════ -->
+<div class="chapter" id="references" style="background:#020617; border-top:2px solid #334155;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#334155;">📚</div>
+    <div>
+      <div class="chapter-title" style="color:#94a3b8;">References &amp; Sources</div>
+      <div class="chapter-subtitle">This handbook synthesises the following papers, documentation, and open-source projects. All credit to the original authors.</div>
+    </div>
+  </div>
+
+  <p class="chapter-intro">The techniques covered here rest on a small number of landmark papers and the tireless documentation work of the open-source community. Please cite the originals in any academic or commercial work that builds on these ideas.</p>
+
+  <div style="font-size:0.7em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px;">Foundational Papers</div>
+  <div class="ref-grid">
+
+    <div class="ref-card">
+      <div class="ref-tag">LoRA · 2021</div>
+      <div class="ref-title">LoRA: Low-Rank Adaptation of Large Language Models</div>
+      <div class="ref-authors">Edward J. Hu, Yelong Shen, Phillip Wallis et al. · Microsoft</div>
+      <a href="https://arxiv.org/abs/2106.09685" target="_blank">arxiv.org/abs/2106.09685</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">QLoRA · 2023</div>
+      <div class="ref-title">QLoRA: Efficient Finetuning of Quantized LLMs</div>
+      <div class="ref-authors">Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, Luke Zettlemoyer · UW</div>
+      <a href="https://arxiv.org/abs/2305.14314" target="_blank">arxiv.org/abs/2305.14314</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">DPO · 2023</div>
+      <div class="ref-title">Direct Preference Optimization: Your Language Model is Secretly a Reward Model</div>
+      <div class="ref-authors">Rafael Rafailov, Archit Sharma, Eric Mitchell et al. · Stanford</div>
+      <a href="https://arxiv.org/abs/2305.18290" target="_blank">arxiv.org/abs/2305.18290</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">ORPO · 2024</div>
+      <div class="ref-title">ORPO: Monolithic Preference Optimization without Reference Model</div>
+      <div class="ref-authors">Jiwoo Hong, Noah Lee, James Thorne · KAIST AI</div>
+      <a href="https://arxiv.org/abs/2403.07691" target="_blank">arxiv.org/abs/2403.07691</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">GRPO · 2024</div>
+      <div class="ref-title">DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models</div>
+      <div class="ref-authors">Zhihong Shao, Peiyi Wang, Qihao Zhu et al. · DeepSeek-AI</div>
+      <a href="https://arxiv.org/abs/2402.03300" target="_blank">arxiv.org/abs/2402.03300</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">RLHF · 2022</div>
+      <div class="ref-title">Training language models to follow instructions with human feedback (InstructGPT)</div>
+      <div class="ref-authors">Long Ouyang, Jeff Wu, Xu Jiang et al. · OpenAI</div>
+      <a href="https://arxiv.org/abs/2203.02155" target="_blank">arxiv.org/abs/2203.02155</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">Attention · 2017</div>
+      <div class="ref-title">Attention Is All You Need</div>
+      <div class="ref-authors">Ashish Vaswani, Noam Shazeer, Niki Parmar et al. · Google Brain</div>
+      <a href="https://arxiv.org/abs/1706.03762" target="_blank">arxiv.org/abs/1706.03762</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">PEFT · 2022</div>
+      <div class="ref-title">The Power of Scale for Parameter-Efficient Prompt Tuning</div>
+      <div class="ref-authors">Brian Lester, Rami Al-Rfou, Noah Constant · Google</div>
+      <a href="https://arxiv.org/abs/2104.08691" target="_blank">arxiv.org/abs/2104.08691</a>
+    </div>
+
+  </div>
+
+  <div style="font-size:0.7em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin: 20px 0 10px;">Libraries &amp; Frameworks</div>
+  <div class="ref-grid">
+
+    <div class="ref-card">
+      <div class="ref-tag">Framework</div>
+      <div class="ref-title">PyTorch</div>
+      <div class="ref-authors">Meta AI Research · BSD License</div>
+      <a href="https://pytorch.org/docs/stable/index.html" target="_blank">pytorch.org/docs</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">Library</div>
+      <div class="ref-title">Hugging Face Transformers</div>
+      <div class="ref-authors">Hugging Face · Apache-2.0</div>
+      <a href="https://huggingface.co/docs/transformers" target="_blank">huggingface.co/docs/transformers</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">Library</div>
+      <div class="ref-title">Hugging Face Datasets</div>
+      <div class="ref-authors">Hugging Face · Apache-2.0</div>
+      <a href="https://huggingface.co/docs/datasets" target="_blank">huggingface.co/docs/datasets</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">Library</div>
+      <div class="ref-title">TRL — Transformer Reinforcement Learning</div>
+      <div class="ref-authors">Hugging Face · Apache-2.0 · DPO / ORPO / GRPO trainers</div>
+      <a href="https://huggingface.co/docs/trl" target="_blank">huggingface.co/docs/trl</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">Library</div>
+      <div class="ref-title">PEFT — Parameter-Efficient Fine-Tuning</div>
+      <div class="ref-authors">Hugging Face · Apache-2.0 · LoRA / QLoRA / adapters</div>
+      <a href="https://huggingface.co/docs/peft" target="_blank">huggingface.co/docs/peft</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">Library</div>
+      <div class="ref-title">Unsloth</div>
+      <div class="ref-authors">Daniel Han, Michael Han · Apache-2.0</div>
+      <a href="https://github.com/unslothai/unsloth" target="_blank">github.com/unslothai/unsloth</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">Cloud</div>
+      <div class="ref-title">AWS SageMaker</div>
+      <div class="ref-authors">Amazon Web Services — HuggingFace on SageMaker docs</div>
+      <a href="https://huggingface.co/docs/sagemaker" target="_blank">huggingface.co/docs/sagemaker</a>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-tag">Cloud</div>
+      <div class="ref-title">AWS Bedrock</div>
+      <div class="ref-authors">Amazon Web Services — Bedrock user guide</div>
+      <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/" target="_blank">docs.aws.amazon.com/bedrock</a>
+    </div>
+
+  </div>
+
+  <div class="tip" style="margin-top:20px; font-size:0.8em;">
+    <strong>Attribution note</strong> — Code patterns in this handbook are adapted from official library documentation and the papers listed above. If you use this material in teaching, research, or a product, please link back to the original papers and the respective library docs. Open science thrives on proper attribution.
+  </div>
+</div>
+
 </main>
+
+<script>
+(function() {
+  const links = Array.from(document.querySelectorAll('nav ul li a[href^="#"]'));
+  const sections = links
+    .map(l => document.getElementById(l.getAttribute('href').slice(1)))
+    .filter(Boolean);
+
+  function setActive(id) {
+    links.forEach(l => {
+      const matches = l.getAttribute('href') === '#' + id;
+      l.classList.toggle('active', matches);
+    });
+  }
+
+  // Set first active on load
+  if (sections.length) setActive(sections[0].id);
+
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) setActive(e.target.id);
+    });
+  }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+
+  sections.forEach(s => obs.observe(s));
+})();
+</script>
 </body>
 </html>
