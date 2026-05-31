@@ -4,3 +4,6 @@ data/
 outputs/
 __pycache__/
 logs/
+unsloth_compiled_cache/
+_unsloth_temporary_saved_buffers/
+*.lock
