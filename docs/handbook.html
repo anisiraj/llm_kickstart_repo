@@ -1224,6 +1224,51 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
     <div><div class="chapter-title">LoRA &amp; QLoRA Concepts</div><div class="chapter-subtitle">Parameter-efficient fine-tuning — the theory you need</div></div>
   </div>
   <p class="chapter-intro"><strong>LoRA</strong> (Hu et al., 2021) freezes the original weight matrix W and adds a low-rank bypass ΔW = BA (rank r ≪ d). Only A and B are trained — typically 0.1–1% of total parameters — cutting VRAM by 60-80%. <strong>QLoRA</strong> (Dettmers et al., 2023) goes further: quantise the frozen base to 4-bit NF4, then apply LoRA on top. These two papers made 70B fine-tuning on a single consumer GPU practical.</p>
+
+  <div style="margin:16px 0; padding:18px; background:#0a0f1a; border:1px solid #1e293b; border-radius:12px;">
+  <svg viewBox="0 0 880 270" width="100%" style="height:auto; font-family:system-ui,-apple-system,sans-serif;" role="img" aria-label="LoRA adds a small trainable low-rank bypass B times A alongside the frozen base weight W; their outputs are summed.">
+    <defs><marker id="ah2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/></marker></defs>
+    <text x="440" y="24" text-anchor="middle" fill="#94a3b8" font-size="13" font-weight="700" letter-spacing="1.5">HOW LoRA WORKS — A FROZEN HIGHWAY + A TINY TRAINABLE DETOUR</text>
+
+    <!-- input -->
+    <circle cx="70" cy="135" r="26" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+    <text x="70" y="130" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">x</text>
+    <text x="70" y="146" text-anchor="middle" fill="#64748b" font-size="9">input</text>
+
+    <!-- frozen W -->
+    <rect x="300" y="40" width="220" height="70" rx="10" fill="#172033" stroke="#475569" stroke-width="2" stroke-dasharray="6,4"/>
+    <text x="410" y="70" text-anchor="middle" fill="#cbd5e1" font-size="17" font-weight="800">W  (frozen)</text>
+    <text x="410" y="92" text-anchor="middle" fill="#64748b" font-size="11">the pretrained weight — d × d, never updated 🔒</text>
+
+    <!-- LoRA branch B A -->
+    <rect x="300" y="170" width="100" height="60" rx="10" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/>
+    <text x="350" y="198" text-anchor="middle" fill="#c7d2fe" font-size="15" font-weight="800">A</text>
+    <text x="350" y="216" text-anchor="middle" fill="#818cf8" font-size="9">d → r</text>
+    <rect x="420" y="170" width="100" height="60" rx="10" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/>
+    <text x="470" y="198" text-anchor="middle" fill="#c7d2fe" font-size="15" font-weight="800">B</text>
+    <text x="470" y="216" text-anchor="middle" fill="#818cf8" font-size="9">r → d</text>
+    <text x="410" y="252" text-anchor="middle" fill="#a5b4fc" font-size="11" font-weight="700">ΔW = B·A   (rank r ≪ d — the only trained weights ✏️)</text>
+
+    <!-- sum -->
+    <circle cx="650" cy="135" r="26" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+    <text x="650" y="142" text-anchor="middle" fill="#7dd3fc" font-size="22" font-weight="700">+</text>
+
+    <!-- output -->
+    <circle cx="820" cy="135" r="26" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+    <text x="820" y="130" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">h</text>
+    <text x="820" y="146" text-anchor="middle" fill="#64748b" font-size="9">output</text>
+
+    <!-- wires -->
+    <path d="M96,128 L300,75" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#ah2)"/>
+    <path d="M96,142 L300,195" fill="none" stroke="#818cf8" stroke-width="2" marker-end="url(#ah2)"/>
+    <path d="M400,200 L420,200" stroke="#818cf8" stroke-width="2" marker-end="url(#ah2)"/>
+    <path d="M520,75 L624,128" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#ah2)"/>
+    <path d="M520,200 L624,142" fill="none" stroke="#818cf8" stroke-width="2" marker-end="url(#ah2)"/>
+    <path d="M676,135 L794,135" stroke="#38bdf8" stroke-width="2" marker-end="url(#ah2)"/>
+    <text x="588" y="120" text-anchor="middle" fill="#94a3b8" font-size="11" font-style="italic">h = Wx + BAx</text>
+  </svg>
+  <div style="font-size:0.84em; color:#94a3b8; line-height:1.6; margin-top:6px; text-align:center;">The big matrix <strong style="color:#cbd5e1;">W</strong> never moves — so it can be quantized to 4-bit (that's the "Q" in QLoRA) and shared across every adapter. Only the slim <strong style="color:#c7d2fe;">A</strong> and <strong style="color:#c7d2fe;">B</strong> learn. At deploy time you fold <code>B·A</code> back into <code>W</code> (see <a href="#merging" style="color:#67e8f9;">Model Merging</a>) and the detour vanishes.</div>
+  </div>
   <div class="grid3">
 
     <div class="card">
@@ -1675,7 +1720,134 @@ model.<span class="fn">push_to_hub_merged</span>(<span class="st">"user/MyModel"
   </div>
   <p class="chapter-intro">Three knobs quietly decide the fate of an SFT run: <strong>which tokens carry the loss</strong>, <strong>which chat template wraps them</strong>, and <strong>what learning rate moves which weights</strong>. Get them wrong and the loss still goes down — you've just taught the wrong thing. Quick reference: <a href="cheatsheet_sft_trainer.html" style="color:#a5b4fc;">SFT Trainer cheatsheet</a> · <a href="cheatsheet_chat_templates_data.html" style="color:#a5b4fc;">Chat Templates cheatsheet</a>. <strong style="color:#a5b4fc;">🧪 Runnable:</strong> <code>scripts/05_sft.py</code> trains with completion-only loss and prints the unmasked fraction (measured 78–81%).</p>
 
+  <div style="margin:16px 0; padding:18px; background:#0a0f1a; border:1px solid #1e293b; border-radius:12px;">
+  <svg viewBox="0 0 900 210" width="100%" style="height:auto; font-family:system-ui,-apple-system,sans-serif;" role="img" aria-label="A tokenized chat sequence: the user prompt tokens are masked with -100 and excluded from loss, while the assistant answer tokens are graded.">
+    <text x="450" y="22" text-anchor="middle" fill="#94a3b8" font-size="13" font-weight="700" letter-spacing="1">COMPLETION-ONLY LOSS — WHICH TOKENS GET GRADED</text>
+
+    <!-- token strip -->
+    <g font-size="12" font-family="'Fira Mono',monospace" text-anchor="middle">
+      <!-- masked prompt tokens -->
+      <rect x="20"  y="50" width="86" height="40" rx="6" fill="#1e293b" stroke="#475569"/><text x="63"  y="75" fill="#64748b">&lt;|user|&gt;</text>
+      <rect x="110" y="50" width="64" height="40" rx="6" fill="#1e293b" stroke="#475569"/><text x="142" y="75" fill="#64748b">What</text>
+      <rect x="178" y="50" width="46" height="40" rx="6" fill="#1e293b" stroke="#475569"/><text x="201" y="75" fill="#64748b">is</text>
+      <rect x="228" y="50" width="74" height="40" rx="6" fill="#1e293b" stroke="#475569"/><text x="265" y="75" fill="#64748b">LoRA?</text>
+      <rect x="306" y="50" width="104" height="40" rx="6" fill="#1e293b" stroke="#475569"/><text x="358" y="75" fill="#64748b">&lt;|assistant|&gt;</text>
+      <!-- graded answer tokens -->
+      <rect x="418" y="50" width="42" height="40" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/><text x="439" y="75" fill="#c7d2fe">A</text>
+      <rect x="464" y="50" width="66" height="40" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/><text x="497" y="75" fill="#c7d2fe">low-</text>
+      <rect x="534" y="50" width="66" height="40" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/><text x="567" y="75" fill="#c7d2fe">rank</text>
+      <rect x="604" y="50" width="86" height="40" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/><text x="647" y="75" fill="#c7d2fe">bypass</text>
+      <rect x="694" y="50" width="40" height="40" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/><text x="714" y="75" fill="#c7d2fe">.</text>
+      <rect x="738" y="50" width="92" height="40" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/><text x="784" y="75" fill="#c7d2fe">&lt;|end|&gt;</text>
+    </g>
+
+    <!-- labels row -->
+    <text x="215" y="120" text-anchor="middle" fill="#64748b" font-size="12" font-weight="700">label = -100  →  IGNORED 🚫</text>
+    <text x="623" y="120" text-anchor="middle" fill="#a5b4fc" font-size="12" font-weight="700">label = token id  →  LEARNED ✏️</text>
+    <line x1="20" y1="100" x2="410" y2="100" stroke="#475569" stroke-width="2"/>
+    <line x1="418" y1="100" x2="830" y2="100" stroke="#818cf8" stroke-width="2"/>
+
+    <!-- bottom explanation -->
+    <text x="450" y="160" text-anchor="middle" fill="#cbd5e1" font-size="13">The model still <tspan font-style="italic">reads</tspan> the whole sequence — attention is never masked here.</text>
+    <text x="450" y="182" text-anchor="middle" fill="#cbd5e1" font-size="13">We only refuse to <tspan font-weight="700" fill="#fff">grade</tspan> its predictions on the prompt, so it learns to <tspan font-weight="700" fill="#c7d2fe">answer</tspan>, not to <tspan font-style="italic">echo the question</tspan>.</text>
+  </svg>
+  </div>
+
   <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #4f46e5; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#a5b4fc;">The one idea behind all three knobs:</strong> a language model only ever learns to predict the next token — so "fine-tuning" is really just choosing <em>which</em> next-token predictions you grade it on. Masking is that choice made explicit: every masked token is a prediction you've decided not to grade. Completion-only SFT is you saying "I don't care if you can echo the user's question, only the answer that follows it." Mask the wrong span and you're grading the wrong exam — the loss still falls, it just falls on the wrong thing.<br><br>The cards below follow that thread end to end: the loss <em>modes</em> are the menu of grading schemes, the chat <em>template</em> physically marks the prompt/answer boundary the mask keys off, and the learning <em>rate</em> sets how hard each graded mistake shoves the weights. The last card is the ten-second check that proves you wired it up right — before you burn a GPU-hour discovering you didn't.</div>
+
+  <div class="card full" style="border-color:#4f46e5; margin:16px 0;">
+    <div class="card-title" style="background:#312e81; color:#c7d2fe;">✅ The three ways to mask loss in TRL — verified against <code>trl 0.24.0</code> / <code>transformers 5.5.0</code></div>
+    <div class="card-body">
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75; margin-bottom:10px;">There is <strong>no <code>masking=...</code> argument</strong>. In modern TRL you control what gets graded by <strong>the shape of your dataset</strong> plus one flag. Pick the row that matches your data — do not mix them up. <em>Every snippet below was run against the installed stack; the masked fractions are measured, not guessed.</em></div>
+
+<pre><span class="cm"># ════ WAY 1 — prompt/completion dataset → completion_only_loss (THE DEFAULT) ════</span>
+<span class="cm"># Dataset rows look like: {"prompt": "...", "completion": "..."}</span>
+<span class="cm"># TRL tokenizes prompt, tokenizes prompt+completion, and sets the prompt's</span>
+<span class="cm"># labels to -100. You do NOT touch the chat template yourself.</span>
+<span class="kw">from</span> trl <span class="kw">import</span> SFTTrainer, SFTConfig
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+ds = <span class="fn">load_dataset</span>(<span class="st">"trl-lib/kto-mix-14k"</span>, split=<span class="st">"train"</span>)   <span class="cm"># has prompt+completion</span>
+trainer = <span class="fn">SFTTrainer</span>(
+    model=<span class="st">"Qwen/Qwen2.5-0.5B-Instruct"</span>,
+    args=<span class="fn">SFTConfig</span>(completion_only_loss=<span class="kw">True</span>),  <span class="cm"># True is the DEFAULT for prompt/completion</span>
+    train_dataset=ds,
+)
+trainer.<span class="fn">train</span>()
+<span class="cm"># completion_only_loss=False would grade the prompt too (that's CPT-style, usually wrong for Q&amp;A)</span></pre>
+
+<pre><span class="cm"># ════ WAY 2 — conversational dataset → assistant_only_loss ════</span>
+<span class="cm"># Dataset rows look like: {"messages": [{"role":"user",...},{"role":"assistant",...}]}</span>
+<span class="cm"># Loss is computed ONLY on assistant turns (great for multi-turn chat).</span>
+args = <span class="fn">SFTConfig</span>(assistant_only_loss=<span class="kw">True</span>)
+<span class="cm"># ⚠️ REQUIRES the chat template to contain {% generation %} ... {% endgeneration %} markers.</span>
+<span class="cm"># TRL auto-patches known families (Qwen3, Llama-3, GPT-OSS). For others it will FAIL.</span></pre>
+
+      <div class="warn" style="margin:6px 0 12px;"><strong>Measured gotcha (this bit me — it's why your SFT can silently underperform):</strong> SmolLM2-135M-Instruct's stock template has <strong>no</strong> <code>{% generation %}</code> marker (<code>"generation" in tok.chat_template → False</code>), so <code>apply_chat_template(..., return_assistant_tokens_mask=True)</code> raises a <code>ValueError</code>. On such models, <strong>use WAY 1 (prompt/completion), not <code>assistant_only_loss</code></strong> — or supply a training template that has the markers.</div>
+
+<pre><span class="cm"># ════ WAY 3 — legacy collator (string-match the response prefix) ════</span>
+<span class="cm"># Older but explicit: mask everything before a literal response marker.</span>
+<span class="kw">from</span> trl <span class="kw">import</span> DataCollatorForCompletionOnlyLM
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer
+
+tok = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"facebook/opt-350m"</span>)
+collator = <span class="fn">DataCollatorForCompletionOnlyLM</span>(
+    response_template=<span class="st">"### Assistant:"</span>,        <span class="cm"># tokens before this → -100</span>
+    instruction_template=<span class="st">"### Human:"</span>,        <span class="cm"># (optional) for multi-turn</span>
+    tokenizer=tok,
+)
+<span class="cm"># Gotcha: context-sensitive tokenizers (Llama) encode "### Assistant:" differently</span>
+<span class="cm"># mid-text vs at line start. If masking fails, pass token IDs instead of the string:</span>
+ids = tok.<span class="fn">encode</span>(<span class="st">"\n### Assistant:"</span>, add_special_tokens=<span class="kw">False</span>)[<span class="nb">2</span>:]  <span class="cm"># drop the leading \n tokens</span></pre>
+    </div>
+  </div>
+
+  <div class="card full" style="border-color:#4f46e5; margin:16px 0;">
+    <div class="card-title" style="background:#312e81; color:#c7d2fe;">💬 How specifying a chat template loads it — the part that wrecked the last run</div>
+    <div class="card-body">
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75; margin-bottom:10px;">SFT only works if the template used in <strong>training</strong> is the one you use at <strong>inference</strong>. A <strong>base</strong> model usually has <em>no</em> chat template at all — train it as if it had one and your prompts won't match later, so the model looks broken. Modern TRL fixes this with one argument:</div>
+
+<pre><span class="cm"># Give a base model a chat template by pointing at a model that HAS one.</span>
+<span class="cm"># SFTTrainer copies that template onto your tokenizer AND aligns special tokens</span>
+<span class="cm"># (e.g. EOS) automatically — verified present in SFTConfig on trl 0.24.0.</span>
+trainer = <span class="fn">SFTTrainer</span>(
+    model=<span class="st">"Qwen/Qwen3-0.6B-Base"</span>,                  <span class="cm"># a BASE model, no template</span>
+    args=<span class="fn">SFTConfig</span>(
+        output_dir=<span class="st">"Qwen3-0.6B-Instruct"</span>,
+        chat_template_path=<span class="st">"HuggingFaceTB/SmolLM3-3B"</span>,  <span class="cm"># borrow this model's template</span>
+    ),
+    train_dataset=<span class="fn">load_dataset</span>(<span class="st">"trl-lib/Capybara"</span>, split=<span class="st">"train"</span>),
+)
+trainer.<span class="fn">train</span>()</pre>
+
+      <div class="tip" style="margin:8px 0;"><strong>If the base model already HAS a template</strong> (e.g. Qwen2.5), don't clone one — just make sure the EOS token matches it, or generations won't stop:
+<pre style="margin-top:6px;"><span class="fn">SFTConfig</span>(eos_token=<span class="st">"&lt;|im_end|&gt;"</span>)   <span class="cm"># align EOS with the template, per HF docs</span></pre></div>
+
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75;"><strong>And when you give SFTTrainer a conversational dataset, it applies the chat template for you</strong> — do <em>not</em> pre-render it into a <code>"text"</code> field and <em>also</em> let the trainer template it, or you double-wrap the special tokens (a classic cause of "my SFT was worse than CPT"). Render it yourself <em>only</em> if you pass plain <code>{"text": ...}</code> rows.</div>
+    </div>
+  </div>
+
+  <div class="card full" style="border-color:#22c55e; margin:16px 0;">
+    <div class="card-title" style="background:#14532d; color:#bbf7d0;">🔬 Prove the mask landed — measured on SmolLM2-135M-Instruct just now</div>
+    <div class="card-body">
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75; margin-bottom:8px;">Reproducing exactly what WAY 1 does to one prompt/completion row, then printing which tokens survive masking:</div>
+<pre><span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer
+tok = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"HuggingFaceTB/SmolLM2-135M-Instruct"</span>)
+prompt     = [{<span class="st">"role"</span>:<span class="st">"user"</span>,      <span class="st">"content"</span>:<span class="st">"What is LoRA?"</span>}]
+completion = [{<span class="st">"role"</span>:<span class="st">"assistant"</span>, <span class="st">"content"</span>:<span class="st">"A low-rank bypass."</span>}]
+
+p = tok.<span class="fn">apply_chat_template</span>(prompt, tokenize=<span class="kw">False</span>, add_generation_prompt=<span class="kw">True</span>)
+f = tok.<span class="fn">apply_chat_template</span>(prompt+completion, tokenize=<span class="kw">False</span>)
+p_ids, f_ids = tok(p).input_ids, tok(f).input_ids
+labels = [-<span class="nb">100</span>]*<span class="fn">len</span>(p_ids) + f_ids[<span class="fn">len</span>(p_ids):]   <span class="cm"># what completion_only_loss does</span>
+
+learned = [tok.<span class="fn">decode</span>([i]) <span class="kw">for</span> i,l <span class="kw">in</span> <span class="fn">zip</span>(f_ids, labels) <span class="kw">if</span> l != -<span class="nb">100</span>]
+<span class="cm"># MEASURED OUTPUT:</span>
+<span class="cm">#   total tokens : 49     masked(-100): 38     learned: 11   (frac learned 0.22)</span>
+<span class="cm">#   LEARNED TEXT : 'A low-rank bypass.&lt;|im_end|&gt;\n'   ← only the answer + stop token ✓</span></pre>
+      <div class="good" style="margin-top:8px;">The 11 learned tokens are exactly the assistant's answer and its <code>&lt;|im_end|&gt;</code>. The 38 prompt tokens are ignored. If your "learned" span included the question, your mask is wrong — fix it before training, not after.</div>
+    </div>
+  </div>
 
   <div class="grid2" style="gap:14px;">
     <div class="card" style="border-color:#4f46e5;">
