@@ -15,6 +15,7 @@ cd "$(dirname "$0")"
 
 # ── config ────────────────────────────────────────────────────────────────────
 export CASE_STUDY_MODE="${MODE:-full}"          # MODE=trial for a fast smoke test
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True   # reduce fragmentation (helps 3B on 12GB)
 HF="../.venv-rl/bin/python"                     # trl 1.x, bf16            (135M)
 US="../.venv/bin/python"                        # unsloth+trl0.24+bnb     (SmolLM3 QLoRA)
 ts() { date +%H:%M:%S; }
@@ -41,17 +42,28 @@ PY
 command -v ollama >/dev/null && echo "  ollama: $(command -v ollama)" || echo "  ollama: not found (Part B deploy/edge/tool sections will skip)"
 echo
 
-# ── run one section ──────────────────────────────────────────────────────────
+# ── run one section (streams output LIVE to console + log file) ───────────────
 run() {  # run <id> <logname> <python> <script> [args...]
-  local id="$1" log="$LOGDIR/$2"; shift 2
+  local id="$1" logname="$2" log="$LOGDIR/$2"; shift 2
   if [ "$SECSET" = "1" ] && ! grep -qw "$id" <<<"$SECTIONS"; then return; fi
-  printf '\033[1;33m[%s] ▶ §%s  %s\033[0m\n' "$(ts)" "$id" "$(basename "$2" .log 2>/dev/null || echo "$2")"
+  echo
+  printf '\033[1;33m┌─[%s] §%s START  %s\033[0m\n' "$(ts)" "$id" "$logname"
+  printf '\033[0;33m│  cmd: %s   (live log: case_study/%s)\033[0m\n' "$*" "$log"
+  printf '\033[0;33m│  gpu: %s\033[0m\n' "$(nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null | head -1)"
+  printf '\033[1;33m└────────────────────────────────────────────────────────────\033[0m\n'
   local t0=$SECONDS
-  "$@" >"$log" 2>&1; local rc=$?
+  # Stream output LIVE to console + log. stdbuf line-buffers; PYTHONUNBUFFERED flushes prints/bars.
+  # If `ts` (moreutils) is present we prefix each line with a clock; otherwise stream as-is.
+  export PYTHONUNBUFFERED=1
+  if command -v ts >/dev/null 2>&1; then
+    stdbuf -oL -eL "$@" 2>&1 | stdbuf -oL -eL ts '   %H:%M:%S│' | tee "$log"
+  else
+    stdbuf -oL -eL "$@" 2>&1 | tee "$log"
+  fi
+  local rc=${PIPESTATUS[0]}
   local dt=$((SECONDS - t0))
-  if [ $rc -eq 0 ]; then printf '\033[1;32m[%s] ✓ §%s done in %ds\033[0m\n' "$(ts)" "$id" "$dt"
-  else printf '\033[1;31m[%s] ✗ §%s FAILED (exit %d) in %ds — see %s\033[0m\n' "$(ts)" "$id" "$rc" "$dt" "$log"; fi
-  tail -n 2 "$log" | sed 's/^/      /'
+  if [ "$rc" -eq 0 ]; then printf '\033[1;32m[%s] ✓ §%s DONE in %ds\033[0m\n' "$(ts)" "$id" "$dt"
+  else printf '\033[1;31m[%s] ✗ §%s FAILED (exit %s) in %ds — full log: case_study/%s\033[0m\n' "$(ts)" "$id" "$rc" "$dt" "$log"; fi
 }
 
 # ── the pipeline ────────────────────────────────────────────────────────────────

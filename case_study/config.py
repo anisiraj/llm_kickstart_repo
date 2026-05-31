@@ -206,6 +206,14 @@ SFT_SWEEP_SIZES = [4, 8, 16, 24]  # train-set sizes (FULL); TRIAL uses a subset 
 REPLAY_FRACTION = 0.10            # general-data rehearsal to mitigate forgetting
 QUANT = "Q4_K_M"                  # GGUF quantization target
 
+# Memory profile: a 3B model in 4-bit on a 12GB GPU needs smaller batch + sequence + gradient
+# checkpointing (the 135M is comfortable at the defaults above). Applied at import for the run.sh
+# path (CASE_STUDY_MODEL set before import). GRAD_CKPT flags the manual-Trainer sections (§3-hf/§4).
+GRAD_CKPT = bool(LOAD_IN_4BIT)
+if LOAD_IN_4BIT:
+    CPT.update(batch_size=1, grad_accum=8, max_seq_len=512)
+    SFT.update(batch_size=1, grad_accum=4, max_seq_len=512)
+
 if __name__ == "__main__":
     import json
     print("Env:", json.dumps(record_env(), indent=2))

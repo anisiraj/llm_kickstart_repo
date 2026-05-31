@@ -108,6 +108,8 @@ def run_one(model_name: str, tag: str, is_instruct: bool, domain_texts, general_
         per_device_train_batch_size=config.CPT["batch_size"],
         gradient_accumulation_steps=config.CPT["grad_accum"],
         num_train_epochs=1, max_steps=lim["cpt_max_steps"], learning_rate=config.CPT["lr"],
+        gradient_checkpointing=config.GRAD_CKPT,           # essential for a 3B in 4-bit on 12GB
+        gradient_checkpointing_kwargs={"use_reentrant": False} if config.GRAD_CKPT else None,
         bf16=(device == "cuda"), logging_steps=5, save_strategy="no", report_to=[], seed=config.SEED)
     Trainer(model=model, args=targs, train_dataset=ds, optimizers=(opt, None)).train()
 

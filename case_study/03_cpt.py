@@ -197,6 +197,8 @@ def _cpt_hf(force: bool = False) -> dict:
         gradient_accumulation_steps=config.CPT["grad_accum"],
         num_train_epochs=config.CPT["epochs"] if lim["cpt_max_steps"] < 0 else 1,
         max_steps=lim["cpt_max_steps"], learning_rate=config.CPT["lr"],
+        gradient_checkpointing=config.GRAD_CKPT,
+        gradient_checkpointing_kwargs={"use_reentrant": False} if config.GRAD_CKPT else None,
         bf16=(device == "cuda"), logging_steps=2, save_strategy="no",
         report_to=[], seed=config.SEED,
     )
