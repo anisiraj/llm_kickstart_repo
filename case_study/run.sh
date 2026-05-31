@@ -53,13 +53,8 @@ run() {  # run <id> <logname> <python> <script> [args...]
   printf '\033[1;33m└────────────────────────────────────────────────────────────\033[0m\n'
   local t0=$SECONDS
   # Stream output LIVE to console + log. stdbuf line-buffers; PYTHONUNBUFFERED flushes prints/bars.
-  # If `ts` (moreutils) is present we prefix each line with a clock; otherwise stream as-is.
   export PYTHONUNBUFFERED=1
-  if command -v ts >/dev/null 2>&1; then
-    stdbuf -oL -eL "$@" 2>&1 | stdbuf -oL -eL ts '   %H:%M:%S│' | tee "$log"
-  else
-    stdbuf -oL -eL "$@" 2>&1 | tee "$log"
-  fi
+  stdbuf -oL -eL "$@" 2>&1 | tee "$log"
   local rc=${PIPESTATUS[0]}
   local dt=$((SECONDS - t0))
   if [ "$rc" -eq 0 ]; then printf '\033[1;32m[%s] ✓ §%s DONE in %ds\033[0m\n' "$(ts)" "$id" "$dt"
