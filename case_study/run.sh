@@ -40,6 +40,15 @@ print(f"  torch {torch.__version__} | cuda={torch.cuda.is_available()}"
       f" {torch.cuda.get_device_name(0) if torch.cuda.is_available() else ''}")
 PY
 command -v ollama >/dev/null && echo "  ollama: $(command -v ollama)" || echo "  ollama: not found (Part B deploy/edge/tool sections will skip)"
+# Go OFFLINE for HF if the model family is already cached. transformers 5.5's tokenizer loader
+# phones home (model_info() via _patch_mistral_regex) even for cached models — a flaky network
+# then crashes a section on a mere tokenizer load. Offline uses the cache and skips that call.
+# (Wikipedia §1 and Ollama pulls use their own HTTP, unaffected by HF_HUB_OFFLINE.)
+case "$MODEL" in
+  smollm3) _cache="$HOME/.cache/huggingface/hub/models--HuggingFaceTB--SmolLM3-3B" ;;
+  *)       _cache="$HOME/.cache/huggingface/hub/models--HuggingFaceTB--SmolLM2-135M" ;;
+esac
+if [ -d "$_cache" ]; then export HF_HUB_OFFLINE=1; echo "  HF cache present -> HF_HUB_OFFLINE=1 (no phone-home)"; else echo "  (first run: HF online for downloads)"; fi
 echo
 
 # ── run one section (streams output LIVE to console + log file) ───────────────
