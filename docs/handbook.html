@@ -206,6 +206,86 @@
 </div>
 
 <!-- ══════════════════ CHAPTER 1: PYTORCH ══════════════════ -->
+<!-- ══════════════════ ORIENTATION (Part 0) ══════════════════ -->
+<div class="chapter" id="orientation" style="background:#070b14; border-top:2px solid #38bdf8;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0ea5e9;">🗺️</div>
+    <div><div class="chapter-title">Start Here — The Map</div><div class="chapter-subtitle">One pipeline, eight stages — every chapter in this book is one box on this map</div></div>
+  </div>
+
+  <p class="chapter-intro">Before the first line of code, it helps to see the whole road. Fine-tuning isn't one technique — it's a <strong>pipeline</strong>: take raw knowledge, teach a base model your domain, shape it to follow instructions, prove it actually improved, then shrink it down and ship it. Almost every confusing question — <em>"do I need CPT or SFT?"</em>, <em>"when do I merge?"</em>, <em>"why is my model bigger now?"</em> — dissolves the moment you know <strong>which box you're standing in</strong>.</p>
+
+  <div style="margin:16px 0; padding:18px; background:#0a0f1a; border:1px solid #1e293b; border-radius:12px;">
+  <svg viewBox="0 0 920 300" width="100%" style="height:auto; font-family:system-ui,-apple-system,sans-serif;" role="img" aria-label="The fine-tuning pipeline: raw text, CPT, SFT, align, then evaluate, merge, quantize, deploy.">
+    <defs>
+      <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/></marker>
+    </defs>
+    <text x="460" y="22" text-anchor="middle" fill="#94a3b8" font-size="13" font-weight="700" letter-spacing="2">THE FINE-TUNING PIPELINE</text>
+
+    <!-- Row 1: TRAIN -->
+    <text x="18" y="44" fill="#475569" font-size="11" font-weight="700" letter-spacing="1">① TRAIN</text>
+    <g>
+      <rect x="18"  y="52" width="194" height="66" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+      <text x="115" y="82"  text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">RAW DOMAIN TEXT</text>
+      <text x="115" y="102" text-anchor="middle" fill="#38bdf8" font-size="11">your corpus · wiki · docs</text>
+      <text x="115" y="136" text-anchor="middle" fill="#475569" font-size="10">where it starts</text>
+
+      <rect x="248" y="52" width="194" height="66" rx="10" fill="#0f172a" stroke="#f59e0b" stroke-width="2"/>
+      <text x="345" y="80"  text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">CPT</text>
+      <text x="345" y="100" text-anchor="middle" fill="#f59e0b" font-size="11">continued pretrain</text>
+      <text x="345" y="136" text-anchor="middle" fill="#475569" font-size="10">teach the domain</text>
+
+      <rect x="478" y="52" width="194" height="66" rx="10" fill="#0f172a" stroke="#6366f1" stroke-width="2"/>
+      <text x="575" y="80"  text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">SFT</text>
+      <text x="575" y="100" text-anchor="middle" fill="#a5b4fc" font-size="11">instruction tune</text>
+      <text x="575" y="136" text-anchor="middle" fill="#475569" font-size="10">teach the format</text>
+
+      <rect x="708" y="52" width="194" height="66" rx="10" fill="#0f172a" stroke="#a855f7" stroke-width="2"/>
+      <text x="805" y="80"  text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">ALIGN</text>
+      <text x="805" y="100" text-anchor="middle" fill="#c4b5fd" font-size="11">DPO · ORPO · GRPO</text>
+      <text x="805" y="136" text-anchor="middle" fill="#475569" font-size="10">teach the taste</text>
+    </g>
+    <line x1="212" y1="85" x2="246" y2="85" stroke="#64748b" stroke-width="2" marker-end="url(#ah)"/>
+    <line x1="442" y1="85" x2="476" y2="85" stroke="#64748b" stroke-width="2" marker-end="url(#ah)"/>
+    <line x1="672" y1="85" x2="706" y2="85" stroke="#64748b" stroke-width="2" marker-end="url(#ah)"/>
+
+    <!-- wrap connector -->
+    <path d="M805,118 L805,158 L115,158 L115,196" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#ah)"/>
+    <text x="460" y="152" text-anchor="middle" fill="#64748b" font-size="11" font-style="italic">trained ✓ — now prove it &amp; ship it</text>
+
+    <!-- Row 2: SHIP -->
+    <text x="18" y="190" fill="#475569" font-size="11" font-weight="700" letter-spacing="1">② SHIP</text>
+    <g>
+      <rect x="18"  y="200" width="194" height="66" rx="10" fill="#0f172a" stroke="#14b8a6" stroke-width="2"/>
+      <text x="115" y="228" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">EVALUATE</text>
+      <text x="115" y="248" text-anchor="middle" fill="#5eead4" font-size="11">did it actually work?</text>
+      <text x="115" y="284" text-anchor="middle" fill="#475569" font-size="10">+ check forgetting</text>
+
+      <rect x="248" y="200" width="194" height="66" rx="10" fill="#0f172a" stroke="#0891b2" stroke-width="2"/>
+      <text x="345" y="228" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">MERGE</text>
+      <text x="345" y="248" text-anchor="middle" fill="#67e8f9" font-size="11">adapter → base</text>
+      <text x="345" y="284" text-anchor="middle" fill="#475569" font-size="10">one clean model</text>
+
+      <rect x="478" y="200" width="194" height="66" rx="10" fill="#0f172a" stroke="#c2410c" stroke-width="2"/>
+      <text x="575" y="228" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">QUANTIZE</text>
+      <text x="575" y="248" text-anchor="middle" fill="#fdba74" font-size="11">NF4 · GGUF Q4</text>
+      <text x="575" y="284" text-anchor="middle" fill="#475569" font-size="10">shrink to fit</text>
+
+      <rect x="708" y="200" width="194" height="66" rx="10" fill="#0f172a" stroke="#16a34a" stroke-width="2"/>
+      <text x="805" y="228" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">DEPLOY</text>
+      <text x="805" y="248" text-anchor="middle" fill="#86efac" font-size="11">edge · cloud</text>
+      <text x="805" y="284" text-anchor="middle" fill="#475569" font-size="10">it runs</text>
+    </g>
+    <line x1="212" y1="233" x2="246" y2="233" stroke="#64748b" stroke-width="2" marker-end="url(#ah)"/>
+    <line x1="442" y1="233" x2="476" y2="233" stroke="#64748b" stroke-width="2" marker-end="url(#ah)"/>
+    <line x1="672" y1="233" x2="706" y2="233" stroke="#64748b" stroke-width="2" marker-end="url(#ah)"/>
+  </svg>
+  </div>
+
+  <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #38bdf8; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#7dd3fc;">How to read this book:</strong> the chapters follow this map roughly left-to-right, top-to-bottom. You rarely run all eight stages — a quick task might be just <em>SFT → Evaluate → Deploy</em>; a from-scratch domain model walks the whole path. Two boxes are optional and skipped more often than not: <em>CPT</em> (only when you have a lot of raw domain text) and <em>Align</em> (only when format and taste matter more than facts).<br><br>And we won't keep it abstract. We'll build <strong>one real example end-to-end — a computational-chemistry model small enough to run on a laptop</strong> — and return to it at every stage. So when a later chapter says <em>"remember our chem model,"</em> this map is the journey it's talking about.</div>
+</div>
+
+<!-- ══════════════════ CHAPTER 1: PYTORCH ══════════════════ -->
 <div class="chapter c-pytorch" id="pytorch">
   <div class="chapter-header">
     <div class="chapter-num">1</div>
@@ -557,11 +637,12 @@ out = trainer.<span class="fn">predict</span>(test_ds)      <span class="cm"># o
     <div class="card-title">🧮 LoRA vs QLoRA vs Full FT — and how to prove it</div>
     <div class="card-body">
       <table>
-        <tr><th>Method</th><th>VRAM (8B)</th><th>Speed</th><th>When to use</th></tr>
-        <tr><td>Full FT</td><td>80GB+</td><td>Fastest</td><td>Many GPUs, max quality</td></tr>
-        <tr><td>LoRA</td><td>~14GB</td><td>Fast</td><td>1× A100, good quality</td></tr>
-        <tr><td>QLoRA</td><td>~5.5GB</td><td>~39% slower</td><td>Single consumer GPU / Colab</td></tr>
+        <tr><th>Method</th><th>VRAM (8B)</th><th>Throughput*</th><th>When to use</th></tr>
+        <tr><td>Full FT</td><td>80GB+</td><td>Highest per-step*</td><td>Multi-GPU (FSDP) — won't fit one card</td></tr>
+        <tr><td>LoRA</td><td>~16–24GB</td><td>≈ Full FT (±adapter)</td><td>1× A100 / A6000, great quality</td></tr>
+        <tr><td>QLoRA</td><td>~5.5GB</td><td>~39% slower than LoRA</td><td>Single consumer GPU / Colab</td></tr>
       </table>
+      <div class="tip" style="margin-top:8px;"><strong>*A word on "speed":</strong> throughput is only comparable where a method actually <em>fits</em>. Full FT has the highest per-step throughput when memory isn't the bottleneck (no adapter matmuls, no 4-bit dequant) — but an 8B full fine-tune needs ~80–100&nbsp;GB, so on one GPU it doesn't run at all, and sharded across many GPUs the communication overhead often makes <em>wall-clock</em> slower than a single-GPU LoRA run. On the same GPU where both fit, LoRA lands roughly level with Full FT — so the real win of LoRA/QLoRA isn't raw speed, it's <strong>memory and accessibility</strong>.</div>
       <p style="font-size:.82em; color:#cbd5e1; line-height:1.7; margin-top:8px;">
         These aren't magic numbers. <code style="color:#60a5fa; font-family:'Fira Mono';">15_lora_footprint.py</code>
         counts the trainable parameters straight from Llama-3.1-8B's layer dimensions —
@@ -2299,6 +2380,8 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
   </div>
   <p class="chapter-intro">Three knobs quietly decide the fate of an SFT run: <strong>which tokens carry the loss</strong>, <strong>which chat template wraps them</strong>, and <strong>what learning rate moves which weights</strong>. Get them wrong and the loss still goes down — you've just taught the wrong thing. Quick reference: <a href="cheatsheet_sft_trainer.html" style="color:#a5b4fc;">SFT Trainer cheatsheet</a> · <a href="cheatsheet_chat_templates_data.html" style="color:#a5b4fc;">Chat Templates cheatsheet</a>. <strong style="color:#a5b4fc;">🧪 Runnable:</strong> <code>scripts/05_sft.py</code> trains with completion-only loss and prints the unmasked fraction (measured 78–81%).</p>
 
+  <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #4f46e5; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#a5b4fc;">The one idea behind all three knobs:</strong> a language model only ever learns to predict the next token — so "fine-tuning" is really just choosing <em>which</em> next-token predictions you grade it on. Masking is that choice made explicit: every masked token is a prediction you've decided not to grade. Completion-only SFT is you saying "I don't care if you can echo the user's question, only the answer that follows it." Mask the wrong span and you're grading the wrong exam — the loss still falls, it just falls on the wrong thing.<br><br>The cards below follow that thread end to end: the loss <em>modes</em> are the menu of grading schemes, the chat <em>template</em> physically marks the prompt/answer boundary the mask keys off, and the learning <em>rate</em> sets how hard each graded mistake shoves the weights. The last card is the ten-second check that proves you wired it up right — before you burn a GPU-hour discovering you didn't.</div>
+
   <div class="grid2" style="gap:14px;">
     <div class="card" style="border-color:#4f46e5;">
       <div class="card-title" style="background:#312e81; color:#c7d2fe;">🎯 The 3 loss modes</div>
@@ -2359,6 +2442,8 @@ text = tok.<span class="fn">apply_chat_template</span>(msgs, tokenize=<span clas
   </div>
   <p class="chapter-intro">Adding tokens and training embeddings is powerful and easy to get wrong. The honest default is <strong>you probably don't need new tokens</strong> — and when you do, there's an exact ritual. Reference: <a href="cheatsheet_chat_templates_data.html" style="color:#c4b5fd;">Chat Templates &amp; Data Prep cheatsheet</a>. <strong style="color:#c4b5fd;">🧪 Runnable:</strong> <code>scripts/18_token_surgery.py</code> verifies every step on SmolLM2-135M — measured: LaTeX→11 tokens, JSON→9 (no surgery needed), and a new token's embedding row lands <strong>0.0001</strong> from the pretrained mean (vs 2.36 average spread).</p>
 
+  <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #7c3aed; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#c4b5fd;">Start from the default: you almost certainly don't need new tokens.</strong> A tokenizer is just a compression scheme, and BPE already compresses anything built from ASCII — a LaTeX equation or a JSON blob becomes a handful of ordinary sub-word tokens the model has seen billions of times. A brand-new token does the opposite of what you'd hope: it starts life as a random vector sitting in a hole, while every other token rests on a carefully learned manifold. Until you train that row, it's noise.<br><br>That's the ritual these cards walk: first prove you need tokens at all, then add them <em>seated on the existing manifold</em> rather than at random, and only then decide whether to actually train those embedding rows — knowing it's the single most expensive thing you can bolt onto a LoRA run. The last card is the bill that arrives when you skip the first question.</div>
+
   <div class="grid2" style="gap:14px;">
     <div class="card" style="border-color:#7c3aed;">
       <div class="card-title" style="background:#3b0764; color:#e9d5ff;">🧪 First: do you even need them?</div>
@@ -2413,6 +2498,8 @@ embedding_learning_rate = <span class="nb">5e-6</span>   <span class="cm"># &lt;
   </div>
   <p class="chapter-intro">TRL+Transformers is the flexible standard; Unsloth is the fast single-GPU specialist with hand-written kernels. They produce the same kind of adapter — the differences are speed, memory, model coverage, and a couple of sharp edges. References: <a href="cheatsheet_unsloth_lora.html" style="color:#fcd34d;">Unsloth cheatsheet</a> · <a href="cheatsheet_sft_trainer.html" style="color:#fcd34d;">SFT Trainer cheatsheet</a>. <strong style="color:#fcd34d;">🧪 Runnable:</strong> <code>scripts/03_cpt.py</code> runs the same CPT both ways (<code>--backend hf</code> / <code>--backend unsloth</code>); <code>scripts/08_unsloth_vs_hf.py</code> benchmarks them head-to-head.</p>
 
+  <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #b45309; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#fcd34d;">Both roads end at the same place</strong> — a LoRA adapter you can merge and ship — so the choice isn't about the result, it's about the journey. TRL + Transformers is the standard-issue toolkit: every architecture, multi-GPU, every method (DPO/ORPO/GRPO), at the cost of leaving performance on the table. Unsloth is the tuned race car: hand-written CUDA kernels make the same fine-tune run ~2× faster in ~60% less memory — but on a single GPU, and only on architectures they've patched.<br><br>So the decision is short: one consumer GPU and a supported model → take the race car; many GPUs, an exotic architecture, or preference tuning → take the toolkit. The catch is the race car's sharp edges — and the gotchas card exists because every bullet in it is a debugging session someone already paid for.</div>
+
   <div class="grid2" style="gap:14px;">
     <div class="card" style="border-color:#b45309;">
       <div class="card-title" style="background:#713f12; color:#fde68a;">⚖️ Side by side</div>
@@ -2460,6 +2547,8 @@ embedding_learning_rate = <span class="nb">5e-6</span>   <span class="cm"># &lt;
     <div><div class="chapter-title">Synthetic Data Generation</div><div class="chapter-subtitle">Beat the ~99× data-scarcity gap without hand-writing thousands of pairs</div></div>
   </div>
   <p class="chapter-intro">Raw text is free; instruction pairs are not (the case study hit a ~99× gap). Synthesis closes it — an LLM writes training data for you — but the quality control is the real work. Reference: <a href="cheatsheet_datagen_merge_hf.html" style="color:#86efac;">Data Gen · Merge · HF cheatsheet</a>. <strong style="color:#86efac;">🧪 Runnable:</strong> <code>scripts/19_synth_data.py</code> distills pairs from a local Ollama teacher (the chem-tuned SmolLM3 we deployed) and runs this exact QC — tested end-to-end, generating real domain Q&amp;A and dropping leaks/dupes/short ones.</p>
+
+  <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #15803d; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#86efac;">The uncomfortable arithmetic:</strong> raw domain text is everywhere, labelled instruction pairs are nowhere — in the case study the gap was ~99×. You can hand-write a few hundred pairs; you can't hand-write ten thousand. Synthetic data is the escape hatch — you let a stronger model write the examples — and the trap is thinking the <em>generation</em> is the hard part. It isn't; calling an LLM in a loop is trivial. The hard part, the part that decides whether your fine-tune learns or rots, is the quality control after.<br><br>The cards run cheapest-to-most-careful: distillation (a strong teacher answers questions mined from your own corpus), self-instruct (grow a tiny seed set into a diverse one), then the non-negotiable QC stage — because synthetic data faithfully inherits the teacher's mistakes and mannerisms. The number worth memorizing: 200 clean pairs beat 5,000 noisy ones for a small model.</div>
 
   <div class="grid2" style="gap:14px;">
     <div class="card" style="border-color:#15803d;">
@@ -2521,6 +2610,8 @@ embedding_learning_rate = <span class="nb">5e-6</span>   <span class="cm"># &lt;
   </div>
   <p class="chapter-intro">Fine-tuning can quietly erode general ability while it learns your domain. The good news: with LoRA it's rare, and it's trivial to <em>measure</em> so you never ship it blind. Seen in the <a href="handbook.html#casestudy" style="color:#5eead4;">🧪 Case Study</a> (we checked, and didn't forget). <strong style="color:#5eead4;">🧪 Runnable:</strong> <code>scripts/04_cpt_base_vs_instruct.py</code> measures domain vs general perplexity before/after CPT.</p>
 
+  <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #0d9488; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#5eead4;">It sounds dramatic, and for full fine-tuning it can be</strong> — push a model hard on a narrow domain and it starts failing arithmetic it used to ace, because every weight is free to drift toward your data and away from everything it knew. The reassuring news: LoRA has forgetting nearly designed out of it. The base weights are frozen, so the original model is still physically present under the adapter — pop the adapter off and you have it back, bit for bit.<br><br>That reframes the topic from "how do I prevent a disaster" to "how do I notice a small one" — and noticing is cheap. Hold out a little general text, measure its perplexity before and after, watch whether it rises. The cards are exactly that loop: detect with one number, understand why LoRA gives you a net, and reach for mitigations (fewer epochs, a little replay, a modest rank) only if the number actually moves. The cardinal sin isn't forgetting — it's shipping a model that forgot without ever checking.</div>
+
   <div class="grid2" style="gap:14px;">
     <div class="card" style="border-color:#0d9488;">
       <div class="card-title" style="background:#134e4a; color:#99f6e4;">🔬 Detect it (cheap)</div>
@@ -2564,6 +2655,8 @@ gen_after  = <span class="fn">perplexity</span>(model1, tok, general_text)
     <div><div class="chapter-title">Model Merging / Fusing</div><div class="chapter-subtitle">Combine several fine-tunes into one model — with zero extra training</div></div>
   </div>
   <p class="chapter-intro">Merging averages weights in clever ways so one model inherits several specialists' skills — no GPUs, no training. The models must share the same base/architecture. Reference: <a href="cheatsheet_datagen_merge_hf.html" style="color:#67e8f9;">Data Gen · Merge · HF cheatsheet</a>. <strong style="color:#67e8f9;">🧪 Runnable:</strong> <code>scripts/20_merge_models.py</code> runs these merges on real SmolLM2-135M tensors — measured: from the base, Linear moves <strong>50%</strong> of the task vector, TIES <strong>83%</strong>, DARE <strong>141%</strong>, and the merged checkpoint reloads + generates correctly.</p>
+
+  <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #0891b2; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#67e8f9;">The closest thing fine-tuning has to a free lunch:</strong> take two models that already exist and produce a third that blends their skills, using nothing but arithmetic on their weights — no GPUs, no training, seconds of compute. It works because of a quietly profound fact: the <em>change</em> a fine-tune makes (tuned weights minus base) behaves like a portable skill vector you can scale, add, or average — as long as everyone started from the same base.<br><br>The cards go from the naive version to the robust one. Plain averaging (a "model soup") is the baseline and is surprisingly strong; trouble starts when two skill-vectors disagree on a weight and cancel out. TIES and DARE are the standard fixes for that interference, and mergekit runs them all from a short config. The measured numbers here — how far each method moves a real SmolLM2 checkpoint along its task vector — are in because merging sounds like magic until you watch it move real tensors.</div>
 
   <div class="grid2" style="gap:14px;">
     <div class="card" style="border-color:#0891b2;">
@@ -2617,6 +2710,8 @@ dtype: bfloat16
     <div><div class="chapter-title">Quantization Internals</div><div class="chapter-subtitle">4-bit for training (QLoRA) and for deploy (GGUF) — and where it breaks</div></div>
   </div>
   <p class="chapter-intro">Quantization shows up twice: <strong>NF4</strong> to <em>train</em> a big model on one GPU (QLoRA), and <strong>GGUF Q-levels</strong> to <em>ship</em> it small. Same idea (fewer bits per weight), different stage. Reference: <a href="cheatsheet_deployment.html" style="color:#fdba74;">Deployment cheatsheet</a>. <strong style="color:#fdba74;">🧪 Runnable:</strong> the NF4 config lives in <code>scripts/utils.py</code>; <code>scripts/09_merge_and_gguf.py</code> + <code>11_edge_benchmark.py</code> produce the GGUF and measure the footprints quoted here (1.9 GB / 0.69 GB).</p>
+
+  <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #c2410c; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#fdba74;">Quantization is what stands between "this 8B wants 16 GB" and "this 8B runs on my laptop."</strong> The mechanism is mundane — store each weight in 4 bits instead of 16 — but the question beginners skip is the good one: <em>why does the model still work afterward?</em> Because a trained network is hugely redundant; no single weight means much, so coarse approximations produce tiny, roughly-independent errors that wash out across a layer. The whole art is the exception — a few outlier weights that carry far more than their share, which every scheme is really a strategy for protecting.<br><br>That's the lens for the cards: you'll meet the same idea at two stages — NF4 to <em>train</em> a big model on one GPU (the "Q" in QLoRA) and GGUF's Q-levels to <em>ship</em> it small — and see why the granularity of the scale decides quality, and why small models quantize worse than large ones. The footprints here are weighed on real checkpoints, because the only honest way to know if Q4 is good enough for <em>your</em> model is to weigh it and test it.</div>
 
   <div class="grid2" style="gap:14px;">
     <div class="card" style="border-color:#c2410c;">
