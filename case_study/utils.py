@@ -70,6 +70,43 @@ def build_sft_model(model_name: str):
     return model, tok
 
 
+import math
+import re
+
+_STOP = {"the", "a", "an", "of", "is", "are", "to", "and", "in", "for", "that", "with",
+         "as", "by", "it", "on", "or", "be", "this", "from", "which", "its", "into"}
+
+
+def content_words(s: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]+", s.lower()) if len(w) > 3 and w not in _STOP}
+
+
+def keyword_recall(gold: str, gen: str) -> float:
+    """Fraction of the gold answer's content words that appear in the generation (format-robust)."""
+    g = content_words(gold)
+    return len(g & content_words(gen)) / len(g) if g else 0.0
+
+
+@torch.no_grad()
+def completion_perplexity(model, tok, pairs: list[dict], device) -> float:
+    """Mean perplexity of the gold completions given their prompts (prompt tokens masked).
+
+    Mirrors the SFT objective (loss on answer tokens only); same formatting for every condition.
+    Shared by §6 and §7 (lives here to avoid a circular import between them).
+    """
+    model.eval()
+    total_loss, total_tok = 0.0, 0
+    for p in pairs:
+        p_ids = tok(p["prompt"], add_special_tokens=False)["input_ids"]
+        c_ids = tok(" " + p["completion"], add_special_tokens=False)["input_ids"] + [tok.eos_token_id]
+        ids = torch.tensor([p_ids + c_ids], device=device)
+        labels = torch.tensor([[-100] * len(p_ids) + c_ids], device=device)
+        loss = model(ids, labels=labels).loss.item()
+        total_loss += loss * len(c_ids)
+        total_tok += len(c_ids)
+    return math.exp(total_loss / max(total_tok, 1))
+
+
 def generate_samples(model, tokenizer, questions: list[str] | None = None, *,
                      max_new_tokens: int = 64, chat: bool = False, n: int | None = None,
                      title: str = "sample generations", quiet: bool = False) -> list[dict]:

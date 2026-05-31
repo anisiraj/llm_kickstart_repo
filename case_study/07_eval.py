@@ -40,24 +40,13 @@ def _sib(fname: str, name: str):
 
 _CPT = _sib("03_cpt.py", "cpt_for_07")    # load_corpus_texts, pack_blocks, perplexity
 _S5 = _sib("05_sft.py", "s5_for_07")      # load_seed, run_sft
-_S6 = _sib("06_base_vs_instruct_sweep.py", "s6_for_07")  # completion_perplexity
-
-_STOP = {"the", "a", "an", "of", "is", "are", "to", "and", "in", "for", "that", "with",
-         "as", "by", "it", "on", "or", "be", "this", "from", "which", "its", "into"}
-
-
-def _content_words(s: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z]+", s.lower()) if len(w) > 3 and w not in _STOP}
-
-
-def keyword_recall(gold: str, gen: str) -> float:
-    g = _content_words(gold)
-    return len(g & _content_words(gen)) / len(g) if g else 0.0
+# completion_perplexity + keyword_recall live in utils (shared with §6; avoids an import cycle)
+keyword_recall = utils.keyword_recall
 
 
 def scorecard(model, tok, test, domain_blocks, device, *, label: str) -> dict:
     dom_ppl = _CPT.perplexity(model, domain_blocks, device)
-    comp_ppl = _S6.completion_perplexity(model, tok, test, device)
+    comp_ppl = utils.completion_perplexity(model, tok, test, device)
     gens = utils.generate_samples(model, tok, [p["prompt"] for p in test], chat=False, quiet=True)
     recall = sum(keyword_recall(t["completion"], g["answer"]) for t, g in zip(test, gens)) / len(test)
     print(f"  [{label}] domain ppl {dom_ppl:.2f} | completion ppl {comp_ppl:.2f} | keyword recall {recall*100:.0f}%")

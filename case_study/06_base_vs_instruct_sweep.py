@@ -47,26 +47,7 @@ def _sib(fname: str, name: str):
 
 
 _S5 = _sib("05_sft.py", "s5_for_06")   # load_seed
-
-
-@torch.no_grad()
-def completion_perplexity(model, tok, pairs: list[dict], device) -> float:
-    """Mean perplexity of the gold completions given their prompts (prompt tokens masked).
-
-    Mirrors the SFT objective: loss only on the answer tokens. Same formatting for every condition,
-    so the comparison across (init, N) is apples-to-apples.
-    """
-    model.eval()
-    total_loss, total_tok = 0.0, 0
-    for p in pairs:
-        p_ids = tok(p["prompt"], add_special_tokens=False)["input_ids"]
-        c_ids = tok(" " + p["completion"], add_special_tokens=False)["input_ids"] + [tok.eos_token_id]
-        ids = torch.tensor([p_ids + c_ids], device=device)
-        labels = torch.tensor([[-100] * len(p_ids) + c_ids], device=device)
-        loss = model(ids, labels=labels).loss.item()
-        total_loss += loss * len(c_ids)
-        total_tok += len(c_ids)
-    return math.exp(total_loss / max(total_tok, 1))
+completion_perplexity = utils.completion_perplexity   # shared (lives in utils to avoid import cycle)
 
 
 def sft_train(model_name: str, train_rows: list[dict], device, lim):
@@ -95,7 +76,7 @@ def run(force: bool = False) -> dict:
     if out.exists() and not force:
         m = json.loads(out.read_text())
         print(f"[cached] §6 sweep ({config.RUN_MODE}) — use --force to rerun.")
-        _print_table(m["results"], m["sizes"])
+        _print_table(m["results"], m.get("recall", {"base": {}, "instruct": {}}), m["sizes"])
         return m
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -106,39 +87,49 @@ def run(force: bool = False) -> dict:
     print(f"=== §6 base-vs-instruct sweep | mode={config.RUN_MODE} | device={device} ===")
     print(f"  test set: {len(test)} held-out pairs | train pool: {len(pool)} | sizes: {sizes}\n")
 
-    results = {"base": {}, "instruct": {}}
+    import utils
+    results = {"base": {}, "instruct": {}}        # completion perplexity (format-sensitive)
+    recall = {"base": {}, "instruct": {}}         # keyword recall on generations (format-robust)
     for init in ("base", "instruct"):
         model_name = config.BASE_MODEL if init == "base" else config.INSTRUCT_MODEL
         for n in sizes:
             model, tok = sft_train(model_name, pool[:n], device, lim)
             ppl = completion_perplexity(model, tok, test, device)
+            gens = utils.generate_samples(model, tok, [p["prompt"] for p in test],
+                                          chat=False, quiet=True, max_new_tokens=64)
+            rec = sum(utils.keyword_recall(t["completion"], g["answer"])
+                      for t, g in zip(test, gens)) / len(test)
             results[init][str(n)] = ppl
-            print(f"  init={init:8} N={n:>3} -> held-out completion perplexity {ppl:.2f}")
+            recall[init][str(n)] = rec
+            print(f"  init={init:8} N={n:>3} -> completion ppl {ppl:.2f} | keyword recall {rec*100:.0f}%")
             del model
             if device == "cuda":
                 torch.cuda.empty_cache()
 
     print()
-    _print_table(results, sizes)
+    _print_table(results, recall, sizes)
     m = dict(mode=config.RUN_MODE, sizes=sizes, test_size=len(test), results=results,
-             env=config.record_env())
+             recall=recall, env=config.record_env())
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(m, indent=2))
     print(f"\n  metrics saved to {out}. Next: §7 eval, then §8 Unsloth-vs-HF.")
     return m
 
 
-def _print_table(results: dict, sizes: list) -> None:
-    print("  held-out completion perplexity (lower = better):")
-    print(f"    {'N':>4} | {'base':>8} | {'instruct':>9} | winner")
-    print(f"    {'-'*4}-+-{'-'*8}-+-{'-'*9}-+-------")
+def _print_table(results: dict, recall: dict, sizes: list) -> None:
+    print("  Two metrics per N — completion perplexity (lower=better) and keyword recall (higher=better):")
+    print(f"    {'N':>4} | {'base ppl':>8} {'inst ppl':>8} | {'base rec':>8} {'inst rec':>8} | winner(recall)")
+    print(f"    {'-'*4}-+-{'-'*17}-+-{'-'*17}-+--------------")
     for n in sizes:
-        b = results["base"].get(str(n)); i = results["instruct"].get(str(n))
+        b, i = results["base"].get(str(n)), results["instruct"].get(str(n))
+        br, ir = recall["base"].get(str(n)), recall["instruct"].get(str(n))
         if b is None or i is None:
             continue
-        win = "instruct" if i < b else "base"
-        print(f"    {n:>4} | {b:>8.2f} | {i:>9.2f} | {win}")
-    print("\n  Hypothesis: instruct-init wins (lower ppl) at small N; gap narrows as N grows.")
+        win = "instruct" if (ir or 0) > (br or 0) else "base"
+        print(f"    {n:>4} | {b:>8.2f} {i:>8.2f} | {br*100:>7.0f}% {ir*100:>7.0f}% | {win}")
+    print("\n  Note: completion perplexity is format-sensitive (the chat-tuned instruct model is penalized")
+    print("  on plain prompt-completion text), so KEYWORD RECALL on generations is the fairer signal.")
+    print("  Hypothesis: instruct-init reaches usable answers (higher recall) with fewer examples.")
 
 
 def main() -> None:
