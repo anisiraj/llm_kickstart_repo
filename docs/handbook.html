@@ -2246,7 +2246,7 @@ trainer = <span class="fn">GRPOTrainer</span>(
         per_device_train_batch_size=<span class="nb">4</span>,
         learning_rate=<span class="nb">1e-6</span>,
         num_generations=<span class="nb">4</span>,            <span class="cm"># must be &lt;= per_device_train_batch_size</span>
-        max_completion_length=<span class="nb">512</span>,    <span class="cm"># renamed from max_new_tokens in trl 1.x</span>
+        max_completion_length=<span class="nb">512</span>,    <span class="cm"># GRPOConfig field (verified trl 0.24.0, default 256). NOT max_new_tokens</span>
         fp16=<span class="kw">True</span>,
     ),
     processing_class=tok,
