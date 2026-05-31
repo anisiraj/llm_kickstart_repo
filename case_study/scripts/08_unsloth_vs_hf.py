@@ -69,6 +69,7 @@ def measure_hf() -> dict:
         config.INSTRUCT_MODEL, dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32)
     trainer = SFTTrainer(model=model, args=args, train_dataset=_text_dataset(), processing_class=tok,
                          peft_config=LoraConfig(r=config.SFT["lora_r"], lora_alpha=config.SFT["lora_alpha"],
+                                                use_rslora=config.SFT["use_rslora"],
                                                 target_modules=config.SFT["target_modules"], task_type="CAUSAL_LM"))
     trainable = sum(p.numel() for p in trainer.model.parameters() if p.requires_grad)
     t0 = time.perf_counter(); trainer.train(); dt = time.perf_counter() - t0
@@ -88,8 +89,8 @@ def measure_unsloth() -> dict:
         dtype=None, load_in_4bit=False)
     model = FastLanguageModel.get_peft_model(
         model, r=config.SFT["lora_r"], lora_alpha=config.SFT["lora_alpha"],
-        target_modules=config.SFT["target_modules"], use_gradient_checkpointing="unsloth",
-        random_state=config.SEED)
+        target_modules=config.SFT["target_modules"], use_rslora=config.SFT["use_rslora"],
+        use_gradient_checkpointing="unsloth", random_state=config.SEED)
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     args = SFTConfig(output_dir="/tmp/bench_unsloth", per_device_train_batch_size=config.SFT["batch_size"],
                      gradient_accumulation_steps=1, max_steps=max(lim["sft_max_steps"], 10),

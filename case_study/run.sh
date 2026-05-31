@@ -22,11 +22,13 @@ ts() { date +%H:%M:%S; }
 say() { printf '\033[1;36m%s\033[0m\n' "$*"; }
 
 MODEL="${1:-smollm2-135m}"
-case "$MODEL" in smollm2-135m|smollm3) shift || true ;; *) MODEL="smollm2-135m" ;; esac
+case "$MODEL" in smollm2-135m|smollm3|minicpm5) shift || true ;; *) MODEL="smollm2-135m" ;; esac
 export CASE_STUDY_MODEL="$MODEL"
+# 4-bit QLoRA models run in .venv (Unsloth+bitsandbytes); the 135M runs bf16 in .venv-rl.
+case "$MODEL" in smollm3|minicpm5) QLORA=1 ;; *) QLORA=0 ;; esac
 SECTIONS="$*"; SECSET=$([ -n "$SECTIONS" ] && echo 1 || echo 0)
 LOGDIR="logs/$MODEL"; mkdir -p "$LOGDIR"
-PY=$([ "$MODEL" = "smollm3" ] && echo "$US" || echo "$HF")
+PY=$([ "$QLORA" = 1 ] && echo "$US" || echo "$HF")
 
 # ── preflight ──────────────────────────────────────────────────────────────────
 say "════════════════════════════════════════════════════════════════"
@@ -45,8 +47,9 @@ command -v ollama >/dev/null && echo "  ollama: $(command -v ollama)" || echo " 
 # then crashes a section on a mere tokenizer load. Offline uses the cache and skips that call.
 # (Wikipedia §1 and Ollama pulls use their own HTTP, unaffected by HF_HUB_OFFLINE.)
 case "$MODEL" in
-  smollm3) _cache="$HOME/.cache/huggingface/hub/models--HuggingFaceTB--SmolLM3-3B" ;;
-  *)       _cache="$HOME/.cache/huggingface/hub/models--HuggingFaceTB--SmolLM2-135M" ;;
+  smollm3)  _cache="$HOME/.cache/huggingface/hub/models--HuggingFaceTB--SmolLM3-3B" ;;
+  minicpm5) _cache="$HOME/.cache/huggingface/hub/models--openbmb--MiniCPM5-1B-sft" ;;
+  *)        _cache="$HOME/.cache/huggingface/hub/models--HuggingFaceTB--SmolLM2-135M" ;;
 esac
 if [ -d "$_cache" ]; then export HF_HUB_OFFLINE=1; echo "  HF cache present -> HF_HUB_OFFLINE=1 (no phone-home)"; else echo "  (first run: HF online for downloads)"; fi
 echo
@@ -71,7 +74,7 @@ run() {  # run <id> <logname> <python> <script> [args...]
 }
 
 # ── the pipeline ────────────────────────────────────────────────────────────────
-if [ "$MODEL" = "smollm3" ]; then
+if [ "$QLORA" = 1 ]; then   # SmolLM3 / MiniCPM5 — QLoRA 4-bit, all in .venv
   run 01 01_corpus.log     $US scripts/01_build_corpus.py
   run 02 02_data.log       $US scripts/02_data_availability.py
   run 03 03_cpt.log        $US scripts/03_cpt.py --backend unsloth --force

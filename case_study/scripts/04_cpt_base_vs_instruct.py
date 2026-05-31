@@ -65,8 +65,8 @@ def _train_cpt(model, lim):
     from peft import LoraConfig, get_peft_model
     model = get_peft_model(model, LoraConfig(
         r=config.CPT["lora_r"], lora_alpha=config.CPT["lora_alpha"],
-        lora_dropout=config.CPT["lora_dropout"], target_modules=config.CPT["target_modules"],
-        task_type="CAUSAL_LM"))
+        lora_dropout=config.CPT["lora_dropout"], use_rslora=config.CPT["use_rslora"],
+        target_modules=config.CPT["target_modules"], task_type="CAUSAL_LM"))
     emb = [p for n, p in model.named_parameters()
            if p.requires_grad and ("embed_tokens" in n or "lm_head" in n)]
     rest = [p for n, p in model.named_parameters()

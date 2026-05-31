@@ -177,7 +177,7 @@ def _cpt_hf(force: bool = False) -> dict:
     print(f"  held-out perplexity BEFORE CPT: {ppl_before:.2f}")
 
     lora = LoraConfig(r=config.CPT["lora_r"], lora_alpha=config.CPT["lora_alpha"],
-                      lora_dropout=config.CPT["lora_dropout"],
+                      lora_dropout=config.CPT["lora_dropout"], use_rslora=config.CPT["use_rslora"],
                       target_modules=config.CPT["target_modules"], task_type="CAUSAL_LM")
     model = get_peft_model(model, lora)
     model.print_trainable_parameters()
@@ -268,6 +268,7 @@ def _cpt_unsloth(force: bool = False) -> dict:
     model = FastLanguageModel.get_peft_model(
         model, r=config.CPT["lora_r"], lora_alpha=config.CPT["lora_alpha"],
         lora_dropout=config.CPT["lora_dropout"], target_modules=config.CPT["target_modules"],
+        use_rslora=config.CPT["use_rslora"],
         use_gradient_checkpointing="unsloth", random_state=config.SEED)
 
     args = UnslothTrainingArguments(

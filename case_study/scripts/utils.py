@@ -56,8 +56,8 @@ def build_sft_model(model_name: str):
             tok.pad_token = tok.eos_token
         model = FastLanguageModel.get_peft_model(
             model, r=cfg["lora_r"], lora_alpha=cfg["lora_alpha"], lora_dropout=cfg["lora_dropout"],
-            target_modules=cfg["target_modules"], use_gradient_checkpointing="unsloth",
-            random_state=config.SEED)
+            target_modules=cfg["target_modules"], use_rslora=cfg["use_rslora"],
+            use_gradient_checkpointing="unsloth", random_state=config.SEED)
         return model, tok
     from transformers import AutoTokenizer
     from peft import LoraConfig, get_peft_model
@@ -66,7 +66,7 @@ def build_sft_model(model_name: str):
         tok.pad_token = tok.eos_token
     model = get_peft_model(load_causal_lm(model_name), LoraConfig(
         r=cfg["lora_r"], lora_alpha=cfg["lora_alpha"], lora_dropout=cfg["lora_dropout"],
-        target_modules=cfg["target_modules"], task_type="CAUSAL_LM"))
+        use_rslora=cfg["use_rslora"], target_modules=cfg["target_modules"], task_type="CAUSAL_LM"))
     return model, tok
 
 

@@ -26,6 +26,11 @@ MODELS = {
                          instruct="HuggingFaceTB/SmolLM2-135M-Instruct", load_in_4bit=False),
     "smollm3":      dict(base="HuggingFaceTB/SmolLM3-3B-Base",
                          instruct="HuggingFaceTB/SmolLM3-3B", load_in_4bit=True),
+    # MiniCPM5-1B: a small (1B) on-device, tool-capable model. arch = LlamaForCausalLM, so Ollama
+    # imports its safetensors directly (no GGUF/llama.cpp needed). Unsloth fine-tunes it (OpenBMB's
+    # own minicpm5-finetune-unsloth skill uses the same FastLanguageModel + target_modules we do).
+    "minicpm5":     dict(base="openbmb/MiniCPM5-1B",
+                         instruct="openbmb/MiniCPM5-1B-sft", load_in_4bit=True),
     # cheap QLoRA-path smoke test: the 135M loaded in 4-bit (verifies the SmolLM3 code path fast).
     "smollm2-135m-4bit": dict(base="HuggingFaceTB/SmolLM2-135M",
                               instruct="HuggingFaceTB/SmolLM2-135M-Instruct", load_in_4bit=True),
@@ -167,19 +172,27 @@ WIKI_PAGES = [
     "ORCA (quantum chemistry program)", "Quantum ESPRESSO",
 ]
 
-# ── Hyperparameters (kept small + explicit) ───────────────────────────────────
+# ── Hyperparameters (model-agnostic — same for every model in MODELS, so a run is just a
+#    model-name swap). High rank + rsLoRA: rank-stabilized LoRA scales the adapter by alpha/sqrt(r)
+#    instead of alpha/r, which keeps high ranks well-conditioned (use_rslora=True). r=32 is "high"
+#    yet memory-safe for a 1–3B QLoRA on 12 GB. Embeddings: CPT targets embed_tokens+lm_head so the
+#    embedding layer adapts to the new-domain token distribution (trained at a smaller LR); SFT does
+#    NOT — it's task/format tuning, and adapting tied embeddings complicates the merge→GGUF step. ──
+_LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 CPT = dict(max_seq_len=1024, lr=5e-5, epochs=1, batch_size=4, grad_accum=4,
-           # embeddings/lm_head adapt to the new-domain (math-heavy) distribution, but with a
-           # SMALLER LR than the rest of the adapter to avoid destabilizing them (see PITFALLS.md).
-           embedding_learning_rate=5e-6,
-           lora_r=16, lora_alpha=16, lora_dropout=0.0,
-           target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                           "gate_proj", "up_proj", "down_proj",
-                           "embed_tokens", "lm_head"])
+           embedding_learning_rate=5e-6,                 # smaller LR for embed_tokens/lm_head
+           lora_r=32, lora_alpha=32, lora_dropout=0.0, use_rslora=True,
+           target_modules=_LORA_TARGETS + ["embed_tokens", "lm_head"])
 SFT = dict(max_seq_len=1024, lr=2e-4, epochs=3, batch_size=4, grad_accum=2,
-           lora_r=16, lora_alpha=16, lora_dropout=0.0,
-           target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                           "gate_proj", "up_proj", "down_proj"])
+           lora_r=32, lora_alpha=32, lora_dropout=0.0, use_rslora=True,
+           target_modules=list(_LORA_TARGETS))
+
+# Optional LoRA-rank override (used by the rank sweep / quick experiments): CASE_STUDY_LORA_R=64
+_lr = _os.environ.get("CASE_STUDY_LORA_R")
+if _lr:
+    _r = int(_lr)
+    CPT["lora_r"] = CPT["lora_alpha"] = _r
+    SFT["lora_r"] = SFT["lora_alpha"] = _r
 # A few held-out questions printed at the end of every run for quick *visual* assessment.
 # Deliberately overlap the domain so you can eyeball whether CPT/SFT changed the answers.
 SAMPLE_QUESTIONS = [

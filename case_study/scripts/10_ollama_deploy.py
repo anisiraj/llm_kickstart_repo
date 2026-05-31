@@ -76,9 +76,9 @@ def run() -> dict:
         _sib("09_merge_and_gguf.py", "s9_for_10").run()
 
     name = f"chem-sft-{config.MODEL_KEY}-{config.RUN_MODE}"
-    # If §9 produced an F16 GGUF, have Ollama quantize it to Q4_K_M at import (<2GB, no build needed).
-    mf_txt = (merged / "Modelfile").read_text() if (merged / "Modelfile").exists() else ""
-    quant_flag = ["-q", "q4_K_M"] if ("f16" in mf_txt and config.LOAD_IN_4BIT) else []
+    # Quantize to Q4_K_M on import for any 4-bit model — works whether the source is an F16 GGUF
+    # (SmolLM3) or merged safetensors (MiniCPM5, Llama-arch → Ollama imports it directly). <2 GB.
+    quant_flag = ["-q", "q4_K_M"] if config.LOAD_IN_4BIT else []
     existing = subprocess.run(["ollama", "list"], capture_output=True, text=True).stdout
     if name in existing:
         print(f"  [cached] model '{name}' already imported.")
