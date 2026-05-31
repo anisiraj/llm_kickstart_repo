@@ -164,6 +164,14 @@
     <li><a href="#adapters">Adapter Patterns</a></li>
     <li><a href="#evaluation">Evaluation</a></li>
     <li><a href="#owndata">Bring Your Data</a></li>
+    <li class="section">Deep Dives</li>
+    <li><a href="#lossmasking">🎭 Loss · Templates · LR</a></li>
+    <li><a href="#tokensurgery">🔤 Tokenizer Surgery</a></li>
+    <li><a href="#engines">⚙️ Unsloth vs TRL</a></li>
+    <li><a href="#synthdata">🧫 Synthetic Data</a></li>
+    <li><a href="#forgetting">🧠 Forgetting</a></li>
+    <li><a href="#merging">🔗 Model Merging</a></li>
+    <li><a href="#quantization">🗜️ Quantization</a></li>
     <li><a href="#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp Exercise</a></li>
     <li class="section">Case Study</li>
     <li><a href="#casestudy" style="color:#34d399;">🧪 CPT→SFT→Edge (Chem)</a></li>
@@ -2146,10 +2154,24 @@ test_prompts = [<span class="st">"LoRA injects"</span>, <span class="st">"The le
       </div>
     </div>
 
+    <div class="card full" style="border-color:#ef4444;">
+      <div class="card-title" style="background:#450a0a; color:#fecaca;">⚠️ 5. The metric format-trap — when perplexity LIES</div>
+      <div class="card-body">
+        <div style="font-size:0.84em; color:#94a3b8; line-height:1.85;">
+          The single most expensive evaluation mistake: judging an instruction model with a <em>raw-text</em> metric. An SFT'd model "wants" chat tokens, so on plain text it looks <strong>worse</strong> — even when it's far better at the actual task. SFT can <em>raise</em> domain perplexity while completion perplexity collapses, because the two losses pull in opposite directions.
+        </div>
+<pre style="margin-top:8px;"><span class="cm"># MiniCPM5-1B, measured before/after SFT (case study §6):</span>
+<span class="cm">#   completion ppl  107.68 -> 3.64   (-97%)   ← SFT's real job, huge win</span>
+<span class="cm">#   domain ppl       24.81 -> 34.90   (+41%)  ← rose! raw-text metric is misleading here</span>
+<span class="cm">#   keyword recall      5% -> 46%     (9x)    ← format-robust, confirms the win</span></pre>
+        <div class="good" style="margin-top:8px;"><strong>Rule:</strong> match the metric to the phase. Judge CPT by domain perplexity; judge SFT by completion perplexity <em>and</em> a generation-based metric (keyword recall / ROUGE) that doesn't punish format. Never rank a base-vs-instruct decision on one perplexity number. Full metric playbook: <a href="cheatsheet_metrics.html" style="color:#fca5a5;">Metrics cheatsheet</a>.</div>
+      </div>
+    </div>
+
   </div>
 
   <div class="good" style="margin-top:16px; font-size:0.83em;">
-    <strong>See it in action:</strong> <code>scripts/10_evaluation.py</code> runs a full before/after comparison — loss tracking, perplexity measurement, generation quality checks — all in one script.
+    <strong>See it in action:</strong> <code>scripts/10_evaluation.py</code> runs a full before/after comparison — loss tracking, perplexity measurement, generation quality checks — all in one script. The format-trap is measured live in the <a href="handbook.html#casestudy" style="color:#34d399;">🧪 Case Study</a> (<code>case_study/scripts/07_eval.py</code>).
   </div>
 </div>
 
@@ -2266,6 +2288,373 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
 
   <div class="good" style="margin-top:16px; font-size:0.83em;">
     <strong>Full working example:</strong> <code>scripts/11_custom_data.py</code> demonstrates loading CSV, JSONL, and text files, converting to every trainer format, filtering, deduplication, and saving — all runnable with no GPU.
+  </div>
+</div>
+
+<!-- ══════════════════ DEEP DIVE: LOSS MASKING, CHAT TEMPLATES & LR ══════════════════ -->
+<div class="chapter" id="lossmasking" style="background:#0a0f1f; border-top:2px solid #4f46e5;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#4f46e5;">🎭</div>
+    <div><div class="chapter-title">Loss Masking, Chat Templates &amp; Learning Rates</div><div class="chapter-subtitle">The SFT mechanics that decide whether training learns the right thing</div></div>
+  </div>
+  <p class="chapter-intro">Three knobs quietly decide the fate of an SFT run: <strong>which tokens carry the loss</strong>, <strong>which chat template wraps them</strong>, and <strong>what learning rate moves which weights</strong>. Get them wrong and the loss still goes down — you've just taught the wrong thing. Quick reference: <a href="cheatsheet_sft_trainer.html" style="color:#a5b4fc;">SFT Trainer cheatsheet</a> · <a href="cheatsheet_chat_templates_data.html" style="color:#a5b4fc;">Chat Templates cheatsheet</a>. <strong style="color:#a5b4fc;">🧪 Runnable:</strong> <code>scripts/05_sft.py</code> trains with completion-only loss and prints the unmasked fraction (measured 78–81%).</p>
+
+  <div class="grid2" style="gap:14px;">
+    <div class="card" style="border-color:#4f46e5;">
+      <div class="card-title" style="background:#312e81; color:#c7d2fe;">🎯 The 3 loss modes</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Mode</th><th>Loss on</th><th>For</th></tr>
+          <tr><td>full causal</td><td>every token</td><td>CPT / raw text</td></tr>
+          <tr><td>completion-only</td><td>answer (prompt masked)</td><td>SFT Q&amp;A</td></tr>
+          <tr><td>assistant-only</td><td>assistant turns</td><td>multi-turn chat</td></tr>
+        </table>
+        <div class="tip">"Masking" = setting masked labels to <code>-100</code> so <code>CrossEntropyLoss(ignore_index=-100)</code> skips them. It's the <em>loss</em> that's masked, not attention.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#4f46e5;">
+      <div class="card-title" style="background:#312e81; color:#c7d2fe;">💬 The chat template IS the mask boundary</div>
+      <div class="card-body">
+<pre><span class="cm"># completion-only loss finds the boundary from the template:</span>
+<span class="cm"># &lt;|im_start|&gt;user … &lt;|im_end|&gt;          ← masked (-100)</span>
+<span class="cm"># &lt;|im_start|&gt;assistant  ANSWER &lt;|im_end|&gt; ← learned</span>
+text = tok.<span class="fn">apply_chat_template</span>(msgs, tokenize=<span class="kw">False</span>,
+                                  add_generation_prompt=<span class="kw">False</span>)</pre>
+        <div class="warn">Forget the mask and the model learns to <em>generate the question too</em> → at inference it "echoes the prompt back." The classic SFT bug.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#4f46e5;">
+      <div class="card-title" style="background:#312e81; color:#c7d2fe;">📈 Learning rates that work</div>
+      <div class="card-body">
+        <table>
+          <tr><th>What</th><th>LR</th><th>Why</th></tr>
+          <tr><td>LoRA adapters</td><td>1e-4 – 3e-4</td><td>tiny matrices tolerate a high LR</td></tr>
+          <tr><td>embeddings / lm_head</td><td>~5e-6</td><td>huge layers → small steps or they destabilize</td></tr>
+          <tr><td>full fine-tune</td><td>1e-5 – 5e-5</td><td>all weights move</td></tr>
+        </table>
+        <div class="tip">Use <code>warmup_ratio≈0.03</code> + a cosine schedule. Unsloth supports a separate <code>embedding_learning_rate</code> for the CPT case.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#4f46e5;">
+      <div class="card-title" style="background:#312e81; color:#c7d2fe;">✅ Prove the mask (one line)</div>
+      <div class="card-body">
+<pre>lab = <span class="fn">next</span>(<span class="fn">iter</span>(trainer.<span class="fn">get_train_dataloader</span>()))[<span class="st">"labels"</span>]
+<span class="fn">print</span>((lab != -<span class="nb">100</span>).<span class="fn">float</span>().<span class="fn">mean</span>())
+<span class="cm"># CPT  → 1.00 (nothing masked)</span>
+<span class="cm"># SFT  → 0.78–0.81 (prompt masked)   ← measured in the case study</span></pre>
+        <div class="good">If your SFT number is 1.0, the prompt isn't masked. Catch it in seconds, not after a wasted run.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DEEP DIVE: TOKENIZER & VOCABULARY SURGERY ══════════════════ -->
+<div class="chapter" id="tokensurgery" style="background:#0d1117; border-top:2px solid #7c3aed;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#7c3aed;">🔤</div>
+    <div><div class="chapter-title">Tokenizer &amp; Vocabulary Surgery</div><div class="chapter-subtitle">Extra tokens, embedding resizing, and when to retrain the embeddings</div></div>
+  </div>
+  <p class="chapter-intro">Adding tokens and training embeddings is powerful and easy to get wrong. The honest default is <strong>you probably don't need new tokens</strong> — and when you do, there's an exact ritual. Reference: <a href="cheatsheet_chat_templates_data.html" style="color:#c4b5fd;">Chat Templates &amp; Data Prep cheatsheet</a>. <strong style="color:#c4b5fd;">🧪 Runnable:</strong> <code>scripts/18_token_surgery.py</code> verifies every step on SmolLM2-135M — measured: LaTeX→11 tokens, JSON→9 (no surgery needed), and a new token's embedding row lands <strong>0.0001</strong> from the pretrained mean (vs 2.36 average spread).</p>
+
+  <div class="grid2" style="gap:14px;">
+    <div class="card" style="border-color:#7c3aed;">
+      <div class="card-title" style="background:#3b0764; color:#e9d5ff;">🧪 First: do you even need them?</div>
+      <div class="card-body">
+<pre><span class="cm"># Check what the tokenizer already does with your content</span>
+<span class="fn">len</span>(tok(<span class="st">r"$\hat{H}\psi=E\psi$"</span>).input_ids)   <span class="cm"># LaTeX = ASCII → fine</span>
+<span class="fn">len</span>(tok(<span class="st">'{"k": 1}'</span>).input_ids)             <span class="cm"># JSON = ASCII → fine</span></pre>
+        <div class="tip">LaTeX, JSON, HTML, code and chemical formulae are plain ASCII — BPE handles them. Adding tokens you don't need just dilutes training signal.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#7c3aed;">
+      <div class="card-title" style="background:#3b0764; color:#e9d5ff;">➕ Adding tokens correctly</div>
+      <div class="card-body">
+<pre>tok.<span class="fn">add_special_tokens</span>(
+   {<span class="st">"additional_special_tokens"</span>: [<span class="st">"&lt;rxn&gt;"</span>, <span class="st">"&lt;/rxn&gt;"</span>]})
+model.<span class="fn">resize_token_embeddings</span>(<span class="fn">len</span>(tok),
+                            mean_resizing=<span class="kw">True</span>)   <span class="cm"># init at embedding mean</span></pre>
+        <div class="warn"><code>mean_resizing=True</code> puts new rows on the pretrained manifold (far better than random). It's simple but collapses many new tokens into one subspace — fine for a few control tokens, risky for hundreds.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#7c3aed;">
+      <div class="card-title" style="background:#3b0764; color:#e9d5ff;">🧠 Retraining the embeddings</div>
+      <div class="card-body">
+<pre><span class="cm"># Add embed_tokens + lm_head to LoRA targets ONLY when:</span>
+<span class="cm">#  • CPT shifts the token distribution a lot, OR</span>
+<span class="cm">#  • you added new tokens (their rows start near-random)</span>
+target_modules += [<span class="st">"embed_tokens"</span>, <span class="st">"lm_head"</span>]
+embedding_learning_rate = <span class="nb">5e-6</span>   <span class="cm"># &lt; base LR, or they destabilize</span></pre>
+        <div class="good">Connects to the LR chapter: big layers want a small LR. New rows <em>must</em> be trained or they stay meaningless.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#7c3aed;">
+      <div class="card-title" style="background:#3b0764; color:#e9d5ff;">⚠️ The cost (when NOT to)</div>
+      <div class="card-body">
+        <div style="font-size:0.86em; color:#94a3b8; line-height:1.9;">
+          Targeting <code>embed_tokens</code>+<code>lm_head</code> on a 3B blew the adapter from <strong>116&nbsp;MB → 1.2&nbsp;GB</strong> (measured). On tiny SFT data over <em>existing</em> tokens it also overfits.
+        </div>
+        <div class="warn" style="margin-top:8px;">For plain SFT on existing tokens: leave embeddings out. Train them for CPT or genuinely new vocabulary — not by default.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DEEP DIVE: ENGINES (UNSLOTH vs TRL) ══════════════════ -->
+<div class="chapter" id="engines" style="background:#0a0f1a; border-top:2px solid #b45309;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#b45309;">⚙️</div>
+    <div><div class="chapter-title">The Engines — Unsloth vs TRL / Transformers</div><div class="chapter-subtitle">Same fine-tune, different machinery — when to reach for which</div></div>
+  </div>
+  <p class="chapter-intro">TRL+Transformers is the flexible standard; Unsloth is the fast single-GPU specialist with hand-written kernels. They produce the same kind of adapter — the differences are speed, memory, model coverage, and a couple of sharp edges. References: <a href="cheatsheet_unsloth_lora.html" style="color:#fcd34d;">Unsloth cheatsheet</a> · <a href="cheatsheet_sft_trainer.html" style="color:#fcd34d;">SFT Trainer cheatsheet</a>. <strong style="color:#fcd34d;">🧪 Runnable:</strong> <code>scripts/03_cpt.py</code> runs the same CPT both ways (<code>--backend hf</code> / <code>--backend unsloth</code>); <code>scripts/08_unsloth_vs_hf.py</code> benchmarks them head-to-head.</p>
+
+  <div class="grid2" style="gap:14px;">
+    <div class="card" style="border-color:#b45309;">
+      <div class="card-title" style="background:#713f12; color:#fde68a;">⚖️ Side by side</div>
+      <div class="card-body">
+        <table>
+          <tr><th></th><th>Unsloth</th><th>HF + TRL</th></tr>
+          <tr><td>speed / VRAM</td><td>~2× / −60%</td><td>baseline</td></tr>
+          <tr><td>GPUs</td><td>single only</td><td>multi-GPU / FSDP</td></tr>
+          <tr><td>model coverage</td><td>patched subset</td><td>everything</td></tr>
+          <tr><td>4-bit SFT</td><td>rock-solid</td><td>can mis-cast</td></tr>
+          <tr><td>GGUF export</td><td>one call</td><td>via llama.cpp</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#b45309;">
+      <div class="card-title" style="background:#713f12; color:#fde68a;">🧭 When to use which</div>
+      <div class="card-body">
+        <div style="font-size:0.86em; color:#94a3b8; line-height:1.9;">
+          <strong style="color:#e2e8f0;">Unsloth:</strong> single consumer GPU / Colab, QLoRA on a supported model, you want speed + easy GGUF.<br>
+          <strong style="color:#e2e8f0;">TRL + Transformers:</strong> multi-GPU, an unsupported architecture, DPO/ORPO/GRPO, or maximum flexibility.<br>
+          <strong style="color:#e2e8f0;">Both:</strong> use the same <code>SFTConfig</code>/dataset — switching is mostly the model-loading line.
+        </div>
+      </div>
+    </div>
+
+    <div class="card full" style="border-color:#b45309;">
+      <div class="card-title" style="background:#713f12; color:#fde68a;">🪤 The gotchas that cost hours</div>
+      <div class="card-body">
+        <div style="font-size:0.86em; color:#94a3b8; line-height:1.9;">
+          • <strong style="color:#fca5a5;">"expected BFloat16 but found Float"</strong> on 4-bit SFT with plain TRL — it re-prepares the quantized model and upcasts <code>lm_head</code>. → route QLoRA SFT through Unsloth <code>FastLanguageModel</code>.<br>
+          • <strong style="color:#e2e8f0;">Import order:</strong> <code>import unsloth</code> <em>first</em> (before transformers/trl) or its patches don't apply.<br>
+          • <strong style="color:#e2e8f0;">Pickling crash:</strong> set <code>dataset_num_proc=1</code> with Unsloth.<br>
+          • <strong style="color:#e2e8f0;">Version pins:</strong> Unsloth historically pins <code>trl&lt;0.9</code>/<code>xformers</code> — keep it in its own venv, separate from a trl-1.x install.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DEEP DIVE: SYNTHETIC DATA GENERATION ══════════════════ -->
+<div class="chapter" id="synthdata" style="background:#0d1117; border-top:2px solid #15803d;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#15803d;">🧫</div>
+    <div><div class="chapter-title">Synthetic Data Generation</div><div class="chapter-subtitle">Beat the ~99× data-scarcity gap without hand-writing thousands of pairs</div></div>
+  </div>
+  <p class="chapter-intro">Raw text is free; instruction pairs are not (the case study hit a ~99× gap). Synthesis closes it — an LLM writes training data for you — but the quality control is the real work. Reference: <a href="cheatsheet_datagen_merge_hf.html" style="color:#86efac;">Data Gen · Merge · HF cheatsheet</a>. <strong style="color:#86efac;">🧪 Runnable:</strong> <code>scripts/19_synth_data.py</code> distills pairs from a local Ollama teacher (the chem-tuned SmolLM3 we deployed) and runs this exact QC — tested end-to-end, generating real domain Q&amp;A and dropping leaks/dupes/short ones.</p>
+
+  <div class="grid2" style="gap:14px;">
+    <div class="card" style="border-color:#15803d;">
+      <div class="card-title" style="background:#14532d; color:#bbf7d0;">🗺️ The methods</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Method</th><th>Idea</th></tr>
+          <tr><td>Distillation</td><td>strong teacher answers your prompts</td></tr>
+          <tr><td>Self-Instruct</td><td>seeds → LLM writes new tasks+answers</td></tr>
+          <tr><td>Evol-Instruct</td><td>LLM rewrites prompts harder/deeper</td></tr>
+          <tr><td>Magpie</td><td>prompt-only: aligned LLM emits its own queries</td></tr>
+        </table>
+        <div class="tip">Best for clear, checkable tasks. Pair synthesis with a few human-written domain seeds.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#15803d;">
+      <div class="card-title" style="background:#14532d; color:#bbf7d0;">🧬 Distillation (the quick win)</div>
+      <div class="card-body">
+<pre><span class="kw">def</span> <span class="fn">make_pair</span>(q):
+    r = client.chat.completions.<span class="fn">create</span>(
+        model=<span class="st">"strong-model"</span>, temperature=<span class="nb">0.4</span>,
+        messages=[{<span class="st">"role"</span>:<span class="st">"user"</span>,<span class="st">"content"</span>:q}])
+    <span class="kw">return</span> {<span class="st">"prompt"</span>:q,
+            <span class="st">"completion"</span>:r.choices[<span class="nb">0</span>].message.content}</pre>
+        <div class="tip">Generate questions from your corpus headings, keep a strong model's answers as gold. Cheapest bootstrap for an SFT set.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#15803d;">
+      <div class="card-title" style="background:#14532d; color:#bbf7d0;">♻️ Self-Instruct loop</div>
+      <div class="card-body">
+<pre>seed = load_seed_tasks()          <span class="cm"># 10–50 humans</span>
+<span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(rounds):
+    few = random.<span class="fn">sample</span>(seed, <span class="nb">6</span>)
+    new = llm(<span class="st">f"Tasks:\n{few}\nWrite 5 NEW diverse ones"</span>)
+    seed += <span class="fn">dedupe</span>(parse(new))   <span class="cm"># embedding/rouge dedupe</span></pre>
+        <div class="warn">Without aggressive dedupe you get thousands of near-clones. Diversity is the whole game.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#15803d;">
+      <div class="card-title" style="background:#14532d; color:#bbf7d0;">⚠️ Quality control (non-negotiable)</div>
+      <div class="card-body">
+        <div style="font-size:0.86em; color:#94a3b8; line-height:1.9;">
+          <strong style="color:#fca5a5;">Decontaminate</strong> against your eval set (or you measure leakage). <strong style="color:#e2e8f0;">Dedupe</strong> (exact + near). <strong style="color:#e2e8f0;">Filter</strong> (length, language, refusals, format). <strong style="color:#e2e8f0;">Judge</strong> a sample for correctness.
+        </div>
+        <div class="good" style="margin-top:8px;">200 clean, verified pairs beat 5,000 noisy ones for a small model. Synthetic data inherits the teacher's errors and style.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DEEP DIVE: CATASTROPHIC FORGETTING ══════════════════ -->
+<div class="chapter" id="forgetting" style="background:#020617; border-top:2px solid #0d9488;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0d9488;">🧠</div>
+    <div><div class="chapter-title">Catastrophic Forgetting</div><div class="chapter-subtitle">When teaching the new makes it forget the old — detect it, then prevent it</div></div>
+  </div>
+  <p class="chapter-intro">Fine-tuning can quietly erode general ability while it learns your domain. The good news: with LoRA it's rare, and it's trivial to <em>measure</em> so you never ship it blind. Seen in the <a href="handbook.html#casestudy" style="color:#5eead4;">🧪 Case Study</a> (we checked, and didn't forget). <strong style="color:#5eead4;">🧪 Runnable:</strong> <code>scripts/04_cpt_base_vs_instruct.py</code> measures domain vs general perplexity before/after CPT.</p>
+
+  <div class="grid2" style="gap:14px;">
+    <div class="card" style="border-color:#0d9488;">
+      <div class="card-title" style="background:#134e4a; color:#99f6e4;">🔬 Detect it (cheap)</div>
+      <div class="card-body">
+<pre><span class="cm"># perplexity on GENERAL text, before AND after training</span>
+gen_before = <span class="fn">perplexity</span>(model0, tok, general_text)
+gen_after  = <span class="fn">perplexity</span>(model1, tok, general_text)
+<span class="cm"># rising general PPL = forgetting</span>
+<span class="cm"># measured (SmolLM3-3B): 8.33 → 8.19  → NO forgetting</span></pre>
+        <div class="good">Always hold out a small general-text set and check it alongside your domain metric. One number tells you if you broke the base.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#0d9488;">
+      <div class="card-title" style="background:#134e4a; color:#99f6e4;">🛡️ Why LoRA helps</div>
+      <div class="card-body">
+        <div style="font-size:0.86em; color:#94a3b8; line-height:1.9;">
+          The base weights are <strong>frozen</strong>; only small adapters move. You can even remove the adapter to recover the original model exactly. Full fine-tuning has no such safety net — every weight drifts.
+        </div>
+      </div>
+    </div>
+
+    <div class="card full" style="border-color:#0d9488;">
+      <div class="card-title" style="background:#134e4a; color:#99f6e4;">🧯 Mitigate it</div>
+      <div class="card-body">
+        <div style="font-size:0.86em; color:#94a3b8; line-height:1.9;">
+          • <strong style="color:#e2e8f0;">Fewer epochs / lower LR</strong> — most forgetting comes from over-training on a narrow set.<br>
+          • <strong style="color:#e2e8f0;">Replay / data mixing</strong> — blend a little general instruction data into your domain set.<br>
+          • <strong style="color:#e2e8f0;">Keep LoRA rank modest</strong> — huge adapters on tiny data overfit (and overwrite more).<br>
+          • <strong style="color:#e2e8f0;">Adapter isolation</strong> — keep domain skills in separate adapters, swap at inference (see <a href="handbook.html#adapters" style="color:#5eead4;">Adapter Patterns</a>) instead of one over-trained model.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DEEP DIVE: MODEL MERGING ══════════════════ -->
+<div class="chapter" id="merging" style="background:#0a1622; border-top:2px solid #0891b2;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#0891b2;">🔗</div>
+    <div><div class="chapter-title">Model Merging / Fusing</div><div class="chapter-subtitle">Combine several fine-tunes into one model — with zero extra training</div></div>
+  </div>
+  <p class="chapter-intro">Merging averages weights in clever ways so one model inherits several specialists' skills — no GPUs, no training. The models must share the same base/architecture. Reference: <a href="cheatsheet_datagen_merge_hf.html" style="color:#67e8f9;">Data Gen · Merge · HF cheatsheet</a>. <strong style="color:#67e8f9;">🧪 Runnable:</strong> <code>scripts/20_merge_models.py</code> runs these merges on real SmolLM2-135M tensors — measured: from the base, Linear moves <strong>50%</strong> of the task vector, TIES <strong>83%</strong>, DARE <strong>141%</strong>, and the merged checkpoint reloads + generates correctly.</p>
+
+  <div class="grid2" style="gap:14px;">
+    <div class="card" style="border-color:#0891b2;">
+      <div class="card-title" style="background:#083344; color:#a5f3fc;">🧮 The methods</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Method</th><th>What it does</th></tr>
+          <tr><td>Linear</td><td>weighted average of weights</td></tr>
+          <tr><td>SLERP</td><td>spherical interp of 2 models (keeps geometry)</td></tr>
+          <tr><td>Task Arithmetic</td><td>add/subtract "task vectors" (Δ from base)</td></tr>
+          <tr><td>TIES</td><td>trim + sign-elect → cut interference (many models)</td></tr>
+          <tr><td>DARE</td><td>random-drop + rescale task vectors</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#0891b2;">
+      <div class="card-title" style="background:#083344; color:#a5f3fc;">🛠️ mergekit (config + run)</div>
+      <div class="card-body">
+<pre><span class="cm"># merge.yaml (TIES)</span>
+merge_method: ties
+base_model: HuggingFaceTB/SmolLM3-3B-Base
+models:
+  - model: user/chem-sft
+    parameters: {weight: 0.5, density: 0.6}
+  - model: user/code-sft
+    parameters: {weight: 0.5, density: 0.6}
+parameters: {normalize: true}
+dtype: bfloat16
+
+<span class="cm"># mergekit-yaml merge.yaml ./merged --cuda</span></pre>
+      </div>
+    </div>
+
+    <div class="card full" style="border-color:#0891b2;">
+      <div class="card-title" style="background:#083344; color:#a5f3fc;">📌 When it works (and when it doesn't)</div>
+      <div class="card-body">
+        <div style="font-size:0.86em; color:#94a3b8; line-height:1.9;">
+          <strong style="color:#86efac;">Great for:</strong> fusing same-base specialists (chem + code), averaging checkpoints for robustness, recovering a balanced model from an over-specialized one. The output is a normal HF model — deploy it like any other.<br>
+          <strong style="color:#fca5a5;">Won't work:</strong> different base models / architectures; expecting genuinely <em>new</em> capability (merging redistributes, it doesn't create). <code>density</code> = fraction of each task-vector kept (TIES/DARE) — start at equal weights, then tune.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DEEP DIVE: QUANTIZATION INTERNALS ══════════════════ -->
+<div class="chapter" id="quantization" style="background:#0d1117; border-top:2px solid #c2410c;">
+  <div class="chapter-header">
+    <div class="chapter-num" style="background:#c2410c;">🗜️</div>
+    <div><div class="chapter-title">Quantization Internals</div><div class="chapter-subtitle">4-bit for training (QLoRA) and for deploy (GGUF) — and where it breaks</div></div>
+  </div>
+  <p class="chapter-intro">Quantization shows up twice: <strong>NF4</strong> to <em>train</em> a big model on one GPU (QLoRA), and <strong>GGUF Q-levels</strong> to <em>ship</em> it small. Same idea (fewer bits per weight), different stage. Reference: <a href="cheatsheet_deployment.html" style="color:#fdba74;">Deployment cheatsheet</a>. <strong style="color:#fdba74;">🧪 Runnable:</strong> the NF4 config lives in <code>scripts/utils.py</code>; <code>scripts/09_merge_and_gguf.py</code> + <code>11_edge_benchmark.py</code> produce the GGUF and measure the footprints quoted here (1.9 GB / 0.69 GB).</p>
+
+  <div class="grid2" style="gap:14px;">
+    <div class="card" style="border-color:#c2410c;">
+      <div class="card-title" style="background:#7c2d12; color:#fed7aa;">🏋️ Training-time: NF4 (QLoRA)</div>
+      <div class="card-body">
+<pre>BitsAndBytesConfig(
+  load_in_4bit=<span class="kw">True</span>,
+  bnb_4bit_quant_type=<span class="st">"nf4"</span>,         <span class="cm"># NormalFloat4</span>
+  bnb_4bit_use_double_quant=<span class="kw">True</span>,      <span class="cm"># quantize the constants too</span>
+  bnb_4bit_compute_dtype=torch.bfloat16)</pre>
+        <div class="tip">Frozen base stored in 4-bit NF4, LoRA adapters compute in bf16. Double-quant shaves another ~0.4 bits/param. ~6 GB for a 7–8B.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#c2410c;">
+      <div class="card-title" style="background:#7c2d12; color:#fed7aa;">📦 Deploy-time: GGUF levels</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Quant</th><th>bits/wt</th><th>Use</th></tr>
+          <tr><td>Q8_0</td><td>~8.5</td><td>near-lossless</td></tr>
+          <tr><td>Q5_K_M</td><td>~5.5</td><td>high quality</td></tr>
+          <tr><td><strong>Q4_K_M</strong></td><td>~4.8</td><td><strong>default</strong></td></tr>
+          <tr><td>Q3_K_M</td><td>~3.9</td><td>tight RAM</td></tr>
+          <tr><td>Q2_K</td><td>~2.6</td><td>last resort</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card full" style="border-color:#c2410c;">
+      <div class="card-title" style="background:#7c2d12; color:#fed7aa;">📏 The size/quality curve</div>
+      <div class="card-body">
+        <div style="font-size:0.86em; color:#94a3b8; line-height:1.9;">
+          <strong style="color:#e2e8f0;">Footprint ≈ params × bits ÷ 8.</strong> Measured at Q4_K_M: SmolLM3-3B → <strong>1.9 GB</strong>, MiniCPM5-1B → <strong>0.69 GB</strong> (fits a Pi).<br>
+          Q4_K_M is the sweet spot for most models. Below ~Q3 quality drops fast — and <strong style="color:#fca5a5;">small models degrade earlier</strong> than big ones (less redundancy to spare), so a 1B at Q2 can be noticeably worse while a 70B at Q2 is still usable.
+        </div>
+        <div class="good" style="margin-top:8px;">Pick the smallest quant whose footprint fits RAM with headroom for the KV-cache — then verify quality didn't fall off with a quick perplexity/recall check.</div>
+      </div>
+    </div>
   </div>
 </div>
 
