@@ -146,40 +146,41 @@
   <a href="index.html" style="display:block;font-size:.72em;color:#38bdf8;text-decoration:none;padding:8px 12px;margin:-8px -12px 10px;border-bottom:1px solid #1e293b;background:rgba(56,189,248,.06);">← Back to Index</a>
   <div class="logo">🤖 Finetune Handbook<br><span>For Weekend Warriors</span></div>
   <ul>
-    <li class="section">Foundation</li>
+    <li class="section">Part 0 · Orientation</li>
+    <li><a href="#orientation">🗺️ Start Here — The Map</a></li>
+    <li class="section">Part I · Foundations</li>
     <li><a href="#pytorch">① PyTorch Core</a></li>
+    <li><a href="#pytorchinternals">🔧 Module Internals</a></li>
     <li><a href="#datasets">② HF Datasets</a></li>
+    <li><a href="#datastack">🗄️ The Dataset Zoo</a></li>
     <li><a href="#transformers">③ HF Transformers</a></li>
-    <li class="section">Fine-Tuning</li>
-    <li><a href="#lora">④ LoRA / QLoRA</a></li>
-    <li><a href="#unsloth">⑤ Unsloth SFT</a></li>
-    <li><a href="#causal">⑥ Causal LM & Pretraining</a></li>
-    <li><a href="#methods">⑦ FT Methods Compared</a></li>
-    <li class="section">Cloud</li>
-    <li><a href="#sagemaker">⑧ SageMaker</a></li>
-    <li><a href="#bedrock">⑨ Bedrock</a></li>
-    <li class="section">Practical</li>
-    <li><a href="#datastack">Dataset Zoo</a></li>
-    <li><a href="#pytorchinternals">Module Internals</a></li>
-    <li><a href="#adapters">Adapter Patterns</a></li>
-    <li><a href="#evaluation">Evaluation</a></li>
-    <li><a href="#owndata">Bring Your Data</a></li>
-    <li class="section">Deep Dives</li>
-    <li><a href="#lossmasking">🎭 Loss · Templates · LR</a></li>
-    <li><a href="#tokensurgery">🔤 Tokenizer Surgery</a></li>
-    <li><a href="#engines">⚙️ Unsloth vs TRL</a></li>
+    <li class="section">Part II · Preparing Data</li>
+    <li><a href="#owndata">📂 Bring Your Own Data</a></li>
     <li><a href="#synthdata">🧫 Synthetic Data</a></li>
-    <li><a href="#forgetting">🧠 Forgetting</a></li>
+    <li class="section">Part III · Training</li>
+    <li><a href="#lora">④ LoRA &amp; QLoRA</a></li>
+    <li><a href="#engines">⚙️ Engines: Unsloth vs TRL</a></li>
+    <li><a href="#causal">⑤ Continued Pretraining</a></li>
+    <li><a href="#tokensurgery">🔤 Tokenizer Surgery</a></li>
+    <li><a href="#unsloth">⑥ Supervised Fine-Tuning</a></li>
+    <li><a href="#lossmasking">🎭 Loss · Templates · LR</a></li>
+    <li><a href="#methods">⑦ Methods: DPO · ORPO · GRPO</a></li>
+    <li class="section">Part IV · Proving It Works</li>
+    <li><a href="#evaluation">📊 Evaluation</a></li>
+    <li><a href="#forgetting">🧠 Catastrophic Forgetting</a></li>
+    <li><a href="#adapters">🔌 Adapter Patterns</a></li>
+    <li class="section">Part V · Shipping It</li>
     <li><a href="#merging">🔗 Model Merging</a></li>
     <li><a href="#quantization">🗜️ Quantization</a></li>
+    <li><a href="#sagemaker">⑧ SageMaker</a></li>
+    <li><a href="#bedrock">⑨ Bedrock</a></li>
+    <li><a href="#workflow">✓ End-to-End Workflow</a></li>
+    <li><a href="#decision">❓ Decision Guide</a></li>
+    <li class="section">Part VI · All Together</li>
+    <li><a href="#casestudy" style="color:#34d399;">🧪 Case Study (Chem)</a></li>
     <li><a href="#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp Exercise</a></li>
-    <li class="section">Case Study</li>
-    <li><a href="#casestudy" style="color:#34d399;">🧪 CPT→SFT→Edge (Chem)</a></li>
-    <li class="section">Reference</li>
-    <li><a href="#workflow">Full Workflow</a></li>
-    <li><a href="#decision">Decision Guide</a></li>
-    <li><a href="#scripts">Working Scripts</a></li>
-    <li><a href="#references">References</a></li>
+    <li><a href="#scripts">💻 Working Scripts</a></li>
+    <li><a href="#references">📚 References</a></li>
   </ul>
 </nav>
 
@@ -190,18 +191,14 @@
   <h1>Best Is Not Always Better.<br><span>Finetune Handbook</span></h1>
   <p>Large context windows can pull in knowledge at inference — but you can't call an API from an embedded device, a compliance boundary, or a 10M-request pipeline. This is where small, specialized models earn their place.</p>
   <div class="flow-bar">
-    <a class="step" href="#pytorch">PyTorch</a><span class="arr">→</span>
-    <a class="step" href="#datasets">HF Datasets</a><span class="arr">→</span>
-    <a class="step" href="#transformers">Transformers</a><span class="arr">→</span>
-    <a class="step" href="#lora">LoRA / QLoRA</a><span class="arr">→</span>
-    <a class="step" href="#unsloth">Unsloth SFT</a><span class="arr">→</span>
-    <a class="step" href="#causal">Causal LM / Pretrain</a><span class="arr">→</span>
-    <a class="step" href="#methods">FT Methods</a>
+    <a class="step" href="#orientation" style="background:#0369a1;">🗺️ The Map</a><span class="arr">→</span>
+    <a class="step" href="#pytorch">Foundations</a><span class="arr">→</span>
+    <a class="step" href="#owndata" style="background:#14532d;">Data</a><span class="arr">→</span>
+    <a class="step" href="#lora" style="background:#713f12;">Training</a><span class="arr">→</span>
+    <a class="step" href="#evaluation" style="background:#134e4a;">Proving It</a><span class="arr">→</span>
+    <a class="step" href="#merging" style="background:#155e75;">Shipping It</a>
     <span style="color:#334155; font-size:0.85em; margin:0 4px;">│</span>
-    <span style="font-size:0.65em; color:#475569; text-transform:uppercase; letter-spacing:0.1em; align-self:center;">Cloud Engines</span>
-    <span class="arr">→</span>
-    <a class="step" href="#sagemaker" style="background:#1e3a5f;">SageMaker</a><span class="arr">→</span>
-    <a class="step" href="#bedrock" style="background:#3b0f0f;">Bedrock</a>
+    <a class="step" href="#casestudy" style="background:#065f46;">🧪 Case Study</a>
   </div>
 </div>
 
