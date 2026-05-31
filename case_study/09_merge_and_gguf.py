@@ -93,22 +93,28 @@ def to_gguf(merged: Path) -> Path | None:
         convert = Path(shutil.which("convert_hf_to_gguf.py"))
     quantize = shutil.which("llama-quantize") or (Path(llama) / "llama-quantize" if llama else None)
 
-    f16 = merged / "model-f16.gguf"
+    q8 = merged / "model-q8_0.gguf"
     quant = merged / f"model-{config.QUANT.lower()}.gguf"
-    if convert and quantize and Path(quantize).exists():
-        print(f"  converting to F16 GGUF via {convert} ...")
-        subprocess.run([sys.executable, str(convert), str(merged), "--outfile", str(f16),
-                        "--outtype", "f16"], check=True)
-        print(f"  quantizing to {config.QUANT} ...")
-        subprocess.run([str(quantize), str(f16), str(quant), config.QUANT], check=True)
-        print(f"  GGUF: {quant} ({quant.stat().st_size/1e6:.0f} MB)")
-        return quant
+    if convert:
+        # convert_hf_to_gguf.py can emit a quantized GGUF DIRECTLY (q8_0) — no compiled llama-quantize
+        # needed. This is the no-build path and works for any arch llama.cpp supports (incl. SmolLM3).
+        print(f"  converting merged model -> q8_0 GGUF via {convert} (no build needed) ...")
+        subprocess.run([sys.executable, str(convert), str(merged), "--outfile", str(q8),
+                        "--outtype", "q8_0"], check=True)
+        print(f"  GGUF: {q8} ({q8.stat().st_size/1e6:.0f} MB)")
+        # Optional: a smaller Q4_K_M if a built llama-quantize is present.
+        if quantize and Path(str(quantize)).exists():
+            print(f"  also quantizing to {config.QUANT} ...")
+            subprocess.run([str(quantize), str(q8), str(quant), config.QUANT], check=True)
+            return quant
+        return q8
 
-    print("\n  [skip GGUF] llama.cpp not found. To produce GGUF, clone + build llama.cpp, then:")
-    print(f"    python <llama.cpp>/convert_hf_to_gguf.py {merged} --outfile {f16} --outtype f16")
-    print(f"    <llama.cpp>/llama-quantize {f16} {quant} {config.QUANT}")
-    print("  (set LLAMA_CPP=/path/to/llama.cpp and re-run to do it automatically.)")
-    print("  NOTE: Ollama (§10) can import the MERGED safetensors directly, no GGUF step needed.")
+    print("\n  [skip GGUF] llama.cpp convert script not found. SmolLM3 can't be imported as safetensors")
+    print("  by Ollama (unsupported arch), so for SmolLM3 you NEED a GGUF. One-time setup (no build):")
+    print("    git clone https://github.com/ggml-org/llama.cpp ~/llama.cpp")
+    print("    ../.venv/bin/pip install -r ~/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt")
+    print("  then re-run with:  LLAMA_CPP=~/llama.cpp bash case_study/run.sh smollm3 09 10 11 12 13")
+    print("  (the 135M is LlamaForCausalLM, which Ollama imports directly — no GGUF needed there.)")
     return None
 
 
