@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Data Gen, Model Merging & Push-to-HF Cheatsheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 14px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 1040px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.85em; color: #15803d; border-bottom: 3px solid #15803d; padding-bottom: 6px; margin-bottom: 6px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .lede { color: #475569; font-size: 0.92em; margin-bottom: 16px; line-height: 1.6; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.74em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.84em; line-height: 1.55; white-space: pre-wrap; }
+  .kw { color: #c678dd; font-weight: 600; } .fn { color: #0891b2; } .st { color: #16a34a; }
+  .cm { color: #7f848e; font-style: italic; } .nb { color: #d97706; }
+  .c1 { background: #f0fdf4; border-left: 3px solid #15803d; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c2 { background: #fff7ed; border-left: 3px solid #f97316; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c3 { background: #fef2f2; border-left: 3px solid #ef4444; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .t1 .card-title { background: #166534; } .t2 .card-title { background: #0369a1; }
+  .t3 .card-title { background: #6d28d9; } .t4 .card-title { background: #b45309; }
+  .t5 .card-title { background: #b91c1c; } .t6 .card-title { background: #0f766e; }
+  .t7 .card-title { background: #be185d; } .t8 .card-title { background: #4338ca; }
+  .t9 .card-title { background: #9a3412; } .t10 .card-title { background: #374151; }
+  .full { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8em; margin: 6px 0 2px; }
+  td, th { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; } tr:last-child td { border-bottom: none; }
+  code { background: #f0fdf4; padding: 1px 4px; border-radius: 3px; font-family: 'Fira Mono', monospace; font-size: 0.92em; }
+  @media print { body { background: white; font-size: 11px; } .page { box-shadow: none; margin: 0; padding: 16px 20px; } }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a><span style="color:#475569;">|</span><a href="handbook.html#casestudy" style="color:#94a3b8;text-decoration:none;">🧪 Case Study</a></div>
+<div class="page">
+  <h1>🧬 Data Gen · Model Merging · Push-to-HF <span>— scale your data, fuse models, ship to the Hub</span></h1>
+  <p class="lede">The three "force-multiplier" steps once your pipeline works: <strong>generate</strong> more training data with an LLM, <strong>merge</strong> several fine-tunes into one, and <strong>publish</strong> adapters, merged models and datasets so they're reusable and citable.</p>
+
+  <div class="grid">
+
+    <!-- 1: SYNTHETIC DATA OVERVIEW -->
+    <div class="card t1">
+      <div class="card-title">① Synthetic data — the methods</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Method</th><th>Idea</th></tr>
+          <tr><td>Distillation</td><td>strong teacher writes completions for your prompts</td></tr>
+          <tr><td>Self-Instruct</td><td>seed tasks → LLM generates more tasks+answers</td></tr>
+          <tr><td>Evol-Instruct</td><td>LLM rewrites prompts harder/deeper</td></tr>
+          <tr><td>Magpie</td><td>prompt-only: aligned LLM emits its own queries</td></tr>
+        </table>
+        <span class="c1">SFT data is scarce and expensive to hand-write — synthesis closes the gap. Best for clear, checkable tasks; pair with human-written seeds for your domain.</span>
+        <span class="c3">Mind licenses: many model EULAs restrict using their outputs to train competitors. Check before distilling.</span>
+      </div>
+    </div>
+
+    <!-- 2: DISTILLATION -->
+    <div class="card t2">
+      <div class="card-title">② Distillation (teacher → data)</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> openai <span class="kw">import</span> OpenAI          <span class="cm"># or a local vLLM/Ollama endpoint</span>
+client = <span class="fn">OpenAI</span>()
+
+<span class="kw">def</span> <span class="fn">make_pair</span>(question):
+    r = client.chat.completions.<span class="fn">create</span>(model=<span class="st">"strong-model"</span>,
+        messages=[{<span class="st">"role"</span>:<span class="st">"user"</span>,<span class="st">"content"</span>:question}], temperature=<span class="nb">0.4</span>)
+    <span class="kw">return</span> {<span class="st">"prompt"</span>:question, <span class="st">"completion"</span>:r.choices[<span class="nb">0</span>].message.content}
+</pre>
+        <span class="c1">Feed it your domain questions (or generate questions from your corpus headings); keep a strong model's answers as gold completions. Cheapest way to bootstrap an SFT set.</span>
+      </div>
+    </div>
+
+    <!-- 3: SELF-INSTRUCT -->
+    <div class="card t3">
+      <div class="card-title">③ Self-Instruct / Evol-Instruct loop</div>
+      <div class="card-body"><pre>
+seed = load_seed_tasks()      <span class="cm"># ~10–50 human examples</span>
+<span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(rounds):
+    few = random.<span class="fn">sample</span>(seed, <span class="nb">6</span>)
+    new = llm(<span class="st">f"Here are tasks:\n{few}\nWrite 5 NEW, diverse tasks + answers"</span>)
+    seed += <span class="fn">dedupe</span>(parse(new))      <span class="cm"># rouge/embedding dedupe vs pool</span>
+</pre>
+        <span class="c1">Few-shot the model with seeds, ask for new diverse tasks, dedupe, repeat. <strong>Evol-Instruct</strong> instead asks the model to make each prompt harder (add constraints, deepen reasoning).</span>
+        <span class="c2">Diversity is everything — without aggressive dedupe you get thousands of near-clones.</span>
+      </div>
+    </div>
+
+    <!-- 4: MAGPIE -->
+    <div class="card t4">
+      <div class="card-title">④ Magpie (prompt-only self-synthesis)</div>
+      <div class="card-body"><pre>
+<span class="cm"># Feed ONLY the template up to the user slot; the aligned</span>
+<span class="cm"># model "completes" a plausible user query, then you ask</span>
+<span class="cm"># it to answer that query → a full (prompt, completion) pair.</span>
+pre = <span class="st">"&lt;|im_start|&gt;user\n"</span>           <span class="cm"># nothing after it</span>
+q = model.<span class="fn">generate</span>(pre, stop=<span class="st">"&lt;|im_end|&gt;"</span>)   <span class="cm"># it invents the question</span>
+a = model.<span class="fn">chat</span>(q)
+</pre>
+        <span class="c1">Cheap, no seeds, surprisingly strong for general alignment. Weaker where the base distribution rarely surfaces the task (e.g. niche math) — there, prefer seeded distillation.</span>
+      </div>
+    </div>
+
+    <!-- 5: QUALITY CONTROL -->
+    <div class="card t5">
+      <div class="card-title">⑤ ⚠ Quality control (the real work)</div>
+      <div class="card-body">
+        <span class="c3"><strong>Decontaminate:</strong> remove any synthetic item overlapping your eval/test set or you'll measure leakage, not learning.</span>
+        <span class="c1"><strong>Dedupe</strong> (exact + near, via embeddings/MinHash), <strong>filter</strong> (length, language, refusal, format), and <strong>judge</strong> a sample (LLM-as-judge or human) for correctness.</span>
+        <span class="c2">Synthetic data inherits the teacher's errors and style. 200 clean, verified pairs beat 5,000 noisy ones for a small model.</span>
+      </div>
+    </div>
+
+    <!-- 6: MERGING OVERVIEW -->
+    <div class="card t6">
+      <div class="card-title">⑥ Model merging — methods</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Method</th><th>What it does</th></tr>
+          <tr><td>Linear</td><td>weighted average of weights</td></tr>
+          <tr><td>SLERP</td><td>spherical interp of 2 models (keeps geometry)</td></tr>
+          <tr><td>Task Arithmetic</td><td>add/subtract "task vectors" (Δ from base)</td></tr>
+          <tr><td>TIES</td><td>trim + sign-elect to cut interference (many models)</td></tr>
+          <tr><td>DARE</td><td>random-drop + rescale task vectors</td></tr>
+        </table>
+        <span class="c1">Merging fuses several fine-tunes into one model <strong>with zero training</strong> — combine a chemistry tune + a code tune, or average checkpoints for robustness. Models must share the same base/arch.</span>
+      </div>
+    </div>
+
+    <!-- 7: MERGEKIT -->
+    <div class="card t7">
+      <div class="card-title">⑦ mergekit — config + run</div>
+      <div class="card-body"><pre>
+<span class="cm"># merge.yaml  (TIES example)</span>
+merge_method: ties
+base_model: HuggingFaceTB/SmolLM3-3B-Base
+models:
+  - model: user/chem-sft
+    parameters: {weight: 0.5, density: 0.6}
+  - model: user/code-sft
+    parameters: {weight: 0.5, density: 0.6}
+parameters: {normalize: true}
+dtype: bfloat16
+</pre>
+<pre>
+pip install mergekit
+mergekit-yaml merge.yaml ./merged --cuda
+</pre>
+        <span class="c2">Density = fraction of task-vector kept (TIES/DARE). Start equal weights, then tune. Output is a normal HF model — deploy it like any other.</span>
+      </div>
+    </div>
+
+    <!-- 8: PUSH ADAPTERS/MODELS -->
+    <div class="card t8">
+      <div class="card-title">⑧ Push to HF — adapters & models</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> huggingface_hub <span class="kw">import</span> HfApi
+api = <span class="fn">HfApi</span>()                        <span class="cm"># reads HF token from login/env</span>
+
+api.<span class="fn">create_repo</span>(<span class="st">"user/Model-LoRA"</span>, exist_ok=<span class="kw">True</span>)
+api.<span class="fn">upload_folder</span>(repo_id=<span class="st">"user/Model-LoRA"</span>, folder_path=<span class="st">"adapter/"</span>,
+    allow_patterns=[<span class="st">"adapter_*"</span>,<span class="st">"*.json"</span>,<span class="st">"*.md"</span>])   <span class="cm"># skip optimizer state</span>
+
+<span class="cm"># or, straight from training objects:</span>
+model.<span class="fn">push_to_hub</span>(<span class="st">"user/Model-LoRA"</span>); tok.<span class="fn">push_to_hub</span>(<span class="st">"user/Model-LoRA"</span>)
+</pre>
+        <span class="c1">Push the small <strong>adapter</strong> (≈100 MB) for reuse and the <strong>merged</strong> model for direct deploy. <code>allow_patterns</code> keeps multi-GB checkpoints/optimizer states out of the repo.</span>
+      </div>
+    </div>
+
+    <!-- 9: PUSH DATASET + CARD -->
+    <div class="card t9">
+      <div class="card-title">⑨ Push the dataset + a model card</div>
+      <div class="card-body"><pre>
+api.<span class="fn">create_repo</span>(<span class="st">"user/my-data"</span>, repo_type=<span class="st">"dataset"</span>, exist_ok=<span class="kw">True</span>)
+api.<span class="fn">upload_folder</span>(repo_id=<span class="st">"user/my-data"</span>, repo_type=<span class="st">"dataset"</span>,
+                  folder_path=<span class="st">"data/"</span>)
+
+<span class="cm"># README.md with YAML frontmatter = the model/dataset card</span>
+<span class="cm"># ---\nlicense: apache-2.0\nbase_model: ...\ndatasets: [user/my-data]\n---</span>
+</pre>
+        <span class="c1">A good card (license, base_model, datasets, measured numbers, repro command) makes artifacts discoverable and trustworthy. Cross-link adapter ↔ dataset ↔ merged model.</span>
+        <span class="c3">Never upload tokens/keys or licensed raw data. Wikipedia text → attribute CC BY-SA.</span>
+      </div>
+    </div>
+
+    <!-- 10: THIS CASE STUDY'S ARTIFACTS -->
+    <div class="card t10">
+      <div class="card-title">⑩ Live artifacts from this handbook</div>
+      <div class="card-body">
+        <span class="c1">Published with the exact pattern above (script: <code>case_study/scripts/17_push_to_hf.py</code>):</span>
+        <table>
+          <tr><th>Artifact</th><th>Repo</th></tr>
+          <tr><td>dataset</td><td><a href="https://huggingface.co/datasets/anisiraj/comp-chem-quantum-chem">comp-chem-quantum-chem</a></td></tr>
+          <tr><td>SmolLM3 SFT</td><td><a href="https://huggingface.co/anisiraj/SmolLM3-3B-compchem-sft-lora">SmolLM3-3B-compchem-sft-lora</a></td></tr>
+          <tr><td>MiniCPM5 SFT</td><td><a href="https://huggingface.co/anisiraj/MiniCPM5-1B-compchem-sft-lora">MiniCPM5-1B-compchem-sft-lora</a></td></tr>
+          <tr><td>SmolLM3 CPT</td><td><a href="https://huggingface.co/anisiraj/SmolLM3-3B-compchem-cpt-lora">SmolLM3-3B-compchem-cpt-lora</a></td></tr>
+          <tr><td>merged (Ollama)</td><td><a href="https://huggingface.co/anisiraj/MiniCPM5-1B-compchem-merged">MiniCPM5-1B-compchem-merged</a></td></tr>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- grid -->
+
+  <div style="margin-top:14px; background:#f0fdf4; border:1px solid #15803d; border-radius:8px; padding:12px 16px;">
+    <strong style="color:#166534; font-size:0.85em; text-transform:uppercase; letter-spacing:0.06em;">⚡ Force-multiplier loop</strong>
+    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:0.85em;">
+      <span style="background:#166534;color:white;padding:4px 10px;border-radius:20px;">seed Q&amp;A</span><span style="color:#999;">→</span>
+      <span style="background:#0369a1;color:white;padding:4px 10px;border-radius:20px;">synthesize + QC</span><span style="color:#999;">→</span>
+      <span style="background:#b45309;color:white;padding:4px 10px;border-radius:20px;">fine-tune</span><span style="color:#999;">→</span>
+      <span style="background:#0f766e;color:white;padding:4px 10px;border-radius:20px;">merge (optional)</span><span style="color:#999;">→</span>
+      <span style="background:#4338ca;color:white;padding:4px 10px;border-radius:20px;">push adapter+model+data to HF</span>
+    </div>
+    <div style="margin-top:8px; font-size:0.8em; color:#64748b;">See it applied in the <a href="handbook.html#casestudy" style="color:#15803d;">🧪 Case Study</a>. Install: <code>pip install huggingface_hub mergekit</code></div>
+  </div>
+</div>
+</body>
+</html>

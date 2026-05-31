@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Chat Templates & Data Prep Cheatsheet — tokens, equations, tables, tools</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 14px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 1040px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.85em; color: #7c3aed; border-bottom: 3px solid #7c3aed; padding-bottom: 6px; margin-bottom: 6px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .lede { color: #475569; font-size: 0.92em; margin-bottom: 16px; line-height: 1.6; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.74em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.84em; line-height: 1.55; white-space: pre-wrap; }
+  .kw { color: #c678dd; font-weight: 600; } .fn { color: #0891b2; } .st { color: #16a34a; }
+  .cm { color: #7f848e; font-style: italic; } .nb { color: #d97706; }
+  .c1 { background: #f5f3ff; border-left: 3px solid #7c3aed; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c2 { background: #fff7ed; border-left: 3px solid #f97316; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c3 { background: #fef2f2; border-left: 3px solid #ef4444; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .t1 .card-title { background: #6d28d9; } .t2 .card-title { background: #0369a1; }
+  .t3 .card-title { background: #be185d; } .t4 .card-title { background: #b45309; }
+  .t5 .card-title { background: #15803d; } .t6 .card-title { background: #0f766e; }
+  .t7 .card-title { background: #4338ca; } .t8 .card-title { background: #b91c1c; }
+  .t9 .card-title { background: #374151; } .t10 .card-title { background: #9333ea; }
+  .full { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8em; margin: 6px 0 2px; }
+  td, th { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code { background: #f5f3ff; padding: 1px 4px; border-radius: 3px; font-family: 'Fira Mono', monospace; font-size: 0.92em; }
+  @media print { body { background: white; font-size: 11px; } .page { box-shadow: none; margin: 0; padding: 16px 20px; } }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a><span style="color:#475569;">|</span><a href="handbook.html#casestudy" style="color:#94a3b8;text-decoration:none;">🧪 Case Study</a></div>
+<div class="page">
+  <h1>💬 Chat Templates & Data Prep <span>— tokens, equations, tables, structured content & tools</span></h1>
+  <p class="lede">The data backbone of fine-tuning. A model only understands its <strong>own</strong> chat template; get the tokens, special characters, equations and tool format right at <em>prep</em> time or training silently learns the wrong thing. Family tokens verified May 2026.</p>
+
+  <div class="grid">
+
+    <!-- 1: WHAT A CHAT TEMPLATE IS -->
+    <div class="card t1">
+      <div class="card-title">① What a chat template actually does</div>
+      <div class="card-body"><pre>
+msgs = [{<span class="st">"role"</span>:<span class="st">"system"</span>,<span class="st">"content"</span>:<span class="st">"You are concise."</span>},
+        {<span class="st">"role"</span>:<span class="st">"user"</span>,  <span class="st">"content"</span>:<span class="st">"What is DFT?"</span>}]
+
+text = tok.<span class="fn">apply_chat_template</span>(msgs, tokenize=<span class="kw">False</span>,
+                                  add_generation_prompt=<span class="kw">True</span>)
+<span class="cm"># &lt;|im_start|&gt;system\nYou are concise.&lt;|im_end|&gt;</span>
+<span class="cm"># &lt;|im_start|&gt;user\nWhat is DFT?&lt;|im_end|&gt;</span>
+<span class="cm"># &lt;|im_start|&gt;assistant\n     ← model writes after this</span>
+</pre>
+        <span class="c1">It's a <strong>Jinja</strong> template stored on the tokenizer (<code>tok.chat_template</code>) that turns a message list into the exact token stream the model saw in post-training. Wrong template = degraded, weird outputs.</span>
+        <span class="c3">Never hand-concatenate role strings. Always go through <code>apply_chat_template</code> so you inherit the model's exact tokens.</span>
+      </div>
+    </div>
+
+    <!-- 2: MODEL FAMILY TOKENS -->
+    <div class="card t2">
+      <div class="card-title">② Model families & their turn tokens</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Family</th><th>Turn markers</th></tr>
+          <tr><td>ChatML (Qwen, SmolLM, OLMo)</td><td><code>&lt;|im_start|&gt;</code> role … <code>&lt;|im_end|&gt;</code></td></tr>
+          <tr><td>Llama-3.x</td><td><code>&lt;|start_header_id|&gt;</code>role<code>&lt;|end_header_id|&gt;</code> … <code>&lt;|eot_id|&gt;</code></td></tr>
+          <tr><td>Llama-4</td><td><code>&lt;|header_start|&gt;</code> … <code>&lt;|eot|&gt;</code></td></tr>
+          <tr><td>Gemma-2/3</td><td><code>&lt;start_of_turn&gt;</code> … <code>&lt;end_of_turn&gt;</code></td></tr>
+          <tr><td>Mistral</td><td><code>[INST]</code> … <code>[/INST]</code></td></tr>
+          <tr><td>Phi-3</td><td><code>&lt;|user|&gt;</code> <code>&lt;|assistant|&gt;</code> <code>&lt;|end|&gt;</code></td></tr>
+        </table>
+        <span class="c2">Alternation rules differ: Gemma-3 forces strict user/assistant alternation; SmolLM3 keeps only the <em>first</em> system message; Qwen is permissive. Validate on a sample before training a batch.</span>
+      </div>
+    </div>
+
+    <!-- 3: TOOL CALLING -->
+    <div class="card t3">
+      <div class="card-title">③ Tool / function calling format</div>
+      <div class="card-body"><pre>
+tools = [{<span class="st">"type"</span>:<span class="st">"function"</span>, <span class="st">"function"</span>:{
+  <span class="st">"name"</span>:<span class="st">"get_energy"</span>,
+  <span class="st">"description"</span>:<span class="st">"DFT total energy"</span>,
+  <span class="st">"parameters"</span>:{<span class="st">"type"</span>:<span class="st">"object"</span>,
+    <span class="st">"properties"</span>:{<span class="st">"molecule"</span>:{<span class="st">"type"</span>:<span class="st">"string"</span>}}}}]
+
+text = tok.<span class="fn">apply_chat_template</span>(msgs, tools=tools,
+                add_generation_prompt=<span class="kw">True</span>, tokenize=<span class="kw">False</span>)
+<span class="cm"># Model emits, e.g. (ChatML/Qwen-style):</span>
+<span class="cm"># &lt;tool_call&gt;{"name":"get_energy","arguments":{...}}&lt;/tool_call&gt;</span>
+</pre>
+        <span class="c1">Pass tools via the <code>tools=</code> arg — the template injects the schema. To <em>train</em> tool use, your data needs assistant turns containing the tool-call block + a <code>role:"tool"</code> turn with the result.</span>
+        <span class="c2">Tool-calling is <strong>emergent with scale</strong>: a 1–3B can learn the format; a 135M usually can't. Don't fine-tune capability that isn't there.</span>
+      </div>
+    </div>
+
+    <!-- 4: TRAIN VS INFERENCE -->
+    <div class="card t4">
+      <div class="card-title">④ add_generation_prompt: train vs infer</div>
+      <div class="card-body"><pre>
+<span class="cm"># INFERENCE: open the assistant turn, model continues</span>
+tok.<span class="fn">apply_chat_template</span>(msgs, add_generation_prompt=<span class="kw">True</span>)
+
+<span class="cm"># TRAINING (full convo incl. the answer): no gen prompt</span>
+tok.<span class="fn">apply_chat_template</span>(full_msgs, add_generation_prompt=<span class="kw">False</span>)
+</pre>
+        <span class="c3">Base (non-instruct) models have <strong>no</strong> chat template — feed raw text, let them continue. Using a chat template on a base model (or vice-versa) is a silent quality killer.</span>
+        <span class="c1">For SFT with <code>assistant_only_loss</code>, the template must mark assistant spans with <code>{% generation %}…{% endgeneration %}</code>.</span>
+      </div>
+    </div>
+
+    <!-- 5: DATA SHAPES -->
+    <div class="card t5">
+      <div class="card-title">⑤ The 3 data shapes you'll prepare</div>
+      <div class="card-body"><pre>
+<span class="cm"># raw text → CPT (full loss)</span>
+{<span class="st">"text"</span>: <span class="st">"Coupled cluster theory expands ..."</span>}
+
+<span class="cm"># prompt/completion → SFT (completion-only)</span>
+{<span class="st">"prompt"</span>:<span class="st">"..."</span>, <span class="st">"completion"</span>:<span class="st">"..."</span>}
+
+<span class="cm"># messages → chat SFT (assistant-only)</span>
+{<span class="st">"messages"</span>:[{<span class="st">"role"</span>:..., <span class="st">"content"</span>:...}, ...]}
+</pre>
+        <span class="c1">Clean every corpus: <strong>NFKC normalize</strong>, strip boilerplate, and <strong>dedupe by content hash</strong> (redirects/mirrors silently over-weight topics). Quality &gt; quantity for SFT.</span>
+      </div>
+    </div>
+
+    <!-- 6: NEW TOKENS -->
+    <div class="card t6">
+      <div class="card-title">⑥ New tokens — usually you DON'T need them</div>
+      <div class="card-body"><pre>
+<span class="cm"># FIRST CHECK: does the tokenizer already cover it?</span>
+<span class="fn">len</span>(tok(<span class="st">r"$\hat{H}\psi = E\psi$"</span>).input_ids)   <span class="cm"># LaTeX = ASCII → fine</span>
+
+<span class="cm"># Only if you add a genuinely new symbol/control token:</span>
+tok.<span class="fn">add_special_tokens</span>({<span class="st">"additional_special_tokens"</span>:[<span class="st">"&lt;rxn&gt;"</span>]})
+model.<span class="fn">resize_token_embeddings</span>(<span class="fn">len</span>(tok),
+                            mean_resizing=<span class="kw">True</span>)  <span class="cm"># init new rows at the embedding mean</span>
+</pre>
+        <span class="c1">LaTeX, JSON, HTML, code, chemical formulae are <strong>plain ASCII</strong> — the BPE tokenizer handles them. Adding tokens you don't need just dilutes training.</span>
+        <span class="c2">If you DO add tokens: <code>mean_resizing=True</code> places new rows on the pretrained manifold (better than random). It's simple but collapses new tokens into one subspace — fine for a few control tokens, risky for many.</span>
+      </div>
+    </div>
+
+    <!-- 7: TRAIN EMBEDDINGS -->
+    <div class="card t7">
+      <div class="card-title">⑦ When to train embeddings (embed_tokens + lm_head)</div>
+      <div class="card-body"><pre>
+<span class="cm"># Add them to LoRA targets ONLY when:</span>
+<span class="cm">#  • CPT shifts the token distribution a lot (new domain/notation)</span>
+<span class="cm">#  • you added new tokens (their rows start ~random)</span>
+target_modules = [<span class="st">"q_proj"</span>,<span class="st">"k_proj"</span>,<span class="st">"v_proj"</span>,<span class="st">"o_proj"</span>,
+                  <span class="st">"gate_proj"</span>,<span class="st">"up_proj"</span>,<span class="st">"down_proj"</span>,
+                  <span class="st">"embed_tokens"</span>, <span class="st">"lm_head"</span>]   <span class="cm"># ← CPT</span>
+
+<span class="cm"># Give embeddings a SMALLER LR so they don't destabilise</span>
+embedding_learning_rate = <span class="nb">5e-6</span>   <span class="cm"># vs 5e-5 base (Unsloth supports this)</span>
+</pre>
+        <span class="c3">For plain SFT on existing tokens, <strong>leave them out</strong> — tuning the big embedding/head on tiny data overfits and bloats the adapter (e.g. 116 MB → 1.2 GB).</span>
+      </div>
+    </div>
+
+    <!-- 8: EQUATIONS -->
+    <div class="card t8">
+      <div class="card-title">⑧ Equations (LaTeX) — keep, don't garble</div>
+      <div class="card-body"><pre>
+<span class="cm"># Wikipedia renders math TWICE: a broken glyph dump AND</span>
+<span class="cm"># clean LaTeX in {\displaystyle ...}. Keep the LaTeX, drop the glyphs.</span>
+<span class="cm"># Use a BALANCED-BRACE scan (LaTeX nests {}): a regex truncates it.</span>
+latex = extract_between_balanced(text, <span class="st">r"{\displaystyle"</span>)
+clean = <span class="fn">f"</span> $ {latex} $ <span class="fn">"</span>           <span class="cm"># store inline as $...$</span>
+</pre>
+        <span class="c1">Represent math as inline <code>$LaTeX$</code> (ASCII) — no new tokens, the model reads it as text, and it round-trips to rendered math downstream.</span>
+        <span class="c2">Garbled glyph soup (e.g. "Ĥψ=Eψ" pulled from a PNG alt-text) <em>teaches noise</em>. Always inspect a few raw samples before training.</span>
+      </div>
+    </div>
+
+    <!-- 9: TABLES / HTML / STRUCTURED -->
+    <div class="card t9">
+      <div class="card-title">⑨ Tables, HTML, JSON & structured output</div>
+      <div class="card-body"><pre>
+<span class="cm"># Keep structure the model can reproduce: Markdown tables / fenced JSON</span>
+completion = <span class="st">"""| method | scaling |
+|--------|---------|
+| HF     | N^4     |"""</span>
+
+<span class="cm"># For guaranteed-valid JSON output, constrain at INFERENCE</span>
+<span class="cm"># (don't rely on SFT alone): grammars / structured outputs</span>
+<span class="cm">#   llama.cpp: --grammar  | Ollama: format:"json" | vLLM: guided_json</span>
+</pre>
+        <span class="c1">Strip presentational HTML (<code>&lt;div&gt;</code>, styles) from training text — it's noise. <em>Keep</em> semantic structure (tables, lists, code fences) if you want the model to emit it.</span>
+        <span class="c2">Be consistent: pick one structure (Markdown <em>or</em> JSON) for a given task and use it across every example. Mixed formats confuse a small model.</span>
+      </div>
+    </div>
+
+    <!-- 10: SPECIAL CHARS / ENCODING -->
+    <div class="card t10">
+      <div class="card-title">⑩ Special characters & encoding hygiene</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> unicodedata
+clean = unicodedata.<span class="fn">normalize</span>(<span class="st">"NFKC"</span>, raw)  <span class="cm"># canonical form</span>
+<span class="cm"># NFKC folds look-alikes: ﬁ→fi, full-width →ASCII, odd spaces→space</span>
+</pre>
+        <span class="c1">Normalize once at prep time so "café" and "café" (combining vs precomposed) don't become different token sequences. Keep meaningful Unicode (μ, Å, ψ) — modern BPE handles it.</span>
+        <span class="c3">Watch invisible chars: NBSP (<code> </code>), zero-width (<code>​</code>), BOM. They sneak in from PDFs/web and blow up token counts.</span>
+      </div>
+    </div>
+
+  </div><!-- grid -->
+
+  <div style="margin-top:14px; background:#f5f3ff; border:1px solid #7c3aed; border-radius:8px; padding:12px 16px;">
+    <strong style="color:#6d28d9; font-size:0.85em; text-transform:uppercase; letter-spacing:0.06em;">⚡ Data-prep decision flow</strong>
+    <div style="margin-top:8px; font-size:0.86em; color:#374151; line-height:1.7;">
+      <strong>1.</strong> Pick the data shape → it picks the loss (text=full, prompt/completion=completion-only, messages=assistant-only).
+      &nbsp;<strong>2.</strong> Render through the model's <em>own</em> <code>apply_chat_template</code>.
+      &nbsp;<strong>3.</strong> New token? Almost never — LaTeX/JSON/HTML are ASCII. If yes → <code>add_special_tokens</code> + <code>resize_token_embeddings(mean_resizing=True)</code> + train <code>embed_tokens/lm_head</code>.
+      &nbsp;<strong>4.</strong> NFKC, dedupe, strip boilerplate, <em>eyeball 5 samples</em>.
+    </div>
+    <div style="margin-top:8px; font-size:0.8em; color:#64748b;">Applied in the <a href="handbook.html#casestudy" style="color:#7c3aed;">🧪 Case Study</a> (Steps 1–3) · corpus + Q&amp;A: <a href="https://huggingface.co/datasets/anisiraj/comp-chem-quantum-chem" style="color:#7c3aed;">comp-chem-quantum-chem dataset</a></div>
+  </div>
+</div>
+</body>
+</html>

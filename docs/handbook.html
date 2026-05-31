@@ -2875,9 +2875,25 @@ curl localhost:11434/api/generate -d <span class="st">'{
 
   <div style="margin-top:16px; font-size:.85em; color:#475569;">
     <strong>Reproduce all of it:</strong> <code>bash case_study/run.sh minicpm5</code> (or <code>smollm3</code> / <code>smollm2-135m</code>) streams live logs and prints a results digest; <code>bash case_study/overnight.sh</code> runs the heavy comparisons + rank sweeps unattended.
-    Code: <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study/scripts" target="_blank" style="color:#34d399;">case_study/scripts/</a> (§1–§16) ·
+    Code: <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study/scripts" target="_blank" style="color:#34d399;">case_study/scripts/</a> (§1–§17) ·
     teaching notebooks: <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study/notebooks" target="_blank" style="color:#34d399;">case_study/notebooks/</a> ·
     settings: <code>scripts/config.py</code> · recipe + sources: <code>RESEARCH_NOTES.md</code> · debugging: <code>PITFALLS.md</code>.
+    <div style="margin-top:8px;">
+      <strong style="color:#94a3b8;">Published artifacts</strong> (script <code>17_push_to_hf.py</code>):
+      <a href="https://huggingface.co/datasets/anisiraj/comp-chem-quantum-chem" target="_blank" style="color:#34d399;">dataset</a> ·
+      <a href="https://huggingface.co/anisiraj/SmolLM3-3B-compchem-sft-lora" target="_blank" style="color:#34d399;">SmolLM3 SFT LoRA</a> ·
+      <a href="https://huggingface.co/anisiraj/MiniCPM5-1B-compchem-sft-lora" target="_blank" style="color:#34d399;">MiniCPM5 SFT LoRA</a> ·
+      <a href="https://huggingface.co/anisiraj/SmolLM3-3B-compchem-cpt-lora" target="_blank" style="color:#34d399;">SmolLM3 CPT LoRA</a> ·
+      <a href="https://huggingface.co/anisiraj/MiniCPM5-1B-compchem-merged" target="_blank" style="color:#34d399;">MiniCPM5 merged (Ollama-ready)</a>
+    </div>
+    <div style="margin-top:8px;">
+      <strong style="color:#94a3b8;">Deep-dive cheatsheets</strong>:
+      <a href="cheatsheet_sft_trainer.html" style="color:#60a5fa;">SFT Trainer</a> ·
+      <a href="cheatsheet_chat_templates_data.html" style="color:#60a5fa;">Chat Templates & Data Prep</a> ·
+      <a href="cheatsheet_metrics.html" style="color:#60a5fa;">Metrics</a> ·
+      <a href="cheatsheet_deployment.html" style="color:#60a5fa;">Deployment</a> ·
+      <a href="cheatsheet_datagen_merge_hf.html" style="color:#60a5fa;">Data Gen · Merge · Push-to-HF</a>
+    </div>
   </div>
 </div>
 
