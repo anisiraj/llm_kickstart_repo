@@ -30,8 +30,8 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent
-REPO = ROOT.parent
+ROOT = Path(__file__).resolve().parent              # case_study/scripts/
+REPO = ROOT.parent.parent                            # repo root (holds .venv / .venv-rl)
 
 
 def _sib(fname: str, name: str):

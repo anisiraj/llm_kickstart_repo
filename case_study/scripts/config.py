@@ -10,7 +10,8 @@ import random
 from pathlib import Path
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-ROOT = Path(__file__).resolve().parent
+# config.py lives in case_study/scripts/, so the case-study root (where data/outputs live) is parent.parent.
+ROOT = Path(__file__).resolve().parent.parent
 import os as _os
 
 DATA = ROOT / "data"

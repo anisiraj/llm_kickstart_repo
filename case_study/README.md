@@ -22,26 +22,40 @@ bash run.sh smollm3 06 07           # only specific sections
   `git clone https://github.com/ggml-org/llama.cpp ~/llama.cpp` + `pip install -r .../requirements-convert_hf_to_gguf.txt`, then prefix runs with `LLAMA_CPP=~/llama.cpp`.
 - `run.sh` auto-sets `HF_HUB_OFFLINE=1` once models are cached (avoids a transformers phone-home crash).
 
-## Scripts & notebooks (each `.py` has a verified `.ipynb` twin where noted)
-| § | Script | What it does | Env |
-|---|--------|--------------|-----|
-| 1 | `01_build_corpus.py` / `.ipynb` | Wikipedia → cleaned CPT corpus; **equation/LaTeX handling**, dedup, manifest | either |
-| 2 | `02_data_availability.py` / `.ipynb` | hand-authored Q&A; quantifies the ~99× raw-vs-SFT data asymmetry | either |
-| 3 | `03_cpt.py` / `.ipynb` | **CPT** — full causal loss, LoRA incl. `embed_tokens`/`lm_head`; HF + Unsloth backends | both |
-| 4 | `04_cpt_base_vs_instruct.py` / `.ipynb` | CPT from base vs instruct + **catastrophic-forgetting** smoke test | per model |
-| 5 | `05_sft.py` / `.ipynb` | **SFT** — completion-only loss (prints the unmasked-token fraction) | per model |
-| 6 | `06_base_vs_instruct_sweep.py` / `.ipynb` | centerpiece: base-vs-instruct over SFT-set size; perplexity **and** keyword recall | per model |
-| 7 | `07_eval.py` / `.ipynb` | scorecard before/after SFT (domain ppl, completion ppl, recall, generations) | per model |
-| 8 | `08_unsloth_vs_hf.py` / `.ipynb` | HF vs Unsloth speed/VRAM head-to-head (135M) | both |
-| 9 | `09_merge_and_gguf.py` / `.ipynb` | merge LoRA → F16 GGUF (Ollama quantizes to Q4_K_M, <2 GB) | per model |
-| 10 | `10_ollama_deploy.py` / `.ipynb` | import into Ollama + query the local API (tok/s) | per model |
-| 11 | `11_edge_benchmark.py` / `.ipynb` | on-device footprint + speed (reproduce on a Raspberry Pi with the same code) | per model |
-| 12 | `12_harness.py` / `.ipynb` | agent tool-loop + lm-evaluation-harness recipe | per model |
-| 13 | `13_smollm3_toolcall.py` | tool-calling on our fine-tuned models (native API + capability probe) | per model |
-| 14 | `14_compare_cpt_vs_sft.py` | **CPT-only vs SFT side by side** (visual + numerical) | per model |
-| 15 | `15_equation_probe.py` | does the model reproduce domain **equations** in LaTeX? (base vs +CPT) | per model |
-| — | `config.py` | single source of truth: models, seeds, RUN_MODE, hyperparameters | — |
-| — | `utils.py` | shared helpers: model loading (4-bit/bf16), SFT model build, generation, metrics | — |
+## Layout
+```
+case_study/
+  run.sh                         one-command end-to-end runner (+ live logs + digest)
+  README.md  RESEARCH_NOTES.md  PITFALLS.md
+  scripts/    config.py  utils.py  01..15_*.py     ← the runnable pipeline (source of truth)
+  notebooks/  01..07_*.ipynb                       ← teaching twins for Part A
+  data/  outputs/  logs/                           ← generated (gitignored)
+```
+`run.sh` invokes `scripts/`; you can also run a script directly, e.g. `../.venv/bin/python scripts/03_cpt.py`.
+
+## Scripts (`scripts/`) — the runnable pipeline
+| § | Script | What it does | Env | Notebook? |
+|---|--------|--------------|-----|-----------|
+| 1 | `01_build_corpus.py` | Wikipedia → cleaned CPT corpus; **equation/LaTeX handling**, dedup, manifest | either | ✅ |
+| 2 | `02_data_availability.py` | hand-authored Q&A; quantifies the ~99× raw-vs-SFT data asymmetry | either | ✅ |
+| 3 | `03_cpt.py` | **CPT** — full causal loss, LoRA incl. `embed_tokens`/`lm_head`; HF + Unsloth backends | both | ✅ |
+| 4 | `04_cpt_base_vs_instruct.py` | CPT from base vs instruct + **catastrophic-forgetting** smoke test | per model | ✅ |
+| 5 | `05_sft.py` | **SFT** — completion-only loss (prints the unmasked-token fraction) | per model | ✅ |
+| 6 | `06_base_vs_instruct_sweep.py` | centerpiece: base-vs-instruct over SFT-set size; perplexity **and** keyword recall | per model | ✅ |
+| 7 | `07_eval.py` | scorecard before/after SFT (domain ppl, completion ppl, recall, generations) | per model | ✅ |
+| 8 | `08_unsloth_vs_hf.py` | HF vs Unsloth speed/VRAM head-to-head (135M) | both | — |
+| 9 | `09_merge_and_gguf.py` | merge LoRA → F16 GGUF (Ollama quantizes to Q4_K_M, <2 GB) | per model | — |
+| 10 | `10_ollama_deploy.py` | import into Ollama + query the local API (tok/s) | per model | — |
+| 11 | `11_edge_benchmark.py` | on-device footprint + speed (reproduce on a Raspberry Pi with the same code) | per model | — |
+| 12 | `12_harness.py` | agent tool-loop + lm-evaluation-harness recipe | per model | — |
+| 13 | `13_smollm3_toolcall.py` | tool-calling on our fine-tuned models (native API + capability probe) | per model | — |
+| 14 | `14_compare_cpt_vs_sft.py` | **CPT-only vs SFT side by side** (visual + numerical) | per model | — |
+| 15 | `15_equation_probe.py` | does the model reproduce domain **equations** in LaTeX? (base vs +CPT) | per model | — |
+| — | `config.py` | single source of truth: models, seeds, RUN_MODE, hyperparameters | — | — |
+| — | `utils.py` | shared helpers: model loading (4-bit/bf16), SFT model build, generation, metrics | — | — |
+
+Notebooks (`notebooks/`) mirror the Part-A teaching narrative (§1–§7) and import the corresponding
+script so code never drifts; Part-B (§8–§15) runs via `run.sh` / direct script calls.
 
 ## Data & wrangling
 - **Corpus**: 41 Wikipedia pages (comp/quantum chemistry), ~112k tokens, CC BY-SA (attributed in `data/corpus/manifest.json`).
@@ -60,13 +74,3 @@ bash run.sh smollm3 06 07           # only specific sections
 - `config.py` holds all knobs; seeds set for python/numpy/torch/transformers; env recorded into each metrics JSON.
 - `RUN_MODE` (env `CASE_STUDY_MODE` or `set_mode`): **trial** caps data+steps for a fast plumbing check; **full** is the real run. Notebooks expose the same top-level flag.
 - Outputs are **model-scoped** (`outputs/<model_key>/`); `data/`, `outputs/`, `logs/` are gitignored (regenerable).
-
-## Layout
-```
-case_study/
-  config.py  utils.py            core (settings + shared helpers)
-  01..15_*.py (+ .ipynb twins)   the pipeline
-  run.sh                          one-command end-to-end runner (+ digest)
-  RESEARCH_NOTES.md  PITFALLS.md  recipe/sources + debugging
-  data/  outputs/  logs/          generated (gitignored)
-```

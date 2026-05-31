@@ -72,33 +72,33 @@ run() {  # run <id> <logname> <python> <script> [args...]
 
 # ── the pipeline ────────────────────────────────────────────────────────────────
 if [ "$MODEL" = "smollm3" ]; then
-  run 01 01_corpus.log     $US 01_build_corpus.py
-  run 02 02_data.log       $US 02_data_availability.py
-  run 03 03_cpt.log        $US 03_cpt.py --backend unsloth --force
-  run 04 04_forgetting.log $US 04_cpt_base_vs_instruct.py --force
-  run 05 05_sft.log        $US 05_sft.py --force
-  run 06 06_sweep.log      $US 06_base_vs_instruct_sweep.py --force
-  run 07 07_eval.log       $US 07_eval.py --force
-  run 09 09_merge.log      $US 09_merge_and_gguf.py
-  run 10 10_ollama.log     $US 10_ollama_deploy.py
-  run 11 11_edge.log       $US 11_edge_benchmark.py
-  run 12 12_harness.log    $US 12_harness.py
-  run 13 13_toolcall.log   $US 13_smollm3_toolcall.py
+  run 01 01_corpus.log     $US scripts/01_build_corpus.py
+  run 02 02_data.log       $US scripts/02_data_availability.py
+  run 03 03_cpt.log        $US scripts/03_cpt.py --backend unsloth --force
+  run 04 04_forgetting.log $US scripts/04_cpt_base_vs_instruct.py --force
+  run 05 05_sft.log        $US scripts/05_sft.py --force
+  run 06 06_sweep.log      $US scripts/06_base_vs_instruct_sweep.py --force
+  run 07 07_eval.log       $US scripts/07_eval.py --force
+  run 09 09_merge.log      $US scripts/09_merge_and_gguf.py
+  run 10 10_ollama.log     $US scripts/10_ollama_deploy.py
+  run 11 11_edge.log       $US scripts/11_edge_benchmark.py
+  run 12 12_harness.log    $US scripts/12_harness.py
+  run 13 13_toolcall.log   $US scripts/13_smollm3_toolcall.py
 else
-  run 01 01_corpus.log        $HF 01_build_corpus.py
-  run 02 02_data.log          $HF 02_data_availability.py
-  run 03 03_cpt_hf.log        $HF 03_cpt.py --backend hf --force
-  run 03 03_cpt_unsloth.log   $US 03_cpt.py --backend unsloth --force
-  run 04 04_forgetting.log    $HF 04_cpt_base_vs_instruct.py --force
-  run 05 05_sft.log           $HF 05_sft.py --force
-  run 06 06_sweep.log         $HF 06_base_vs_instruct_sweep.py --force
-  run 07 07_eval.log          $HF 07_eval.py --force
-  run 08 08_bench.log         $HF 08_unsloth_vs_hf.py --force
-  run 09 09_merge.log         $HF 09_merge_and_gguf.py
-  run 10 10_ollama.log        $HF 10_ollama_deploy.py
-  run 11 11_edge.log          $HF 11_edge_benchmark.py
-  run 12 12_harness.log       $HF 12_harness.py
-  run 13 13_toolcall.log      $HF 13_smollm3_toolcall.py
+  run 01 01_corpus.log        $HF scripts/01_build_corpus.py
+  run 02 02_data.log          $HF scripts/02_data_availability.py
+  run 03 03_cpt_hf.log        $HF scripts/03_cpt.py --backend hf --force
+  run 03 03_cpt_unsloth.log   $US scripts/03_cpt.py --backend unsloth --force
+  run 04 04_forgetting.log    $HF scripts/04_cpt_base_vs_instruct.py --force
+  run 05 05_sft.log           $HF scripts/05_sft.py --force
+  run 06 06_sweep.log         $HF scripts/06_base_vs_instruct_sweep.py --force
+  run 07 07_eval.log          $HF scripts/07_eval.py --force
+  run 08 08_bench.log         $HF scripts/08_unsloth_vs_hf.py --force
+  run 09 09_merge.log         $HF scripts/09_merge_and_gguf.py
+  run 10 10_ollama.log        $HF scripts/10_ollama_deploy.py
+  run 11 11_edge.log          $HF scripts/11_edge_benchmark.py
+  run 12 12_harness.log       $HF scripts/12_harness.py
+  run 13 13_toolcall.log      $HF scripts/13_smollm3_toolcall.py
 fi
 
 # ── results digest ───────────────────────────────────────────────────────────

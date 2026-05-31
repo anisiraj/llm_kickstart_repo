@@ -2706,10 +2706,12 @@ SFTConfig(completion_only_loss=<span class="kw">True</span>)
   </div>
 
   <div style="margin-top:14px; font-size:.78em; color:#475569;">
-    Reproduce: <code>bash case_study/run.sh smollm3</code> (or <code>smollm2-135m</code>). Scripts:
-    <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study" target="_blank" style="color:#34d399;">case_study/</a>
-    — §1 corpus · §3 CPT · §5 SFT · §6 base-vs-instruct sweep · §9–§11 GGUF/Ollama/edge · §13 tool-call · §14 CPT-vs-SFT compare.
-    Every number above is written by these scripts; settings in <code>config.py</code>; recipe + sources in <code>RESEARCH_NOTES.md</code>.
+    Reproduce: <code>bash case_study/run.sh smollm3</code> (or <code>smollm2-135m</code>). Code lives in
+    <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study/scripts" target="_blank" style="color:#34d399;">case_study/scripts/</a>
+    (the runnable pipeline, §1–§15) with teaching
+    <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study/notebooks" target="_blank" style="color:#34d399;">notebooks/</a>
+    for §1–§7. Every number above is written by those scripts; settings in <code>scripts/config.py</code>;
+    recipe + sources in <code>RESEARCH_NOTES.md</code>, gotchas in <code>PITFALLS.md</code>.
   </div>
 </div>
 
