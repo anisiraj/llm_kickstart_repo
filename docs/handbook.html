@@ -6,7 +6,7 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Mono:wght@400;500&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', Arial, sans-serif; font-size: 13px; background: #0f172a; color: #e2e8f0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 15px; background: #0f172a; color: #e2e8f0; }
 
   /* NAV */
   nav { position: fixed; top: 0; left: 0; width: 200px; height: 100vh; background: #1e293b; padding: 20px 0; overflow-y: auto; z-index: 100; border-right: 1px solid #334155; }
@@ -48,7 +48,7 @@
   .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: hidden; }
   .card-title { font-size: 0.7em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
   .card-body { padding: 10px 12px; }
-  pre { font-family: 'Fira Mono', monospace; font-size: 0.81em; line-height: 1.6; white-space: pre-wrap; color: #e2e8f0; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.84em; line-height: 1.6; white-space: pre-wrap; color: #e2e8f0; }
 
   /* SYNTAX */
   .kw  { color: #c084fc; font-weight: 600; }
@@ -2536,55 +2536,54 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
 <div class="chapter" id="casestudy" style="background:#08140d; border-top:2px solid #34d399;">
   <div class="chapter-header">
     <div class="chapter-num" style="background:#059669;">🧪</div>
-    <div><div class="chapter-title">Case Study — Teach a Small Model Chemistry, Then Run It on a Laptop</div>
-    <div class="chapter-subtitle">A follow-along build: Wikipedia → continued pretraining → supervised fine-tuning → a 4-bit model serving locally. Every step has runnable code and a measured result.</div></div>
+    <div><div class="chapter-title">Case Study — I Taught a Small Model Chemistry, Then Ran It on My Laptop</div>
+    <div class="chapter-subtitle">A hands-on build I did end to end: Wikipedia → continued pretraining → supervised fine-tuning → a sub-1&nbsp;GB model serving locally. Every claim below is a number I measured, including the ones that surprised me.</div></div>
   </div>
-  <p class="chapter-intro">This is the chapter that ties the whole handbook together. We take a small open model and turn it into a computational-chemistry assistant you can run on your own machine — and we <em>measure</em> every claim. You'll follow the exact two-phase recipe pros use (<strong>CPT</strong> to teach the domain, <strong>SFT</strong> to teach the task), see precisely where the loss is masked differently, sweep LoRA rank, and ship a sub-2&nbsp;GB model. The full runnable code lives in <code>case_study/scripts/</code>; the snippets below are the teachable core of each step. One command reproduces it all: <code>bash case_study/run.sh smollm3</code>.</p>
+  <p class="chapter-intro">This is the chapter where the whole handbook becomes one project. I took small open models and turned them into computational-chemistry assistants I can run on my own machine — and I refused to <em>assert</em> anything I could <em>measure</em>. I'll walk you through the exact two-phase recipe (<strong>CPT</strong> to teach the domain, <strong>SFT</strong> to teach the task), show the chat-template conversion that trips up beginners, prove where the loss is masked, and then actually deploy. Where my expectations were wrong — and a few were — I say so, because that's the part you actually learn from. Every script lives in <code>case_study/scripts/</code>; one command reproduces it all: <code>bash case_study/run.sh minicpm5</code>.</p>
 
   <div class="card full">
-    <div class="card-title">What you'll build, and the models</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      <strong>Goal:</strong> a domain assistant — ask it "What is the Hartree–Fock method?" and get a correct, concise answer — small enough to run at the edge.<br>
-      <strong>Three models</strong> (Apache-2.0), so you can see how size changes the story:
-      <ul style="padding-left:18px; margin:4px 0; color:#94a3b8;">
-        <li><strong>SmolLM2-135M</strong> — the floor: shows the mechanics; too small for real answers.</li>
-        <li><strong>SmolLM3-3B</strong> — capable: real answers, reasoning.</li>
-        <li><strong>MiniCPM5-1B</strong> — the sweet spot: small <em>and</em> tool-capable, and Llama-architecture so it deploys trivially.</li>
+    <div class="card-title">What I built, on what hardware</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      <strong>The goal:</strong> ask "What is the Hartree–Fock method?" and get a correct, concise answer from a model small enough to run at the edge. I ran the <em>same pipeline</em> on three Apache-2.0 models so you can see how size changes the story — swapping models is one variable (<code>config.py</code>), so <code>bash run.sh minicpm5</code> vs <code>smollm3</code> is the only change:
+      <ul style="padding-left:18px; margin:6px 0; color:#94a3b8;">
+        <li><strong>SmolLM2-135M</strong> — the floor. Shows the mechanics; too small to give real answers (you'll see it fail, on purpose).</li>
+        <li><strong>SmolLM3-3B</strong> — capable: real answers and reasoning, but a newer architecture that complicates deployment.</li>
+        <li><strong>MiniCPM5-1B</strong> — my favourite here: small <em>and</em> tool-capable, Llama-architecture (deploys trivially), and it gave the most dramatic before/after of the three.</li>
       </ul>
-      <strong>Hardware:</strong> everything below ran on one <strong>RTX 3080 Ti (12&nbsp;GB)</strong>. The 3B fits via QLoRA (4-bit). Numbers will vary a little with seed/hardware — that's expected.<br>
-      <strong>Swapping models is one variable:</strong> the settings live in <code>config.py</code>, so <code>CASE_STUDY_MODEL=minicpm5 bash run.sh minicpm5</code> runs the same pipeline on a different model.
+      Everything below ran on <strong>one RTX 3080 Ti (12&nbsp;GB)</strong>. The 3B fits via QLoRA (4-bit). Your numbers will differ a little with seed/hardware — that's expected, and it's why I report <em>direction and relative change</em>, never leaderboard scores.
     </div>
   </div>
 
   <!-- THE MENTAL MODEL -->
-  <div class="card full" style="margin-top:14px; border:1px solid #34d399;">
-    <div class="card-title">First, the mental model: two phases, two different losses</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      A model that "knows chemistry" and a model that "answers chemistry questions" are <em>two different things</em>, taught in two phases:
+  <div class="card full" style="margin-top:16px; border:1px solid #34d399;">
+    <div class="card-title">The one idea to hold onto: two phases, two different losses</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      A model that "knows chemistry" and a model that "answers chemistry questions" are <em>two different things</em>, taught in two phases. This single table is the spine of the chapter:
       <table>
         <tr><th></th><th>CPT — Continued PreTraining</th><th>SFT — Supervised Fine-Tuning</th></tr>
         <tr><td><strong>teaches</strong></td><td>the <em>domain</em> (knowledge, vocabulary, notation)</td><td>the <em>task</em> (follow an instruction, answer a question)</td></tr>
         <tr><td><strong>data</strong></td><td>raw text (Wikipedia articles)</td><td>prompt → completion pairs (Q&amp;A)</td></tr>
-        <tr><td><strong>loss is computed on…</strong></td><td><strong>every token</strong> (full causal LM)</td><td><strong>only the answer</strong> (the prompt is masked out)</td></tr>
-        <tr><td><strong>abundance</strong></td><td>plentiful — scrape it</td><td>scarce — you hand-write it</td></tr>
+        <tr><td><strong>loss computed on…</strong></td><td><strong>every token</strong> (full causal LM)</td><td><strong>only the answer</strong> (the prompt is masked)</td></tr>
+        <tr><td><strong>data abundance</strong></td><td>plentiful — you scrape it</td><td>scarce — you hand-write it</td></tr>
+        <tr><td><strong>what moves</strong></td><td>domain perplexity ↓</td><td>completion perplexity ↓, answer recall ↑</td></tr>
       </table>
-      That last row is the crux of this whole chapter, and the one beginners get wrong. Keep it in mind; we prove it in code in Steps&nbsp;3 and&nbsp;4.
+      Everything that follows is me proving each row in code and numbers. The "loss computed on…" row is the one beginners get wrong, so I prove it twice (Steps&nbsp;4 and&nbsp;5) by literally counting masked tokens.
     </div>
   </div>
 
   <!-- STEP 1 — DATA -->
-  <div class="card full" style="margin-top:14px;">
-    <div class="card-title">Step 1 — Build the corpus (and handle the equations)</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      We pull ~40 chemistry pages from Wikipedia via the MediaWiki API. Two non-obvious things bite you here, so the code handles both:
-      <ol style="padding-left:18px; margin:4px 0;">
-        <li><strong>You must send a User-Agent</strong> — Wikipedia returns HTTP 403 to anonymous scrapers.</li>
-        <li><strong>Equations come out twice</strong> — once as a broken glyph-by-glyph dump, once as clean LaTeX inside <code>{\displaystyle …}</code>. Feed the glyph soup to training and you teach the model noise.</li>
+  <div class="card full" style="margin-top:16px;">
+    <div class="card-title">Step 1 — Build the corpus (and survive the equations)</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      I pulled ~40 chemistry pages from Wikipedia through the MediaWiki API. Two things bit me, so the code handles both up front:
+      <ol style="padding-left:18px; margin:6px 0;">
+        <li><strong>You must send a User-Agent</strong> — Wikipedia returns HTTP&nbsp;403 to anonymous scrapers. Cost me ten confused minutes the first time.</li>
+        <li><strong>Equations come out twice</strong> — once as a broken glyph-by-glyph dump, once as clean LaTeX inside <code>{\displaystyle …}</code>. Feed the glyph soup to training and you're literally teaching the model noise.</li>
       </ol>
 <pre>
-<span class="kw">import</span> urllib.request, urllib.parse, json, re
+<span class="kw">import</span> urllib.request, urllib.parse, json
 
-UA = <span class="st">"chem-corpus/0.1 (educational; you@example.com)"</span>   <span class="cm"># required, or 403</span>
+UA = <span class="st">"chem-corpus/0.1 (educational; you@example.com)"</span>   <span class="cm"># required, or you get 403</span>
 
 <span class="kw">def</span> <span class="fn">fetch_plaintext</span>(title):
     p = <span class="fn">dict</span>(action=<span class="st">"query"</span>, format=<span class="st">"json"</span>, prop=<span class="st">"extracts"</span>,
@@ -2594,51 +2593,75 @@ UA = <span class="st">"chem-corpus/0.1 (educational; you@example.com)"</span>   
     page = <span class="fn">next</span>(<span class="fn">iter</span>(json.<span class="fn">load</span>(urllib.request.<span class="fn">urlopen</span>(req))[<span class="st">"query"</span>][<span class="st">"pages"</span>].values()))
     <span class="kw">return</span> page[<span class="st">"extract"</span>]
 
-<span class="cm"># Keep the LaTeX, drop the glyph-soup duplicate. Balanced-brace scan because</span>
-<span class="cm"># LaTeX has nested {…}, so a greedy/non-greedy regex would truncate the formula.</span>
+<span class="cm"># Keep the LaTeX, drop the glyph-soup duplicate. Balanced-brace scan because LaTeX</span>
+<span class="cm"># nests {…}, so a greedy/non-greedy regex would truncate the formula mid-expression.</span>
 <span class="kw">def</span> <span class="fn">extract_math</span>(text):
     out, i = [], <span class="nb">0</span>
     <span class="kw">while</span> (j := text.<span class="fn">find</span>(<span class="st">"{\\displaystyle"</span>, i)) != -<span class="nb">1</span>:
-        out.<span class="fn">append</span>(<span class="fn">strip_glyph_run</span>(text[i:j]))   <span class="cm"># remove the rendered duplicate</span>
+        out.<span class="fn">append</span>(text[i:j])                       <span class="cm"># text before the formula</span>
         depth, k = <span class="nb">0</span>, j
-        <span class="kw">while</span> k < <span class="fn">len</span>(text):                    <span class="cm"># walk to the matching close brace</span>
+        <span class="kw">while</span> k &lt; <span class="fn">len</span>(text):                    <span class="cm"># walk to the matching close brace</span>
             depth += (text[k] == <span class="st">"{"</span>) - (text[k] == <span class="st">"}"</span>)
             <span class="kw">if</span> depth == <span class="nb">0</span>: <span class="kw">break</span>
             k += <span class="nb">1</span>
         latex = text[j+<span class="fn">len</span>(<span class="st">"{\\displaystyle"</span>):k].<span class="fn">strip</span>()
-        out.<span class="fn">append</span>(<span class="fn">f"</span> $ {latex} $ <span class="fn">"</span>)        <span class="cm"># keep as inline $LaTeX$</span>
+        out.<span class="fn">append</span>(<span class="fn">f"</span> $ {latex} $ <span class="fn">"</span>)             <span class="cm"># keep it as inline $LaTeX$</span>
         i = k + <span class="nb">1</span>
     <span class="kw">return</span> <span class="st">""</span>.<span class="fn">join</span>(out)
 </pre>
-      We also NFKC-normalize, strip boilerplate (References/See also), and <strong>deduplicate</strong> by content hash — Wikipedia redirects silently point several titles at the same article, which would over-weight those topics in training.
-      <div class="good"><strong>Result:</strong> 41 unique pages, ~112,000 tokens, <strong>1,149 equations preserved</strong> as inline <code>$LaTeX$</code> — and we add <em>no new tokens</em> (LaTeX is plain ASCII; the existing tokenizer handles it). Full code: <code>scripts/01_build_corpus.py</code>.</div>
+      I also NFKC-normalize, strip boilerplate (References / See&nbsp;also), and <strong>deduplicate by content hash</strong> — Wikipedia redirects silently point several titles at the same article, which would over-weight those topics.
+      <div class="good"><strong>Measured result:</strong> 41 unique pages, ~111,956 tokens, <strong>1,149 equations preserved</strong> as inline <code>$LaTeX$</code> — and I added <em>no new tokens</em> (LaTeX is plain ASCII; the existing tokenizer handles it fine). Full code: <code>scripts/01_build_corpus.py</code>.</div>
     </div>
   </div>
 
   <!-- STEP 2 — DATA AVAILABILITY -->
-  <div class="card full" style="margin-top:14px;">
-    <div class="card-title">Step 2 — The reality that shapes everything: instruction data is scarce</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      Raw text was free — a few dozen pages gave 112k tokens in seconds. Instruction pairs are not: someone has to <em>write</em> the answers. Here's the shape, and how few we have:
+  <div class="card full" style="margin-top:16px;">
+    <div class="card-title">Step 2 — The reality that shapes every later decision: instruction data is scarce</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      Raw text was nearly free — a few dozen pages gave ~112k tokens in seconds. Instruction pairs are not: <em>someone has to write the answers.</em> Here's the unit of SFT data, and how few I actually had:
 <pre>
-<span class="cm"># A prompt → completion pair (the unit of SFT data). We hand-wrote 32 of these.</span>
+<span class="cm"># One prompt → completion pair. I hand-wrote 32 of these, by hand, one at a time.</span>
 {<span class="st">"prompt"</span>: <span class="st">"What does the Hartree-Fock method approximate?"</span>,
  <span class="st">"completion"</span>: <span class="st">"It approximates the many-electron wavefunction as a single "</span>
                <span class="st">"Slater determinant and treats electron repulsion in a mean-field way."</span>}
 </pre>
-      <div class="warn"><strong>The asymmetry:</strong> ~112,000 corpus tokens vs ~1,132 tokens of hand-written Q&amp;A — a <strong>~99× gap</strong>. This is why "just fine-tune it" is harder than it sounds, and why Step&nbsp;5 (base vs instruct) matters: with little SFT data, your starting point decides everything. Code: <code>scripts/02_data_availability.py</code>.</div>
+      <div class="warn"><strong>The asymmetry that decides everything:</strong> ~112,000 corpus tokens vs ~1,132 tokens of hand-written Q&amp;A — a <strong>~99× gap</strong>. This is the real reason "just fine-tune it" is harder than it sounds, and it's why Step&nbsp;7 (base vs instruct init) matters so much: with this little SFT data, your <em>starting point</em> dominates the outcome. Code: <code>scripts/02_data_availability.py</code>.</div>
     </div>
   </div>
 
-  <!-- STEP 3 — CPT -->
-  <div class="card full" style="margin-top:14px;">
-    <div class="card-title">Step 3 — CPT: teach the domain (full causal loss)</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      CPT is just "keep pretraining" on our domain text: predict the next token, over and over. We don't update the whole 3B model — that needs too much memory — we use <strong>QLoRA</strong>: load the model in 4-bit, freeze it, and train tiny low-rank <strong>LoRA</strong> adapters. Three choices worth understanding:
-      <ul style="padding-left:18px; margin:4px 0; color:#94a3b8;">
-        <li><strong>rank <code>r</code> + <code>use_rslora</code>:</strong> the adapter's capacity. We use <code>r=32</code> with rank-stabilized LoRA (scales by <code>α/√r</code> so high ranks stay stable). Step&nbsp;6 sweeps this.</li>
-        <li><strong>we add <code>embed_tokens</code> + <code>lm_head</code> to the targets:</strong> CPT shifts the <em>token distribution</em> (lots of math/LaTeX), so the embedding layers must adapt — at a <em>smaller</em> learning rate (5e-6) so they don't destabilize.</li>
-        <li><strong>packing:</strong> glue documents together (EOS-separated) and cut into fixed 512/1024-token blocks — no wasted padding.</li>
+  <!-- STEP 3 — CHAT TEMPLATES -->
+  <div class="card full" style="margin-top:16px; border:1px solid #38bdf8;">
+    <div class="card-title">Step 3 — Chat templates: what the model <em>actually</em> reads (and why it matters twice)</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      My data is just <code>{"prompt":…, "completion":…}</code>. But an instruction-tuned model was never trained on bare text — it was trained on conversations wrapped in <strong>special role tokens</strong>. Before training (and again at inference), the tokenizer's <strong>chat template</strong> converts a message list into exactly that format. You have to see what it produces:
+<pre>
+msgs = [{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"What is the Hartree-Fock method?"</span>}]
+text = tok.<span class="fn">apply_chat_template</span>(msgs, tokenize=<span class="kw">False</span>, add_generation_prompt=<span class="kw">True</span>)
+<span class="fn">print</span>(text)
+<span class="cm"># &lt;|im_start|&gt;user                              ← ChatML role tokens, baked into THIS model</span>
+<span class="cm"># What is the Hartree-Fock method?&lt;|im_end|&gt;</span>
+<span class="cm"># &lt;|im_start|&gt;assistant                         ← add_generation_prompt=True adds this open turn;</span>
+<span class="cm">#                                                 the model writes its answer right after it</span>
+</pre>
+      Three things to internalize, because they connect training and deployment:
+      <ul style="padding-left:18px; margin:6px 0; color:#94a3b8;">
+        <li><strong>The template is model-specific.</strong> SmolLM/MiniCPM use ChatML (<code>&lt;|im_start|&gt;…&lt;|im_end|&gt;</code>); Llama-3 and Mistral use different tokens. Never hardcode — read <code>tok.chat_template</code> or use Unsloth's <code>get_chat_template(tok, "chatml")</code> (see the <a href="cheatsheet_unsloth_lora.html" style="color:#60a5fa;">Unsloth/LoRA cheatsheet</a>).</li>
+        <li><strong>It's what lets completion-only loss find the boundary.</strong> The mask in Step&nbsp;5 keys off "everything up to <code>&lt;|im_start|&gt;assistant</code> is the prompt → set to <code>-100</code>; the assistant's tokens are the answer → learn those."</li>
+        <li><strong>The same <code>&lt;|im_end|&gt;</code> token reappears at deploy time</strong> — my Ollama Modelfile sets <code>stop "&lt;|im_end|&gt;"</code> so the server knows when the answer is finished. One token ties the whole pipeline together.</li>
+      </ul>
+      <div class="tip">For a <em>base</em> (non-instruct) model there is no chat template — you feed raw text and let it continue. That's exactly why, in my eval code, <code>generate_samples(..., chat=False)</code> for base/CPT models and <code>chat=True</code> for instruct/SFT models. Mixing those up is a subtle, silent cause of "why are my answers garbage." Code: <code>scripts/utils.py:generate_samples</code>.</div>
+    </div>
+  </div>
+
+  <!-- STEP 4 — CPT -->
+  <div class="card full" style="margin-top:16px;">
+    <div class="card-title">Step 4 — CPT: teach the domain (loss on every token)</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      CPT is just "keep pretraining" on my domain text: predict the next token, over and over. I don't update the whole model — that needs too much memory — I use <strong>QLoRA</strong>: load in 4-bit, freeze it, train tiny low-rank <strong>LoRA</strong> adapters. Three choices that matter:
+      <ul style="padding-left:18px; margin:6px 0; color:#94a3b8;">
+        <li><strong>rank <code>r</code> + <code>use_rslora</code>:</strong> the adapter's capacity. rank-stabilized LoRA scales the update by <code>α/√r</code> (not <code>α/r</code>) so high ranks stay stable. Step&nbsp;8 sweeps this — with a result that surprised me.</li>
+        <li><strong>I add <code>embed_tokens</code> + <code>lm_head</code> to the targets (CPT only):</strong> CPT shifts the token distribution (lots of math/LaTeX), so the embedding layers need to adapt — at a <em>smaller</em> learning rate (5e-6) so they don't destabilize.</li>
+        <li><strong>packing:</strong> glue documents together (EOS-separated), cut into fixed 512/1024-token blocks — no wasted padding.</li>
       </ul>
 <pre>
 <span class="kw">from</span> unsloth <span class="kw">import</span> FastLanguageModel
@@ -2652,153 +2675,208 @@ model = FastLanguageModel.<span class="fn">get_peft_model</span>(model,
                     <span class="st">"gate_proj"</span>,<span class="st">"up_proj"</span>,<span class="st">"down_proj"</span>,
                     <span class="st">"embed_tokens"</span>, <span class="st">"lm_head"</span>])             <span class="cm"># ← CPT adapts embeddings too</span>
 
-<span class="cm"># Pack the corpus into fixed blocks; labels == input_ids => predict EVERY token.</span>
-blocks = <span class="fn">pack_documents</span>(tok, corpus_texts, block_size=<span class="nb">512</span>)
+<span class="cm"># Pack the corpus into fixed blocks; labels == input_ids ⇒ predict EVERY token.</span>
+blocks  = <span class="fn">pack_documents</span>(tok, corpus_texts, block_size=<span class="nb">512</span>)
 dataset = Dataset.<span class="fn">from_dict</span>({<span class="st">"input_ids"</span>: blocks, <span class="st">"labels"</span>: [b[:] <span class="kw">for</span> b <span class="kw">in</span> blocks]})
 
-unmasked = <span class="fn">sum</span>(x != -<span class="nb">100</span> <span class="kw">for</span> x <span class="kw">in</span> dataset[<span class="nb">0</span>][<span class="st">"labels"</span>]) / <span class="fn">len</span>(dataset[<span class="nb">0</span>][<span class="st">"labels"</span>])
-<span class="fn">print</span>(<span class="fn">f"</span>unmasked tokens: {unmasked:.0%}<span class="fn">"</span>)   <span class="cm"># -> 100%  (full causal loss; nothing masked)</span>
+<span class="cm"># PROOF the loss is full: count labels that aren't masked (-100).</span>
+lab = dataset[<span class="nb">0</span>][<span class="st">"labels"</span>]
+<span class="fn">print</span>(<span class="fn">f"</span>unmasked: {<span class="fn">sum</span>(x != -<span class="nb">100</span> <span class="kw">for</span> x <span class="kw">in</span> lab) / <span class="fn">len</span>(lab):.0%}<span class="fn">"</span>)   <span class="cm"># → 100%  (nothing masked)</span>
 </pre>
-      <div class="good"><strong>Result (SmolLM3-3B):</strong> held-out domain perplexity 11.19 → 11.15. <em>Tiny</em> — because a 3B already knows textbook chemistry; CPT pays off far more on a weak model or genuinely novel notation. An honest, useful finding: <strong>don't expect CPT to work miracles on an already-strong base.</strong> Code: <code>scripts/03_cpt.py</code> (HF + Unsloth backends).</div>
+      <div class="good"><strong>Measured (SmolLM3-3B):</strong> held-out domain perplexity 11.19 → 11.15 (−0.3%). <strong>Honestly? Tiny.</strong> I expected more — but a 3B already knows textbook chemistry, so there's little left to teach from 40 articles. The general lesson is real and worth stating plainly: <strong>CPT pays off on a <em>weak</em> base or genuinely <em>novel</em> notation, not on a strong model that already saw the domain.</strong> (I also checked for catastrophic forgetting — general-text perplexity went 8.33 → 8.19, so it didn't forget.) Code: <code>scripts/03_cpt.py</code> (HF + Unsloth backends).</div>
     </div>
   </div>
 
-  <!-- STEP 4 — SFT -->
-  <div class="card full" style="margin-top:14px; border:1px solid #34d399;">
-    <div class="card-title">Step 4 — SFT: teach the task (loss on the answer only)</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      Now we teach it to <em>answer</em>. Same LoRA idea, but two differences from CPT: the data is prompt→completion, and <strong>we compute loss on the completion only</strong> — the prompt tokens are set to <code>-100</code> (ignored). That single flag is the whole difference:
+  <!-- STEP 5 — SFT -->
+  <div class="card full" style="margin-top:16px; border:1px solid #34d399;">
+    <div class="card-title">Step 5 — SFT: teach the task (loss on the answer only)</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      Now I teach it to <em>answer</em>. Same LoRA idea, two differences from CPT: the data is prompt→completion, and <strong>loss is computed on the completion only</strong> — the prompt tokens become <code>-100</code> (ignored). That single flag is the entire difference between "learn everything" and "learn only the answer":
 <pre>
 <span class="kw">from</span> trl <span class="kw">import</span> SFTConfig, SFTTrainer
 
 trainer = SFTTrainer(
     model=model, train_dataset=qa_pairs, processing_class=tok,
     args=SFTConfig(
-        completion_only_loss=<span class="kw">True</span>,    <span class="cm"># ← THE line: mask the prompt, learn only the answer</span>
-        num_train_epochs=<span class="nb">3</span>, learning_rate=<span class="nb">2e-4</span>))   <span class="cm"># adapters like a higher LR</span>
+        completion_only_loss=<span class="kw">True</span>,       <span class="cm"># ← THE line: mask the prompt, learn only the answer</span>
+        num_train_epochs=<span class="nb">3</span>, learning_rate=<span class="nb">2e-4</span>, packing=<span class="kw">False</span>))   <span class="cm"># no packing keeps the mask clean</span>
 
-<span class="cm"># Prove the mask: pull one collated batch and count non -100 labels.</span>
+<span class="cm"># PROOF the mask is on: pull one real collated batch and count non-(-100) labels.</span>
 labels = <span class="fn">next</span>(<span class="fn">iter</span>(trainer.<span class="fn">get_train_dataloader</span>()))[<span class="st">"labels"</span>]
-<span class="fn">print</span>(<span class="fn">f"</span>unmasked: {(labels != -<span class="nb">100</span>).<span class="fn">float</span>().<span class="fn">mean</span>():.0%}<span class="fn">"</span>)   <span class="cm"># -> ~60%  (prompt is masked!)</span>
+<span class="fn">print</span>(<span class="fn">f"</span>unmasked: {(labels != -<span class="nb">100</span>).<span class="fn">float</span>().<span class="fn">mean</span>():.0%}<span class="fn">"</span>)   <span class="cm"># → ~78–81% (the prompt is masked!)</span>
 </pre>
-      Contrast the two prints: <strong>CPT ~100% unmasked, SFT ~60%</strong>. That's the difference between "learn everything" and "learn only the answer." Forget <code>completion_only_loss</code> and the model learns to generate <em>questions</em> too — at inference it then "echoes the prompt back," a classic beginner bug.
-      <div class="good"><strong>Result (SmolLM3-3B):</strong> held-out completion perplexity <strong>39.0 → 6.6 (−83%)</strong>. Concretely, after SFT it answers: <em>"What is the Hartree–Fock method?" → "A self-consistent mean-field approximation that approximates the many-electron wavefunction as a single Slater determinant, neglecting correlation."</em> Code: <code>scripts/05_sft.py</code>.</div>
+      Put the two proofs next to each other: <strong>CPT 100% unmasked, SFT ~80% unmasked.</strong> The masked ~20% is the question text — the part we do <em>not</em> want the model learning to generate. Forget <code>completion_only_loss</code> and the model learns to produce questions too; at inference it then "echoes the prompt back" before (or instead of) answering. That's the single most common beginner bug, and now you can detect it in one line.
+      <div class="good"><strong>Measured (MiniCPM5-1B):</strong> held-out completion perplexity <strong>107.68 → 3.64 (−97%)</strong>, and on held-out questions it actually answers — verbatim from my run: <em>"What is the Hartree–Fock method?" → "An approximate wavefunction-based method that approximates the many-electron wavefunction as a single Slater determinant and treats electron–electron repulsion in a mean-field (averaged) way."</em> Code: <code>scripts/05_sft.py</code>.</div>
     </div>
   </div>
 
-  <!-- CPT vs SFT side by side -->
-  <div class="card full" style="margin-top:14px;">
-    <div class="card-title">CPT-only vs SFT — the same question, side by side</div>
-    <div class="card-body">
+  <!-- STEP 6 — BASE→CPT→SFT direction of improvement (CENTERPIECE) -->
+  <div class="card full" style="margin-top:16px; border:2px solid #34d399;">
+    <div class="card-title">Step 6 ★ — Base → CPT → SFT: the direction of improvement, measured</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      This is the comparison the whole chapter exists for. Same model, three states, the metrics that match each phase. Watch which number each phase moves — that's the proof the two phases do two different jobs:
       <table>
-        <tr><th>Prompt</th><th>After CPT only (domain LM)</th><th>After SFT (instruction-tuned)</th></tr>
-        <tr><td>What is the Hartree–Fock method?</td><td>"…the Hartree–Fock method is a method of quantum chemistry used to calculate…" — <em>continues like an article</em></td><td>"A self-consistent mean-field approximation… a single Slater determinant, neglecting correlation." — <em>answers</em></td></tr>
-        <tr><td>What does DFT compute?</td><td>"Select from: A] Electron density B] … The right option is A" — <em>drifts into quiz text</em></td><td>"A functional of the density that gives the exact energy, but it's expensive."</td></tr>
+        <tr><th>MiniCPM5-1B, at each stage</th><th>domain ppl<br><span style="font-weight:400;color:#64748b;">(CPT's job ↓)</span></th><th>completion ppl<br><span style="font-weight:400;color:#64748b;">(SFT's job ↓)</span></th><th>answer recall<br><span style="font-weight:400;color:#64748b;">(quality ↑)</span></th><th>behaviour on a held-out question</th></tr>
+        <tr><td><strong>Base instruct</strong> (no fine-tune)</td><td>24.81</td><td>107.68</td><td><strong style="color:#f87171;">5%</strong></td><td>doesn't produce our answer — rambles / generic / off-format</td></tr>
+        <tr><td><strong>+ SFT</strong> (completion-only)</td><td>34.90 <span style="color:#f59e0b;">↑</span></td><td><strong style="color:#34d399;">3.64</strong> <span style="color:#34d399;">↓97%</span></td><td><strong style="color:#34d399;">46%</strong> <span style="color:#34d399;">(9×)</span></td><td>answers crisply in our house style (see Step&nbsp;5 quote)</td></tr>
       </table>
-      <div class="good">CPT moved <strong>domain</strong> perplexity; SFT moved <strong>completion</strong> perplexity. <strong>Two phases, two jobs</strong> — visible in both the words and the numbers. Side-by-side script: <code>scripts/14_compare_cpt_vs_sft.py</code>.</div>
+      <strong>Read the arrows.</strong> Recall went <strong>5% → 46%</strong> and completion perplexity <strong>collapsed 30×</strong> — that is not "the base already knew it." On <em>our</em> custom Q&amp;A the base model essentially can't do the task, and the fine-tune clearly can. That's the differentiation, in numbers you can reproduce.
+      <div class="warn"><strong>The detail I almost missed — and it's the most instructive one:</strong> SFT made <em>domain</em> perplexity go <em>up</em> (24.81 → 34.90) while completion perplexity cratered. The two losses literally pull in opposite directions: SFT tunes the model to <em>answer in our format</em>, which makes it slightly worse at <em>continuing raw prose</em>. So you cannot judge an SFT model with a raw-text (domain) metric — it will look like a regression. Use the metric that matches the phase: completion perplexity and recall for SFT. This is the same trap, from a different angle, that bites the base-vs-instruct experiment in Step&nbsp;7.</div>
+      And the qualitative side, the same question after each phase (this is why CPT alone is not enough):
+      <table>
+        <tr><th>"What is the Hartree–Fock method?"</th><th>what comes out</th></tr>
+        <tr><td><strong>After CPT only</strong> (domain LM)</td><td>"…the Hartree–Fock method is a method of quantum chemistry used to calculate…" — keeps going like an <em>article</em>. It knows the domain; it doesn't know it's supposed to <em>answer</em>.</td></tr>
+        <tr><td><strong>After SFT</strong> (instruction-tuned)</td><td>"An approximate wavefunction-based method that approximates the many-electron wavefunction as a single Slater determinant…" — <em>answers</em>, then stops.</td></tr>
+      </table>
+      <div class="good"><strong>CPT moved domain perplexity; SFT moved completion perplexity and recall.</strong> Two phases, two jobs — visible in both the words and the numbers. SmolLM3-3B tells the same story more mildly (completion ppl 39.23 → 6.64, −83%; recall 18% → 22%) because it started stronger. Side-by-side script: <code>scripts/14_compare_cpt_vs_sft.py</code>; full scorecard: <code>scripts/07_eval.py</code>.</div>
     </div>
   </div>
 
-  <!-- STEP 5 — BASE vs INSTRUCT -->
-  <div class="card full" style="margin-top:14px;">
-    <div class="card-title">Step 5 — The experiment: with little data, start from the instruct model</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      Should you SFT the <em>base</em> model or the already-<em>instruction-tuned</em> one? With only ~30 examples it matters a lot. We sweep the training-set size for both and — importantly — measure two ways:
+  <!-- STEP 7 — BASE vs INSTRUCT -->
+  <div class="card full" style="margin-top:16px;">
+    <div class="card-title">Step 7 — With little data, start from the <em>instruct</em> model (and don't trust perplexity)</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      Should I SFT the <em>base</em> model or the already-<em>instruction-tuned</em> one? With ~30 examples it matters a lot. I swept the training-set size for both, and measured <strong>two</strong> ways on purpose:
 <pre>
 <span class="kw">for</span> init <span class="kw">in</span> (<span class="st">"base"</span>, <span class="st">"instruct"</span>):
     <span class="kw">for</span> n <span class="kw">in</span> [<span class="nb">4</span>, <span class="nb">8</span>, <span class="nb">16</span>, <span class="nb">24</span>]:                 <span class="cm"># vary how many Q&A pairs</span>
         m = <span class="fn">sft</span>(init, train_pairs[:n])
-        ppl    = <span class="fn">completion_perplexity</span>(m, heldout)  <span class="cm"># format-sensitive</span>
-        recall = <span class="fn">keyword_recall</span>(m, heldout)         <span class="cm"># generation-based, format-robust</span>
+        ppl    = <span class="fn">completion_perplexity</span>(m, heldout)   <span class="cm"># format-sensitive — can lie</span>
+        recall = <span class="fn">keyword_recall</span>(m, heldout)          <span class="cm"># generation-based — format-robust</span>
 </pre>
-      <strong>The trap:</strong> by perplexity, "base wins" — but that's a <em>format artifact</em> (the chat-tuned instruct model is penalized on plain text). By <strong>keyword recall</strong> (what fraction of the right answer it actually generates), the real story appears:
+      <strong>The trap I walked into:</strong> by perplexity, "base wins." But that's a <em>format artifact</em> — the chat-tuned instruct model is penalized when scored on plain text (the same effect as Step&nbsp;6's rising domain ppl). Score by <strong>keyword recall</strong> — what fraction of the right answer it actually generates — and the real story flips:
       <table>
-        <tr><th>recall, N = 4 → 24</th><th>base init</th><th>instruct init</th></tr>
-        <tr><td>SmolLM3-3B</td><td>16% → <strong style="color:#f87171;">6%</strong> (degrades)</td><td>16% → <strong style="color:#34d399;">21%</strong> (improves)</td></tr>
+        <tr><th>SmolLM3-3B, recall as N grows 4 → 24</th><th>base init</th><th>instruct init</th></tr>
+        <tr><td>keyword recall</td><td>16% → <strong style="color:#f87171;">6%</strong> (destabilizes)</td><td>16% → <strong style="color:#34d399;">21%</strong> (improves with data)</td></tr>
       </table>
-      <div class="good"><strong>Lesson (two for the price of one):</strong> with scarce data, <strong>instruct-init wins and scales with data; base-init destabilizes</strong> — and <strong>pick the right metric</strong>, or perplexity will lie to you. Code: <code>scripts/06_base_vs_instruct_sweep.py</code>.</div>
+      <div class="good"><strong>Two lessons for the price of one:</strong> with scarce data, <strong>instruct-init wins and scales with data while base-init falls apart</strong> — and <strong>pick the metric that matches the task</strong>, or perplexity will quietly lie to you. Code: <code>scripts/06_base_vs_instruct_sweep.py</code>.</div>
     </div>
   </div>
 
-  <!-- STEP 6 — LORA RANK -->
-  <div class="card full" style="margin-top:14px;">
-    <div class="card-title">Step 6 — How big should the LoRA adapter be? (rank sweep)</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      The rank <code>r</code> is the adapter's capacity: bigger = more it can learn, but more params/VRAM/time. <code>use_rslora=True</code> keeps high ranks well-behaved (it scales the update by <code>α/√r</code> instead of <code>α/r</code>). We hold everything fixed and vary only <code>r</code>:
+  <!-- STEP 8 — LORA RANK (with the surprise) -->
+  <div class="card full" style="margin-top:16px; border:1px solid #f59e0b;">
+    <div class="card-title">Step 8 ★ — How big should the adapter be? The rank sweep that proved me wrong</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      Rank <code>r</code> is the adapter's capacity. I assumed "bigger is better, just watch the cost," set <code>r=32</code> as my default, and ran an overnight sweep to confirm it. It did the opposite of confirm it. Holding everything else fixed and varying only <code>r</code> (rsLoRA on):
 <pre>
 <span class="kw">for</span> r <span class="kw">in</span> [<span class="nb">8</span>, <span class="nb">16</span>, <span class="nb">32</span>, <span class="nb">64</span>, <span class="nb">128</span>]:
-    cfg[<span class="st">"lora_r"</span>] = cfg[<span class="st">"lora_alpha"</span>] = r          <span class="cm"># alpha tracks r</span>
-    model = <span class="fn">sft_at_rank</span>(r, use_rslora=<span class="kw">True</span>)
+    cfg[<span class="st">"lora_r"</span>] = cfg[<span class="st">"lora_alpha"</span>] = r          <span class="cm"># alpha tracks r; rsLoRA keeps high r stable</span>
+    model = <span class="fn">sft_at_rank</span>(r)
     <span class="fn">record</span>(r, completion_ppl, recall, trainable_params, peak_vram, seconds)
 </pre>
-      You'll see quality improve then flatten while cost keeps climbing — the point is to find the knee, not to crank <code>r</code> blindly. (Illustrative 135M run: <code>r=8</code> → ppl 96 / 2.4M params; <code>r=32</code> → ppl 59 / 9.8M.) Code: <code>scripts/16_lora_rank_sweep.py</code>; the overnight runner <code>overnight.sh</code> sweeps this across models.
+      <table>
+        <tr><th>rank r</th><th>MiniCPM5-1B<br>completion ppl ↓</th><th>SmolLM3-3B<br>completion ppl ↓</th><th>trainable params</th><th>peak VRAM</th></tr>
+        <tr><td><strong>8</strong></td><td>52.6</td><td><strong style="color:#34d399;">16.4</strong> ← best</td><td>5.6M / 15.1M</td><td>1.4 / 2.3 GB</td></tr>
+        <tr><td><strong>16</strong></td><td><strong style="color:#34d399;">48.0</strong> ← best</td><td>19.0</td><td>11.2M / 30.2M</td><td>2.5 / 4.1 GB</td></tr>
+        <tr><td><strong>32</strong></td><td>53.3</td><td>26.3</td><td>22.4M / 60.5M</td><td>2.9 / 4.7 GB</td></tr>
+        <tr><td><strong>64</strong></td><td>68.1</td><td>50.3</td><td>44.8M / 120.9M</td><td>3.4 / 5.4 GB</td></tr>
+        <tr><td><strong>128</strong></td><td>168.2</td><td>72.3</td><td>89.7M / 241.8M</td><td>4.0 / 6.7 GB</td></tr>
+      </table>
+      <div class="warn"><strong>The lesson I got for free by measuring instead of assuming:</strong> on a tiny SFT set (32 pairs), <strong>higher rank actively hurts</strong> — it overfits. The sweet spot was <strong>r=8 for SmolLM3 and r=16 for MiniCPM5</strong>; by r=128 quality had fallen off a cliff (and cost ~16× the params and ~2× the VRAM). My default of r=32 was <em>past</em> the knee for both. Match adapter capacity to <em>data</em> size, not model size — and always sweep before you trust a default (including mine). Code: <code>scripts/16_lora_rank_sweep.py</code>; runner: <code>overnight.sh</code>.</div>
     </div>
   </div>
 
-  <!-- STEP 7 — DEPLOY -->
-  <div class="card full" style="margin-top:14px;">
-    <div class="card-title">Step 7 — Ship it: a sub-2 GB model serving on your machine</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      A fine-tune is only useful if you can run it. The path: <strong>merge</strong> the LoRA into the base, <strong>convert</strong> to GGUF, let <strong>Ollama</strong> quantize to Q4_K_M and serve it.
+  <!-- STEP 9 — DEPLOY FOR REAL -->
+  <div class="card full" style="margin-top:16px; border:2px solid #60a5fa;">
+    <div class="card-title">Step 9 ★ — Ship it: a sub-1 GB model serving on your own machine (every command)</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      A fine-tune is useless if you can't run it. This is the full, no-hand-waving path — exactly the commands I ran. The flow: <strong>merge</strong> the LoRA into the base → (if needed) <strong>convert</strong> to GGUF → let <strong>Ollama</strong> quantize to Q4_K_M and serve a local API.
+      <p style="margin:8px 0 4px; color:#94a3b8;"><strong>1. Merge the adapter into standalone weights</strong> (adapters can't be converted or served on their own):</p>
 <pre>
-<span class="cm"># 1. merge LoRA -> standalone weights</span>
-model = PeftModel.<span class="fn">from_pretrained</span>(base, adapter).<span class="fn">merge_and_unload</span>()
-model.<span class="fn">save_pretrained</span>(<span class="st">"merged/"</span>, safe_serialization=<span class="kw">True</span>)
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoModelForCausalLM, AutoTokenizer
+<span class="kw">from</span> peft <span class="kw">import</span> PeftModel
 
-<span class="cm"># 2. to GGUF (no compile needed) — only for non-Llama archs like SmolLM3</span>
-<span class="cm"># python llama.cpp/convert_hf_to_gguf.py merged/ --outfile model-f16.gguf --outtype f16</span>
-
-<span class="cm"># 3. Ollama imports + quantizes to ~1.9 GB and serves a local API</span>
-<span class="cm"># ollama create chem -q q4_K_M -f Modelfile     # FROM ./merged  (or the .gguf)</span>
+base   = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(<span class="st">"openbmb/MiniCPM5-1B-sft"</span>, torch_dtype=<span class="st">"bfloat16"</span>)
+merged = PeftModel.<span class="fn">from_pretrained</span>(base, <span class="st">"outputs/sft_instruct_full"</span>).<span class="fn">merge_and_unload</span>()
+merged.<span class="fn">save_pretrained</span>(<span class="st">"outputs/merged_full"</span>, safe_serialization=<span class="kw">True</span>)
+AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"openbmb/MiniCPM5-1B-sft"</span>).<span class="fn">save_pretrained</span>(<span class="st">"outputs/merged_full"</span>)
 </pre>
-      <div class="warn"><strong>Architecture matters at deploy time:</strong> Ollama imports <strong>Llama-architecture</strong> safetensors directly (MiniCPM5-1B, the 135M) — no GGUF needed. SmolLM3 is a newer arch (<code>SmolLM3ForCausalLM</code>) that Ollama <em>can't</em> import as safetensors, so it must go through a GGUF first. A real-world gotcha worth knowing before you pick a model.</div>
-      <div class="good"><strong>Result:</strong> SmolLM3-3B → <strong>1.9 GB</strong> Q4_K_M, serving at <strong>~237 tok/s</strong> on the 3080 Ti (a Raspberry Pi runs the same Modelfile at ~10–18 tok/s). Code: <code>scripts/09_merge_and_gguf.py</code>, <code>scripts/10_ollama_deploy.py</code>, <code>scripts/11_edge_benchmark.py</code>.</div>
+      <p style="margin:8px 0 4px; color:#94a3b8;"><strong>2. Architecture decides your next step.</strong> MiniCPM5 is <strong>Llama-architecture</strong>, so Ollama imports the safetensors directly — skip to step&nbsp;3. <strong>SmolLM3</strong> is a newer arch (<code>SmolLM3ForCausalLM</code>) Ollama can't read as safetensors, so it needs a GGUF first (no compile required):</p>
+<pre>
+<span class="cm"># SmolLM3 only — produce an F16 GGUF; Ollama quantizes it in step 3</span>
+python llama.cpp/convert_hf_to_gguf.py outputs/merged_full \
+       --outfile outputs/merged_full/model-f16.gguf --outtype f16
+</pre>
+      <p style="margin:8px 0 4px; color:#94a3b8;"><strong>3. Write a Modelfile</strong> (this is the real one my script emits — note <code>stop "&lt;|im_end|&gt;"</code>, the same ChatML token from Step&nbsp;3):</p>
+<pre>
+FROM .                                  <span class="cm"># MiniCPM5: the merged dir. SmolLM3: ./model-f16.gguf</span>
+PARAMETER temperature 0.3
+PARAMETER num_ctx 2048
+PARAMETER stop <span class="st">"&lt;|im_end|&gt;"</span>
+SYSTEM <span class="st">"You are a concise assistant for computational and quantum chemistry."</span>
+</pre>
+      <p style="margin:8px 0 4px; color:#94a3b8;"><strong>4. Import + quantize to Q4_K_M, then run it</strong> — Ollama does the quantization on import:</p>
+<pre>
+cd outputs/merged_full
+ollama create chem-minicpm5 -q q4_K_M -f Modelfile
+ollama run chem-minicpm5 <span class="st">"What is the Hartree-Fock method?"</span>
+</pre>
+      <p style="margin:8px 0 4px; color:#94a3b8;"><strong>5. Or serve it to a harness</strong> over Ollama's local REST API (OpenAI-compatible at <code>/v1/chat/completions</code>); the timings field is how you measure tok/s:</p>
+<pre>
+curl localhost:11434/api/generate -d <span class="st">'{
+  "model":"chem-minicpm5",
+  "prompt":"What does the Hartree-Fock method approximate?",
+  "stream":false, "options":{"temperature":0.3,"num_predict":64}}'</span>
+<span class="cm"># → {"response":"It approximates the many-electron wavefunction ...",</span>
+<span class="cm">#    "eval_count":58, "eval_duration":...}   # tok/s = eval_count / (eval_duration/1e9)</span>
+</pre>
+      <div class="good"><strong>Measured footprint:</strong> MiniCPM5-1B fine-tune → <strong>0.689&nbsp;GB</strong> on disk at Q4_K_M (SmolLM3-3B → 1.915&nbsp;GB). Both serve over the local API. Code: <code>scripts/09_merge_and_gguf.py</code>, <code>scripts/10_ollama_deploy.py</code>, <code>scripts/11_edge_benchmark.py</code>.</div>
+      <div class="warn"><strong>An honest deployment caveat (and a measuring lesson):</strong> I wanted to quote a clean tokens/sec, but my SFT model — trained on only 32 pairs — emits the end-of-turn token <em>very</em> early, so several generations were too short to time reliably (one came back as a single token). Footprint is a solid, reproducible number; a meaningful tok/s needs a larger SFT set so the model generates enough tokens to average over. The right way to get it is the <code>eval_count/eval_duration</code> the API already returns — don't eyeball a stopwatch. §11 takes the same number on a Raspberry-Pi-class device.</div>
     </div>
   </div>
 
-  <!-- STEP 8 — SIZE vs CAPABILITY -->
-  <div class="card full" style="margin-top:14px;">
-    <div class="card-title">Step 8 — What fine-tuning can't do: size vs capability</div>
-    <div class="card-body" style="font-size:.85em; color:#cbd5e1; line-height:1.7;">
-      We asked each fine-tuned model to use a tool (compute 23×19) and to write equations in LaTeX. The fine-tuned <strong>SmolLM3-3B reasons it out (437) and writes correct LaTeX</strong>; the fine-tuned <strong>135M cannot</strong> — it produces gibberish. The recipe was identical, so the gap is about <strong>model size</strong>, not training. Fine-tuning teaches a <em>task</em>; it does not grant a <em>capability</em> the base model never had. (And the base 3B already wrote equations at 95% — so on a strong model, CPT didn't even need to teach that.) This is exactly why MiniCPM5-1B is interesting: it's small enough for the edge yet large enough to actually tool-call. Code: <code>scripts/12_harness.py</code>, <code>scripts/13_smollm3_toolcall.py</code>, <code>scripts/15_equation_probe.py</code>.
+  <!-- STEP 10 — SIZE vs CAPABILITY -->
+  <div class="card full" style="margin-top:16px;">
+    <div class="card-title">Step 10 — What fine-tuning can't buy you: size vs capability</div>
+    <div class="card-body" style="font-size:.92em; color:#cbd5e1; line-height:1.75;">
+      Identical recipe, three sizes, and the gap is all about size: the fine-tuned <strong>135M produces gibberish</strong>, the <strong>1B and 3B answer in clean prose</strong>, and only the larger two reliably tool-call. Fine-tuning teaches a <em>task</em> on top of a <em>capability the base already has</em> — it does not conjure a capability from nothing.
+      <p style="margin:8px 0;">And I'll keep myself honest: the 1B answers are <em>well-formed</em> but not always <em>correct</em>. Real outputs from my run — a good one and a wrong one, side by side:</p>
+      <table>
+        <tr><th>MiniCPM5-1B answer (verbatim)</th><th>verdict</th></tr>
+        <tr><td>"MCSCF: multi-configurational self-consistent field — it optimizes both the orbitals and the coefficients of several determinants, important when static correlation is strong."</td><td><span style="color:#34d399;">correct</span></td></tr>
+        <tr><td>"[one-electron density matrix is] an operator that gives the density of the system; its eigenvalues are the energies."</td><td><span style="color:#f87171;">wrong</span> — confidently</td></tr>
+      </table>
+      <div class="tip">This is the real takeaway of the whole case study: at 1B you get a fluent, on-format domain assistant that runs in 0.7&nbsp;GB — fantastic for drafting and recall, but it still hallucinates, so keep a human (or a retrieval/verification layer) in the loop. That trade-off, made with eyes open, is exactly why MiniCPM5-1B is the interesting size: small enough for the edge, big enough to be useful, honest enough to need supervision. Code: <code>scripts/12_harness.py</code>, <code>scripts/13_toolcall.py</code>, <code>scripts/15_equation_probe.py</code>.</div>
     </div>
   </div>
 
   <!-- METRICS -->
-  <div class="card full" style="margin-top:14px;">
+  <div class="card full" style="margin-top:16px;">
     <div class="card-title">📐 The metrics, in plain words</div>
     <div class="card-body">
       <table>
         <tr><th>Metric</th><th>What it means</th><th>What it tells you</th></tr>
-        <tr><td><strong>domain perplexity</strong></td><td>how "surprised" the model is by held-out domain text (lower = less surprised)</td><td>did <strong>CPT</strong> teach the domain?</td></tr>
-        <tr><td><strong>completion perplexity</strong></td><td>perplexity on the <em>answer</em> tokens given the question</td><td>did <strong>SFT</strong> teach the task?</td></tr>
-        <tr><td><strong>keyword recall</strong></td><td>fraction of the gold answer's key words the model actually generates</td><td>answer quality — and it's <strong>format-robust</strong> (won't lie like perplexity can)</td></tr>
+        <tr><td><strong>domain perplexity</strong></td><td>how "surprised" the model is by held-out domain <em>text</em> (lower = less surprised)</td><td>did <strong>CPT</strong> teach the domain? <em>(don't use it on an SFT model — Step&nbsp;6)</em></td></tr>
+        <tr><td><strong>completion perplexity</strong></td><td>perplexity on the <em>answer</em> tokens, given the question</td><td>did <strong>SFT</strong> teach the task?</td></tr>
+        <tr><td><strong>keyword recall</strong></td><td>fraction of the gold answer's key words the model actually generates</td><td>answer quality — and it's <strong>format-robust</strong>, so it won't lie the way perplexity can</td></tr>
         <tr><td><strong>footprint / tok/s</strong></td><td>quantized size on disk (≈ RAM) and generation speed</td><td>can it run at the <strong>edge</strong>?</td></tr>
       </table>
-      <div class="tip">These are small models on tiny data, so we report <strong>relative</strong> change (before/after, base/instruct), never absolute leaderboard scores. Definitions + literature in <code>RESEARCH_NOTES.md</code>.</div>
+      <div class="tip">These are small models on tiny data, so I report <strong>relative</strong> change (before/after, base/instruct) and never absolute leaderboard scores. Definitions + literature: <code>RESEARCH_NOTES.md</code>.</div>
     </div>
   </div>
 
   <!-- PITFALLS -->
-  <div class="card full" style="margin-top:14px; border:1px solid #f59e0b;">
-    <div class="card-title">⚠️ Pitfalls we hit (so you don't have to)</div>
+  <div class="card full" style="margin-top:16px; border:1px solid #f59e0b;">
+    <div class="card-title">⚠️ Pitfalls I actually hit (so you don't have to)</div>
     <div class="card-body">
       <table>
         <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
-        <tr><td>Model "echoes the prompt" back</td><td>forgot <code>completion_only_loss=True</code> → it learned to generate prompts too. Mask the prompt.</td></tr>
-        <tr><td>CUDA out of memory on the 3B</td><td>defaults are tuned for the 135M. For a 3B on 12 GB: QLoRA 4-bit + batch 1 + seq 512 + gradient checkpointing (9 GB → 3.9 GB).</td></tr>
-        <tr><td><code>expected BFloat16 but found Float</code></td><td>hand-rolled 4-bit SFT upcasts <code>lm_head</code> → use Unsloth's <code>FastLanguageModel</code> for QLoRA SFT.</td></tr>
-        <tr><td>A section dies loading a tokenizer (ConnectError)</td><td>transformers phones home even for cached models → set <code>HF_HUB_OFFLINE=1</code> once cached.</td></tr>
-        <tr><td>SmolLM3 won't deploy to Ollama</td><td>unsupported safetensors arch → convert to GGUF first (Llama-arch models import directly).</td></tr>
-        <tr><td>"base wins" on small-data SFT</td><td>perplexity format-confound → judge by generation recall.</td></tr>
+        <tr><td>Model "echoes the prompt" back</td><td>forgot <code>completion_only_loss=True</code> → it learned to generate prompts too. Mask the prompt; verify with the one-line unmasked count.</td></tr>
+        <tr><td>SFT model looks <em>worse</em> on perplexity</td><td>you scored an instruction model with a raw-text/domain metric (format confound). Judge SFT by completion perplexity + recall (Steps&nbsp;6–7).</td></tr>
+        <tr><td>Higher LoRA rank made it worse</td><td>not a bug — overfitting on tiny data. Sweep r; on ~32 examples the knee was r=8–16, not 32+ (Step&nbsp;8).</td></tr>
+        <tr><td>CUDA out of memory on the 3B</td><td>QLoRA 4-bit + batch 1 + seq 512 + gradient checkpointing (9 GB → 3.9 GB). Defaults are tuned for the 135M.</td></tr>
+        <tr><td><code>expected BFloat16 but found Float</code></td><td>hand-rolled 4-bit SFT upcasts <code>lm_head</code> → route QLoRA SFT through Unsloth's <code>FastLanguageModel</code>.</td></tr>
+        <tr><td>A section dies loading a tokenizer (ConnectError)</td><td>transformers phones home even for cached models → <code>HF_HUB_OFFLINE=1</code> once the model is cached.</td></tr>
+        <tr><td>SmolLM3 won't import into Ollama</td><td>unsupported safetensors arch → convert to GGUF first (Llama-arch models like MiniCPM5 import directly).</td></tr>
+        <tr><td>tok/s comes back as N/A / 1 token</td><td>under-trained model emits EOS immediately. Need more SFT data; measure via the API's <code>eval_count/eval_duration</code> (Step&nbsp;9).</td></tr>
       </table>
     </div>
   </div>
 
-  <div style="margin-top:14px; font-size:.8em; color:#475569;">
-    <strong>Reproduce it all:</strong> <code>bash case_study/run.sh smollm3</code> (or <code>minicpm5</code> / <code>smollm2-135m</code>) streams live logs and prints a results digest.
+  <div style="margin-top:16px; font-size:.85em; color:#475569;">
+    <strong>Reproduce all of it:</strong> <code>bash case_study/run.sh minicpm5</code> (or <code>smollm3</code> / <code>smollm2-135m</code>) streams live logs and prints a results digest; <code>bash case_study/overnight.sh</code> runs the heavy comparisons + rank sweeps unattended.
     Code: <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study/scripts" target="_blank" style="color:#34d399;">case_study/scripts/</a> (§1–§16) ·
-    teaching notebooks: <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study/notebooks" target="_blank" style="color:#34d399;">case_study/notebooks/</a> (§1–§7) ·
+    teaching notebooks: <a href="https://github.com/anisiraj/llm_kickstart_repo/tree/master/case_study/notebooks" target="_blank" style="color:#34d399;">case_study/notebooks/</a> ·
     settings: <code>scripts/config.py</code> · recipe + sources: <code>RESEARCH_NOTES.md</code> · debugging: <code>PITFALLS.md</code>.
   </div>
 </div>
