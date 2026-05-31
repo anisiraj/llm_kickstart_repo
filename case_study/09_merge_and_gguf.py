@@ -93,21 +93,24 @@ def to_gguf(merged: Path) -> Path | None:
         convert = Path(shutil.which("convert_hf_to_gguf.py"))
     quantize = shutil.which("llama-quantize") or (Path(llama) / "llama-quantize" if llama else None)
 
-    q8 = merged / "model-q8_0.gguf"
+    f16 = merged / "model-f16.gguf"
     quant = merged / f"model-{config.QUANT.lower()}.gguf"
     if convert:
-        # convert_hf_to_gguf.py can emit a quantized GGUF DIRECTLY (q8_0) — no compiled llama-quantize
-        # needed. This is the no-build path and works for any arch llama.cpp supports (incl. SmolLM3).
-        print(f"  converting merged model -> q8_0 GGUF via {convert} (no build needed) ...")
-        subprocess.run([sys.executable, str(convert), str(merged), "--outfile", str(q8),
-                        "--outtype", "q8_0"], check=True)
-        print(f"  GGUF: {q8} ({q8.stat().st_size/1e6:.0f} MB)")
-        # Optional: a smaller Q4_K_M if a built llama-quantize is present.
+        # Convert to F16 GGUF (no build needed). The small Q4_K_M (<2GB) is produced by Ollama's
+        # `create -q q4_K_M` in §10 (no compiled llama-quantize required). If a built llama-quantize
+        # IS present we make the Q4_K_M here directly.
+        if not f16.exists():
+            print(f"  converting merged model -> F16 GGUF via {convert} (no build needed) ...")
+            subprocess.run([sys.executable, str(convert), str(merged), "--outfile", str(f16),
+                            "--outtype", "f16"], check=True)
+        print(f"  F16 GGUF: {f16} ({f16.stat().st_size/1e6:.0f} MB)")
         if quantize and Path(str(quantize)).exists():
-            print(f"  also quantizing to {config.QUANT} ...")
-            subprocess.run([str(quantize), str(q8), str(quant), config.QUANT], check=True)
+            print(f"  quantizing -> {config.QUANT} (<2GB) ...")
+            subprocess.run([str(quantize), str(f16), str(quant), config.QUANT], check=True)
+            print(f"  {config.QUANT} GGUF: {quant} ({quant.stat().st_size/1e6:.0f} MB)")
             return quant
-        return q8
+        print(f"  (Ollama will quantize F16 -> {config.QUANT} at import in §10, ~<2GB)")
+        return f16
 
     print("\n  [skip GGUF] llama.cpp convert script not found. SmolLM3 can't be imported as safetensors")
     print("  by Ollama (unsupported arch), so for SmolLM3 you NEED a GGUF. One-time setup (no build):")

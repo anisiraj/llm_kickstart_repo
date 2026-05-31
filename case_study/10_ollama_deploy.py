@@ -76,16 +76,20 @@ def run() -> dict:
         _sib("09_merge_and_gguf.py", "s9_for_10").run()
 
     name = f"chem-sft-{config.MODEL_KEY}-{config.RUN_MODE}"
+    # If §9 produced an F16 GGUF, have Ollama quantize it to Q4_K_M at import (<2GB, no build needed).
+    mf_txt = (merged / "Modelfile").read_text() if (merged / "Modelfile").exists() else ""
+    quant_flag = ["-q", "q4_K_M"] if ("f16" in mf_txt and config.LOAD_IN_4BIT) else []
     existing = subprocess.run(["ollama", "list"], capture_output=True, text=True).stdout
     if name in existing:
         print(f"  [cached] model '{name}' already imported.")
     else:
-        print(f"  importing '{name}' via `ollama create` (Ollama converts/quantizes the safetensors)...")
-        r = subprocess.run(["ollama", "create", name, "-f", "Modelfile"], cwd=str(merged),
+        how = "quantizing F16->Q4_K_M" if quant_flag else "importing"
+        print(f"  {how} '{name}' via `ollama create`...")
+        r = subprocess.run(["ollama", "create", name, *quant_flag, "-f", "Modelfile"], cwd=str(merged),
                            capture_output=True, text=True)
         if r.returncode != 0:
             print(f"  [skip] ollama create failed:\n{r.stderr[-800:]}")
-            print("  (If it's an unsupported-arch error, produce a GGUF in §9 and point FROM at it.)")
+            print("  (SmolLM3 safetensors aren't importable by Ollama — produce a GGUF in §9 first.)")
             return {"skipped": "create failed"}
         print(f"  imported '{name}'.")
 

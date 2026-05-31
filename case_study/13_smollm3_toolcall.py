@@ -73,14 +73,36 @@ def _chat(model: str, messages: list, tools=None) -> dict:
         return json.load(r)
 
 
+def _prompt_probe(model: str) -> dict:
+    """Capability fallback when the native tools API is unavailable: can the model just compute it?
+
+    Uses /api/generate (no tools, no chat-template requirement). 23×19=437. A capable model answers
+    correctly; a too-small model does not. This separates CAPABILITY from tool-API plumbing.
+    """
+    # SmolLM3 is a reasoning model — give it room to work, then look for the answer anywhere.
+    body = json.dumps({"model": model,
+                       "prompt": "What is 23 multiplied by 19? Show your work, then give the number.",
+                       "stream": False, "options": {"temperature": 0.0, "num_predict": 200}}).encode()
+    req = urllib.request.Request(f"{OLLAMA_URL}/api/generate", data=body,
+                                 headers={"Content-Type": "application/json"})
+    txt = json.load(urllib.request.urlopen(req, timeout=120)).get("response", "")
+    ok = "437" in txt
+    print(f"  [{model}] prompt-probe (23×19): {txt.strip()[:80]!r} -> correct={ok}")
+    return {"model": model, "tool_called": False, "native_tools": "unsupported",
+            "prompt_probe_correct": ok}
+
+
 def tool_call_test(model: str) -> dict:
-    """Ask a multiplication question with the multiply tool; did the model call it correctly?"""
+    """Try native tool-calling; if the GGUF template doesn't advertise tools, fall back to a probe."""
     messages = [{"role": "user", "content": "What is 23 times 19? Use the multiply tool."}]
     try:
         resp = _chat(model, messages, tools=TOOLS)
     except Exception as e:
-        print(f"  [{model}] tools API error ({type(e).__name__}) — model likely has no tool template.")
-        return {"model": model, "tool_called": False, "error": type(e).__name__}
+        # Ollama returns 400 "does not support tools" when the GGUF's chat template isn't tool-aware
+        # (common for a freshly-converted fine-tune). That's a plumbing limit, not a capability one —
+        # so probe capability directly.
+        print(f"  [{model}] native tools API unavailable ({type(e).__name__}) — prompt-probe instead:")
+        return _prompt_probe(model)
     msg = resp.get("message", {})
     calls = msg.get("tool_calls") or []
     if not calls:
