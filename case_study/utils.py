@@ -12,11 +12,12 @@ import torch
 
 def generate_samples(model, tokenizer, questions: list[str] | None = None, *,
                      max_new_tokens: int = 64, chat: bool = False, n: int | None = None,
-                     title: str = "sample generations") -> list[dict]:
-    """Generate (greedy) answers to `questions` and print them. Returns the Q/A pairs.
+                     title: str = "sample generations", quiet: bool = False) -> list[dict]:
+    """Generate (greedy) answers to `questions` and (unless quiet) print them. Returns the Q/A pairs.
 
     chat=False: feed the question text and let the model continue (right for a base/CPT model).
     chat=True : apply the tokenizer's chat template (right for an instruct/SFT model).
+    quiet=True: don't print (used when scoring the whole test set in §7).
     """
     import config
     if questions is None:
@@ -27,7 +28,8 @@ def generate_samples(model, tokenizer, questions: list[str] | None = None, *,
     model.eval()
     device = next(model.parameters()).device
     eos = tokenizer.eos_token_id
-    print(f"\n--- {title} (greedy; eyeball these) ---")
+    if not quiet:
+        print(f"\n--- {title} (greedy; eyeball these) ---")
     results = []
     for q in questions:
         if chat and getattr(tokenizer, "chat_template", None):
@@ -44,6 +46,8 @@ def generate_samples(model, tokenizer, questions: list[str] | None = None, *,
                                  do_sample=False, pad_token_id=eos)
         answer = tokenizer.decode(out[0][ids.shape[1]:], skip_special_tokens=True).strip()
         results.append({"question": q, "answer": answer})
-        print(f"\nQ: {q}\nA: {answer}")
-    print("")
+        if not quiet:
+            print(f"\nQ: {q}\nA: {answer}")
+    if not quiet:
+        print("")
     return results
