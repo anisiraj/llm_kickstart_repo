@@ -1797,6 +1797,55 @@ model.<span class="fn">push_to_hub_merged</span>(<span class="st">"user/MyModel"
 
   <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #4f46e5; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#a5b4fc;">The one idea behind all three knobs:</strong> a language model only ever learns to predict the next token — so "fine-tuning" is really just choosing <em>which</em> next-token predictions you grade it on. Masking is that choice made explicit: every masked token is a prediction you've decided not to grade. Completion-only SFT is you saying "I don't care if you can echo the user's question, only the answer that follows it." Mask the wrong span and you're grading the wrong exam — the loss still falls, it just falls on the wrong thing.<br><br>The cards below follow that thread end to end: the loss <em>modes</em> are the menu of grading schemes, the chat <em>template</em> physically marks the prompt/answer boundary the mask keys off, and the learning <em>rate</em> sets how hard each graded mistake shoves the weights. The last card is the ten-second check that proves you wired it up right — before you burn a GPU-hour discovering you didn't.</div>
 
+  <div class="card full" style="border-color:#0ea5e9; margin:16px 0;">
+    <div class="card-title" style="background:#075985; color:#bae6fd;">🧭 Your dataset's shape decides the training type — TRL auto-detects it</div>
+    <div class="card-body">
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75; margin-bottom:10px;">This is the single most important table for not repeating your last run's mistake. <strong>You don't tell TRL "do CPT" or "do SFT" — it infers the job from the columns in your dataset.</strong> Get the columns right and masking follows automatically; get them wrong and you silently train the wrong objective. Field names and behavior below are quoted from the official <a href="https://huggingface.co/docs/trl/dataset_formats" target="_blank" style="color:#7dd3fc;">TRL Dataset formats</a> guide and the <a href="https://huggingface.co/docs/trl/sft_trainer" target="_blank" style="color:#7dd3fc;">SFT Trainer</a> docs.</div>
+      <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.82em;">
+        <tr style="border-bottom:2px solid #475569;">
+          <th style="text-align:left; padding:6px 8px;">Your dataset columns</th>
+          <th style="text-align:left; padding:6px 8px;">TRL calls it</th>
+          <th style="text-align:left; padding:6px 8px;">Default loss (what's graded)</th>
+          <th style="text-align:left; padding:6px 8px;">This is effectively…</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px 8px;"><code>{"text": "..."}</code></td>
+          <td style="padding:6px 8px;">Language modeling (standard)</td>
+          <td style="padding:6px 8px;"><strong>Every token</strong> (full sequence)</td>
+          <td style="padding:6px 8px;">CPT / raw-text fine-tuning</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px 8px;"><code>{"messages": [...]}</code></td>
+          <td style="padding:6px 8px;">Language modeling (conversational)</td>
+          <td style="padding:6px 8px;"><strong>Every token</strong>, unless <code>assistant_only_loss=True</code></td>
+          <td style="padding:6px 8px;">chat-formatted CPT, or assistant-only SFT</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px 8px;"><code>{"prompt": ..., "completion": ...}</code></td>
+          <td style="padding:6px 8px;">Prompt-completion</td>
+          <td style="padding:6px 8px;"><strong>Completion only</strong> (prompt auto-masked to -100)</td>
+          <td style="padding:6px 8px;">standard SFT (Q→A)</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px 8px;"><code>{"prompt": [...], "completion": [...]}</code></td>
+          <td style="padding:6px 8px;">Prompt-completion (conversational)</td>
+          <td style="padding:6px 8px;">Completion only; combine with <code>assistant_only_loss=True</code> for multi-turn</td>
+          <td style="padding:6px 8px;">conversational SFT</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 8px;"><code>{"prompt", "chosen", "rejected"}</code></td>
+          <td style="padding:6px 8px;">Preference</td>
+          <td style="padding:6px 8px;">preference loss (not next-token)</td>
+          <td style="padding:6px 8px;">DPO / ORPO (not SFTTrainer)</td>
+        </tr>
+      </table>
+      </div>
+      <div class="good" style="margin-top:10px;">Quoted behavior: <em>"By default, the trainer computes the loss on the completion tokens only, ignoring the prompt tokens"</em> (prompt-completion); and for <code>completion_only_loss=None</code> (the default), <em>"loss is computed on the completion for prompt-completion datasets, and on the full sequence for language modeling datasets."</em> So the rule of thumb: <strong>a bare <code>"text"</code> column ⇒ full-sequence (CPT-style) loss; a <code>prompt</code>+<code>completion</code> pair ⇒ completion-only (SFT) loss.</strong> If your "SFT" used a <code>"text"</code> column, it was actually doing CPT on the whole string — a very common reason SFT underperforms CPT.</div>
+      <div style="font-size:0.78em; color:#64748b; margin-top:8px;">Trainer→format mapping (from the TRL docs): <strong>SFTTrainer</strong> → language-modeling or prompt-completion · <strong>DPOTrainer</strong> → preference · <strong>GRPOTrainer</strong> → prompt-only · <strong>RewardTrainer</strong> → preference. Full reference: <a href="https://huggingface.co/docs/trl/dataset_formats#which-dataset-type-to-use" target="_blank" style="color:#7dd3fc;">Which dataset type to use?</a></div>
+    </div>
+  </div>
+
   <div class="card full" style="border-color:#4f46e5; margin:16px 0;">
     <div class="card-title" style="background:#312e81; color:#c7d2fe;">✅ The three ways to mask loss in TRL — verified against <code>trl 0.24.0</code> / <code>transformers 5.5.0</code></div>
     <div class="card-body">
@@ -1825,7 +1874,7 @@ args = <span class="fn">SFTConfig</span>(assistant_only_loss=<span class="kw">Tr
 <span class="cm"># ⚠️ REQUIRES the chat template to contain {% generation %} ... {% endgeneration %} markers.</span>
 <span class="cm"># TRL auto-patches known families (Qwen3, Llama-3, GPT-OSS). For others it will FAIL.</span></pre>
 
-      <div class="warn" style="margin:6px 0 12px;"><strong>Measured gotcha (this bit me — it's why your SFT can silently underperform):</strong> SmolLM2-135M-Instruct's stock template has <strong>no</strong> <code>{% generation %}</code> marker (<code>"generation" in tok.chat_template → False</code>), so <code>apply_chat_template(..., return_assistant_tokens_mask=True)</code> raises a <code>ValueError</code>. On such models, <strong>use WAY 1 (prompt/completion), not <code>assistant_only_loss</code></strong> — or supply a training template that has the markers.</div>
+      <div class="warn" style="margin:6px 0 12px;"><strong>Measured gotcha (this is the silent one — verified just now on the installed stack):</strong> SmolLM2-135M-Instruct's stock template does <strong>not</strong> contain the <code>{% generation %}</code> block. Calling <code>apply_chat_template(msgs, return_assistant_tokens_mask=True, return_dict=True)</code> does <strong>not crash</strong> — it prints a warning (<em>"return_assistant_tokens_mask==True but chat template does not contain {% generation %} keyword"</em>) and returns an <strong>all-zero</strong> assistant mask (measured: <code>sum(assistant_masks)=0 of 43</code>). So <code>assistant_only_loss=True</code> on such a model can mask out <em>everything</em> — training on nothing — instead of erroring loudly. <strong>On a model without the marker, use WAY 1 (prompt/completion + <code>completion_only_loss</code>), or supply one of TRL's patched training templates.</strong> TRL bundles them and swaps them in automatically for these families when <code>assistant_only_loss=True</code>: Cohere, Cohere2, DeepSeek-V3, Gemma/Gemma3, GLM-4-MoE, GPT-OSS, Llama 3/3.1/3.2, Phi-3/3.5, Qwen2.5, Qwen3 (per <a href="https://huggingface.co/docs/trl/chat_templates" target="_blank" style="color:#fca5a5;">TRL Chat Templates docs</a>). SmolLM2 is <em>not</em> on that list, so it won't be auto-patched.</div>
 
 <pre><span class="cm"># ════ WAY 3 — legacy collator (string-match the response prefix) ════</span>
 <span class="cm"># Older but explicit: mask everything before a literal response marker.</span>
