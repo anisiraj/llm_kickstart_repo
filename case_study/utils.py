@@ -31,9 +31,10 @@ def generate_samples(model, tokenizer, questions: list[str] | None = None, *,
     results = []
     for q in questions:
         if chat and getattr(tokenizer, "chat_template", None):
-            ids = tokenizer.apply_chat_template(
-                [{"role": "user", "content": q}], add_generation_prompt=True, return_tensors="pt"
-            ).to(device)
+            enc = tokenizer.apply_chat_template(
+                [{"role": "user", "content": q}], add_generation_prompt=True,
+                return_tensors="pt", return_dict=True)
+            ids = enc["input_ids"].to(device)
         else:
             ids = tokenizer(q, return_tensors="pt").input_ids.to(device)
         with torch.no_grad():

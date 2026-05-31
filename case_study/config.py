@@ -152,6 +152,15 @@ SAMPLE_QUESTIONS = [
     "What is the Born-Oppenheimer approximation?",
 ]
 
+# §4 catastrophic-forgetting probes: NON-chemistry text + instructions. If CPT on the domain
+# corpus damages general ability, general-text perplexity rises and these answers degrade.
+GENERAL_PAGES = ["Coffee", "Association football", "Piano", "Mount Everest"]
+GENERAL_QUESTIONS = [
+    "What is the capital of France?",
+    "List three primary colors.",
+    "Write one short sentence about a dog.",
+]
+
 SFT_SWEEP_SIZES = [10, 30, 100]   # centerpiece data-availability experiment
 REPLAY_FRACTION = 0.10            # general-data rehearsal to mitigate forgetting
 QUANT = "Q4_K_M"                  # GGUF quantization target
