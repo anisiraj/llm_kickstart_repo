@@ -87,8 +87,7 @@ def run(force: bool = False) -> dict:
 
     print(f"=== §7 eval | mode={config.RUN_MODE} | device={device} | {len(test)} test pairs ===")
     # before: untrained instruct baseline
-    base = AutoModelForCausalLM.from_pretrained(
-        config.INSTRUCT_MODEL, dtype=torch.bfloat16 if device == "cuda" else torch.float32).to(device)
+    base = utils.load_causal_lm(config.INSTRUCT_MODEL)
     before = scorecard(base, tok, test, domain_blocks, device, label="instruct (no SFT)")
     del base
     if device == "cuda":
@@ -99,10 +98,9 @@ def run(force: bool = False) -> dict:
     if not adapter.exists():
         print("  (no SFT adapter yet — training it via §5)")
         _S5.run_sft(init="instruct")
-    m2 = PeftModel.from_pretrained(
-        AutoModelForCausalLM.from_pretrained(
-            config.INSTRUCT_MODEL, dtype=torch.bfloat16 if device == "cuda" else torch.float32),
-        str(adapter)).to(device)
+    m2 = PeftModel.from_pretrained(utils.load_causal_lm(config.INSTRUCT_MODEL), str(adapter))
+    if not config.LOAD_IN_4BIT and device == "cuda":
+        m2 = m2.to(device)
     after = scorecard(m2, tok, test, domain_blocks, device, label="instruct + SFT")
 
     print("\n=== before vs after SFT ===")

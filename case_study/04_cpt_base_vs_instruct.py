@@ -93,8 +93,7 @@ def run_one(model_name: str, tag: str, is_instruct: bool, domain_texts, general_
     gen_held = _CPT.pack_blocks(tok, general_texts, block)[: lim["eval_blocks"]]
 
     print(f"\n=== {tag} ({model_name}) ===")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name, dtype=torch.bfloat16 if device == "cuda" else torch.float32).to(device)
+    model = utils.load_causal_lm(model_name, training=True)   # 4-bit QLoRA if active model needs it
     dom_before = _CPT.perplexity(model, dom_held, device)
     gen_before = _CPT.perplexity(model, gen_held, device)
     print(f"  before CPT: domain ppl {dom_before:.2f} | general ppl {gen_before:.2f}")

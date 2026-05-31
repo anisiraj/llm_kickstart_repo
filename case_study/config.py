@@ -11,20 +11,52 @@ from pathlib import Path
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"
-OUTPUTS = ROOT / "outputs"
-CORPUS_DIR = DATA / "corpus"          # raw Wikipedia text (one file per page)
-SFT_DIR = DATA / "sft"                # instruction Q&A sets
-for _d in (DATA, OUTPUTS, CORPUS_DIR, SFT_DIR):
-    _d.mkdir(parents=True, exist_ok=True)
+import os as _os
 
-# ── Models (Apache-2.0, tiny) ─────────────────────────────────────────────────
-BASE_MODEL = "HuggingFaceTB/SmolLM2-135M"
-INSTRUCT_MODEL = "HuggingFaceTB/SmolLM2-135M-Instruct"
-# §13: a larger, tool-capable model to contrast with the 135M's inability to tool-call.
-# Ollama model name; override with --model. If `ollama pull smollm3` 404s, try a HF GGUF, e.g.
-#   ollama pull hf.co/HuggingFaceTB/SmolLM3-3B-GGUF:Q4_K_M   (then pass --model that name)
+DATA = ROOT / "data"
+CORPUS_DIR = DATA / "corpus"          # raw Wikipedia text (shared across models)
+SFT_DIR = DATA / "sft"                # instruction Q&A sets (shared across models)
+
+# ── Model registry — the pipeline runs on either model ────────────────────────
+# Pick with env CASE_STUDY_MODEL or set_model(). SmolLM3-3B uses QLoRA (4-bit) so it fits a 12GB GPU;
+# it must run in the Unsloth env (.venv) which has bitsandbytes. The 135M runs bf16 in either env.
+MODELS = {
+    "smollm2-135m": dict(base="HuggingFaceTB/SmolLM2-135M",
+                         instruct="HuggingFaceTB/SmolLM2-135M-Instruct", load_in_4bit=False),
+    "smollm3":      dict(base="HuggingFaceTB/SmolLM3-3B-Base",
+                         instruct="HuggingFaceTB/SmolLM3-3B", load_in_4bit=True),
+    # cheap QLoRA-path smoke test: the 135M loaded in 4-bit (verifies the SmolLM3 code path fast).
+    "smollm2-135m-4bit": dict(base="HuggingFaceTB/SmolLM2-135M",
+                              instruct="HuggingFaceTB/SmolLM2-135M-Instruct", load_in_4bit=True),
+}
+MODEL_KEY = _os.environ.get("CASE_STUDY_MODEL", "smollm2-135m").lower()
+
+# §13: Ollama name for the stock tool-capable model (override with --model).
 SMOLLM3_OLLAMA = "smollm3"
+
+# Resolved per active model (updated by set_model). OUTPUTS is model-scoped so the two models'
+# adapters/metrics never collide; DATA (corpus, seed Q&A) is shared.
+BASE_MODEL = INSTRUCT_MODEL = LOAD_IN_4BIT = OUTPUTS = None  # set by _apply_model() below
+
+
+def _apply_model() -> None:
+    global BASE_MODEL, INSTRUCT_MODEL, LOAD_IN_4BIT, OUTPUTS
+    m = MODELS[MODEL_KEY]
+    BASE_MODEL, INSTRUCT_MODEL, LOAD_IN_4BIT = m["base"], m["instruct"], m["load_in_4bit"]
+    OUTPUTS = ROOT / "outputs" / MODEL_KEY
+    for _d in (DATA, CORPUS_DIR, SFT_DIR, OUTPUTS):
+        _d.mkdir(parents=True, exist_ok=True)
+
+
+def set_model(key: str) -> None:
+    """Switch the active model (e.g. 'smollm2-135m' or 'smollm3') at runtime."""
+    global MODEL_KEY
+    assert key in MODELS, f"{key} not in {list(MODELS)}"
+    MODEL_KEY = key
+    _apply_model()
+
+
+_apply_model()
 
 # ── Run mode: TRIAL (fast smoke test) vs FULL (the real run) ──────────────────
 # Top-level flag every script/notebook reads. TRIAL caps data volume + training steps so the

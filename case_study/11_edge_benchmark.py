@@ -69,7 +69,7 @@ def run() -> dict:
         print("  [skip] no `ollama` — see §10. (On a Pi, install Ollama and re-run this same script.)")
         return {"skipped": "no ollama"}
 
-    name = f"chem-sft-{config.RUN_MODE}"
+    name = f"chem-sft-{config.MODEL_KEY}-{config.RUN_MODE}"
     fp = _model_footprint(name)
     if fp is None:
         print("  (model not deployed — deploying via §10)")

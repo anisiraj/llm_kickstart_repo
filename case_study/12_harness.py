@@ -91,7 +91,7 @@ def run() -> dict:
     if not shutil.which("ollama"):
         print("  [skip agent] no `ollama` — see §10.")
     else:
-        name = f"chem-sft-{config.RUN_MODE}"
+        name = f"chem-sft-{config.MODEL_KEY}-{config.RUN_MODE}"
         try:
             urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=3)
             tags = json.loads(urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=3).read())

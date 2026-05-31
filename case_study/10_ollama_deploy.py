@@ -75,7 +75,7 @@ def run() -> dict:
         print("  (merged model/Modelfile missing — building via §9)")
         _sib("09_merge_and_gguf.py", "s9_for_10").run()
 
-    name = f"chem-sft-{config.RUN_MODE}"
+    name = f"chem-sft-{config.MODEL_KEY}-{config.RUN_MODE}"
     existing = subprocess.run(["ollama", "list"], capture_output=True, text=True).stdout
     if name in existing:
         print(f"  [cached] model '{name}' already imported.")

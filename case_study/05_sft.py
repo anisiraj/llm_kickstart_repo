@@ -17,6 +17,12 @@ Run:  python case_study/05_sft.py                       # TRIAL, init=instruct
       CASE_STUDY_MODE=full python case_study/05_sft.py
 """
 from __future__ import annotations
+# Import unsloth FIRST (before torch/transformers/trl) so its QLoRA patches apply cleanly and the
+# dataset fingerprinting doesn't choke on patched globals. No-op in .venv-rl (unsloth not installed).
+try:
+    import unsloth  # noqa: F401,E402
+except Exception:
+    pass
 import argparse
 import importlib.util
 import json
@@ -65,9 +71,7 @@ def run_sft(init: str = "instruct", n_examples: int | None = None, force: bool =
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"=== §5 SFT [init={init}, completion-only loss] | mode={config.RUN_MODE} | device={device} ===")
-    tok = AutoTokenizer.from_pretrained(model_name)
-    if tok.pad_token is None:
-        tok.pad_token = tok.eos_token
+    sft_model, tok = utils.build_sft_model(model_name)   # bf16 (135M) or 4-bit QLoRA via Unsloth (SmolLM3)
 
     rows = load_seed(n)
     from datasets import Dataset
@@ -80,15 +84,9 @@ def run_sft(init: str = "instruct", n_examples: int | None = None, force: bool =
         gradient_accumulation_steps=config.SFT["grad_accum"],
         num_train_epochs=config.SFT["epochs"], max_steps=lim["sft_max_steps"],
         learning_rate=config.SFT["lr"], max_length=config.SFT["max_seq_len"],
-        completion_only_loss=True, packing=False,    # mask the prompt; no packing keeps masking clean
+        completion_only_loss=True, packing=False, dataset_num_proc=1,    # mask the prompt; no packing keeps masking clean
         bf16=(device == "cuda"), logging_steps=5, save_strategy="no", report_to=[], seed=config.SEED)
-    trainer = SFTTrainer(
-        model=AutoModelForCausalLM.from_pretrained(
-            model_name, dtype=torch.bfloat16 if device == "cuda" else torch.float32),
-        args=args, train_dataset=ds, processing_class=tok,
-        peft_config=LoraConfig(r=config.SFT["lora_r"], lora_alpha=config.SFT["lora_alpha"],
-                               lora_dropout=config.SFT["lora_dropout"],
-                               target_modules=config.SFT["target_modules"], task_type="CAUSAL_LM"))
+    trainer = SFTTrainer(model=sft_model, args=args, train_dataset=ds, processing_class=tok)
 
     # PROVE the masking: pull one collated batch and count non -100 labels. Completion-only loss
     # masks the prompt tokens (-100), so the fraction is well under 100% (cf. ~100% for CPT in §3).
@@ -98,7 +96,7 @@ def run_sft(init: str = "instruct", n_examples: int | None = None, force: bool =
     print(f"  unmasked-token fraction = {unmasked*100:.0f}%  -> prompt is MASKED (completion-only loss)")
 
     trainer.train()
-    model = trainer.model.to(device)
+    model = trainer.model if config.LOAD_IN_4BIT else trainer.model.to(device)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     trainer.save_model(str(out_dir / "adapter"))

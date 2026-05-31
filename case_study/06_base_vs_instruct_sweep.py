@@ -20,6 +20,12 @@ Run:  python case_study/06_base_vs_instruct_sweep.py            # TRIAL
       CASE_STUDY_MODE=full python case_study/06_base_vs_instruct_sweep.py
 """
 from __future__ import annotations
+# Import unsloth FIRST (before torch/transformers/trl) for clean QLoRA patching + dataset pickling.
+# No-op in .venv-rl (unsloth not installed).
+try:
+    import unsloth  # noqa: F401,E402
+except Exception:
+    pass
 import argparse
 import importlib.util
 import json
@@ -31,6 +37,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config  # noqa: E402
+import utils   # noqa: E402
 
 
 def _sib(fname: str, name: str):
@@ -64,29 +71,21 @@ def completion_perplexity(model, tok, pairs: list[dict], device) -> float:
 
 def sft_train(model_name: str, train_rows: list[dict], device, lim):
     """SFT a fresh model on train_rows (completion-only loss). Returns (model, tok)."""
-    from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import SFTConfig, SFTTrainer
-    from peft import LoraConfig
     from datasets import Dataset
 
-    tok = AutoTokenizer.from_pretrained(model_name)
-    if tok.pad_token is None:
-        tok.pad_token = tok.eos_token
+    sft_model, tok = utils.build_sft_model(model_name)   # bf16 (135M) or 4-bit QLoRA via Unsloth
     args = SFTConfig(
         output_dir="/tmp/sweep_ckpt", per_device_train_batch_size=config.SFT["batch_size"],
         gradient_accumulation_steps=config.SFT["grad_accum"], num_train_epochs=config.SFT["epochs"],
         max_steps=lim["sft_max_steps"], learning_rate=config.SFT["lr"],
-        max_length=config.SFT["max_seq_len"], completion_only_loss=True, packing=False,
+        max_length=config.SFT["max_seq_len"], completion_only_loss=True, packing=False, dataset_num_proc=1,
         bf16=(device == "cuda"), logging_steps=50, save_strategy="no", report_to=[], seed=config.SEED)
-    trainer = SFTTrainer(
-        model=AutoModelForCausalLM.from_pretrained(
-            model_name, dtype=torch.bfloat16 if device == "cuda" else torch.float32),
-        args=args, train_dataset=Dataset.from_list(train_rows), processing_class=tok,
-        peft_config=LoraConfig(r=config.SFT["lora_r"], lora_alpha=config.SFT["lora_alpha"],
-                               lora_dropout=config.SFT["lora_dropout"],
-                               target_modules=config.SFT["target_modules"], task_type="CAUSAL_LM"))
+    trainer = SFTTrainer(model=sft_model, args=args,
+                         train_dataset=Dataset.from_list(train_rows), processing_class=tok)
     trainer.train()
-    return trainer.model.to(device), tok
+    model = trainer.model
+    return (model if config.LOAD_IN_4BIT else model.to(device)), tok
 
 
 def run(force: bool = False) -> dict:

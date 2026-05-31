@@ -10,6 +10,66 @@ from __future__ import annotations
 import torch
 
 
+def load_causal_lm(name: str, *, training: bool = False, dtype=None):
+    """Load a causal LM honoring the active model's precision.
+
+    - config.LOAD_IN_4BIT (SmolLM3): QLoRA 4-bit via bitsandbytes (NF4 + bf16 compute, double-quant),
+      placed by device_map; if training, prepare_model_for_kbit_training. Requires the .venv env.
+    - otherwise (135M): bf16 on CUDA / fp32 on CPU, moved to the device.
+    Returns the model already on its device, so callers must NOT call .to(...) on a 4-bit model.
+    """
+    import config
+    from transformers import AutoModelForCausalLM
+    cuda = torch.cuda.is_available()
+    if config.LOAD_IN_4BIT:
+        from transformers import BitsAndBytesConfig
+        qc = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                                bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True)
+        # keep non-quantized layers (norms, lm_head, embeddings) in bf16 so they match the bf16
+        # autocast trl uses — otherwise SFTTrainer hits "expected BFloat16 but found Float".
+        model = AutoModelForCausalLM.from_pretrained(
+            name, quantization_config=qc, device_map="auto", dtype=torch.bfloat16)
+        if training:
+            from peft import prepare_model_for_kbit_training
+            model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+        return model
+    model = AutoModelForCausalLM.from_pretrained(
+        name, dtype=dtype or (torch.bfloat16 if cuda else torch.float32))
+    return model.to("cuda") if cuda else model
+
+
+def build_sft_model(model_name: str):
+    """Return (peft_model, tokenizer) ready for SFTTrainer (pass WITHOUT peft_config).
+
+    - 4-bit (SmolLM3): use Unsloth's FastLanguageModel — it's purpose-built for QLoRA and handles all
+      the dtype/grad-checkpoint alignment that trips up a hand-rolled transformers+bnb+trl QLoRA
+      (the 'expected BFloat16 but found Float' error). Requires the .venv env.
+    - bf16 (135M): standard transformers + PEFT, pre-wrapped.
+    """
+    import config
+    cfg = config.SFT
+    if config.LOAD_IN_4BIT:
+        from unsloth import FastLanguageModel
+        model, tok = FastLanguageModel.from_pretrained(
+            model_name, max_seq_length=cfg["max_seq_len"], dtype=None, load_in_4bit=True)
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
+        model = FastLanguageModel.get_peft_model(
+            model, r=cfg["lora_r"], lora_alpha=cfg["lora_alpha"], lora_dropout=cfg["lora_dropout"],
+            target_modules=cfg["target_modules"], use_gradient_checkpointing="unsloth",
+            random_state=config.SEED)
+        return model, tok
+    from transformers import AutoTokenizer
+    from peft import LoraConfig, get_peft_model
+    tok = AutoTokenizer.from_pretrained(model_name)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    model = get_peft_model(load_causal_lm(model_name), LoraConfig(
+        r=cfg["lora_r"], lora_alpha=cfg["lora_alpha"], lora_dropout=cfg["lora_dropout"],
+        target_modules=cfg["target_modules"], task_type="CAUSAL_LM"))
+    return model, tok
+
+
 def generate_samples(model, tokenizer, questions: list[str] | None = None, *,
                      max_new_tokens: int = 64, chat: bool = False, n: int | None = None,
                      title: str = "sample generations", quiet: bool = False) -> list[dict]:

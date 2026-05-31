@@ -57,6 +57,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config  # noqa: E402
+import utils   # noqa: E402
 
 
 def _load_sibling(fname: str, mod_name: str):
@@ -171,8 +172,7 @@ def _cpt_hf(force: bool = False) -> dict:
     unmasked = sum(1 for x in sample_labels if x != -100) / len(sample_labels)
     print(f"  unmasked-token fraction = {unmasked*100:.0f}%  -> FULL causal loss (CPT), nothing masked")
 
-    model = AutoModelForCausalLM.from_pretrained(
-        config.BASE_MODEL, dtype=torch.bfloat16 if device == "cuda" else torch.float32).to(device)
+    model = utils.load_causal_lm(config.BASE_MODEL, training=True)   # 4-bit QLoRA if active model needs it
     ppl_before = perplexity(model, held_blocks, device)
     print(f"  held-out perplexity BEFORE CPT: {ppl_before:.2f}")
 
@@ -220,7 +220,6 @@ def _cpt_hf(force: bool = False) -> dict:
     print("  (lower = the model fits domain text better). Next: §4 base-vs-instruct + forgetting.")
     # Quick visual assessment: a CPT'd base model isn't instruction-tuned, so we let it CONTINUE
     # the question text (chat=False). Eyeball whether the continuations sound domain-fluent.
-    import utils
     utils.generate_samples(model, tok, n=lim["gen_samples"], chat=False,
                            title=f"§3 CPT continuations (backend=hf, mode={mode})")
     return m
@@ -247,7 +246,8 @@ def _cpt_unsloth(force: bool = False) -> dict:
     print(f"=== §3 CPT [backend=unsloth, packing=True] | mode={mode} ===")
     block = config.CPT["max_seq_len"]
     model, tok = FastLanguageModel.from_pretrained(
-        model_name=config.BASE_MODEL, max_seq_length=block, dtype=None, load_in_4bit=False)
+        model_name=config.BASE_MODEL, max_seq_length=block, dtype=None,
+        load_in_4bit=config.LOAD_IN_4BIT)   # QLoRA for SmolLM3
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
@@ -296,7 +296,6 @@ def _cpt_unsloth(force: bool = False) -> dict:
     (out_dir / "metrics.json").write_text(json.dumps(m, indent=2))
     print(f"\n  adapter + metrics saved to {out_dir}")
     print(f"  RESULT (unsloth): ppl {ppl_before:.2f} -> {ppl_after:.2f} ({delta:+.1f}%)")
-    import utils
     utils.generate_samples(model, tok, n=lim["gen_samples"], chat=False,
                            title=f"§3 CPT continuations (backend=unsloth, mode={mode})")
     return m
