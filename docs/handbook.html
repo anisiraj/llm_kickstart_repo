@@ -1405,6 +1405,41 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
     <div><div class="chapter-title">Causal LM Fine-Tuning &amp; Continued Pretraining</div><div class="chapter-subtitle">Raw text training · next-token prediction · domain adaptation</div></div>
   </div>
   <p class="chapter-intro"><strong>Causal language modelling</strong> trains the model to predict the next token from raw text — no labels needed. It's the right approach when you want to adapt the model's knowledge or writing style rather than teach it a specific instruction format. <em>Continued pretraining</em> on domain text (medical, legal, code) shifts the model's priors before you apply SFT on top. <code>DataCollatorForLanguageModeling(mlm=False)</code> auto-constructs the shifted labels from your input tokens.</p>
+
+  <div style="margin:16px 0; padding:18px; background:#0a0f1a; border:1px solid #1e293b; border-radius:12px;">
+  <svg viewBox="0 0 880 260" width="100%" style="height:auto; font-family:system-ui,-apple-system,sans-serif;" role="img" aria-label="Two-phase training: continued pretraining on raw text teaches domain knowledge with loss on all tokens; supervised fine-tuning on Q&amp;A pairs teaches the answer format with loss on the completion only.">
+    <defs><marker id="ahcpt" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/></marker></defs>
+    <text x="440" y="24" text-anchor="middle" fill="#94a3b8" font-size="13" font-weight="700" letter-spacing="1.5">CPT vs SFT — TWO PHASES, TWO JOBS, TWO MASKS</text>
+
+    <!-- Phase 1: CPT -->
+    <rect x="30" y="48" width="370" height="170" rx="12" fill="#0f172a" stroke="#f59e0b" stroke-width="2"/>
+    <text x="215" y="76" text-anchor="middle" fill="#fbbf24" font-size="16" font-weight="800">① CPT — Continued Pretraining</text>
+    <text x="215" y="98" text-anchor="middle" fill="#94a3b8" font-size="11.5">teaches the model WHAT IT KNOWS (domain facts, style)</text>
+    <rect x="55" y="116" width="320" height="34" rx="6" fill="#1c1917" stroke="#78350f"/>
+    <text x="215" y="138" text-anchor="middle" fill="#fcd34d" font-size="11.5" font-family="'Fira Mono',monospace">"Density functional theory approximates…"</text>
+    <text x="215" y="172" text-anchor="middle" fill="#cbd5e1" font-size="11.5">Data: <tspan fill="#fff" font-weight="700">raw text</tspan> &nbsp;·&nbsp; Loss on: <tspan fill="#fff" font-weight="700">every token</tspan></text>
+    <text x="215" y="194" text-anchor="middle" fill="#64748b" font-size="11">unmasked fraction ≈ 1.00 &nbsp;·&nbsp; collator: LM(mlm=False)</text>
+
+    <!-- arrow -->
+    <path d="M404,133 L476,133" stroke="#64748b" stroke-width="2.5" marker-end="url(#ahcpt)"/>
+    <text x="440" y="124" text-anchor="middle" fill="#94a3b8" font-size="10" font-style="italic">then</text>
+
+    <!-- Phase 2: SFT -->
+    <rect x="480" y="48" width="370" height="170" rx="12" fill="#0f172a" stroke="#6366f1" stroke-width="2"/>
+    <text x="665" y="76" text-anchor="middle" fill="#a5b4fc" font-size="16" font-weight="800">② SFT — Supervised Fine-Tuning</text>
+    <text x="665" y="98" text-anchor="middle" fill="#94a3b8" font-size="11.5">teaches the model HOW TO ANSWER (the Q→A format)</text>
+    <rect x="505" y="112" width="320" height="22" rx="5" fill="#1e293b" stroke="#475569"/>
+    <text x="665" y="127" text-anchor="middle" fill="#64748b" font-size="10.5" font-family="'Fira Mono',monospace">user: "What does DFT approximate?"  🚫 masked</text>
+    <rect x="505" y="138" width="320" height="22" rx="5" fill="#1e1b4b" stroke="#818cf8"/>
+    <text x="665" y="153" text-anchor="middle" fill="#c7d2fe" font-size="10.5" font-family="'Fira Mono',monospace">assistant: "The electron density."  ✏️ learned</text>
+    <text x="665" y="180" text-anchor="middle" fill="#cbd5e1" font-size="11.5">Data: <tspan fill="#fff" font-weight="700">prompt/completion</tspan> &nbsp;·&nbsp; Loss on: <tspan fill="#fff" font-weight="700">completion</tspan></text>
+    <text x="665" y="200" text-anchor="middle" fill="#64748b" font-size="11">unmasked fraction ≈ 0.22–0.81 &nbsp;·&nbsp; completion_only_loss=True</text>
+
+    <text x="440" y="244" text-anchor="middle" fill="#94a3b8" font-size="12">Skip CPT when the base already knows your domain. Skip SFT when you only need raw-text generation.</text>
+    <text x="440" y="244" text-anchor="middle" fill="transparent" font-size="1">.</text>
+  </svg>
+  <div style="font-size:0.84em; color:#94a3b8; line-height:1.6; margin-top:6px; text-align:center;">This is the recipe the <a href="#casestudy" style="color:#34d399;">🧪 Case Study</a> follows end to end. The masks differ on purpose: CPT grades <em>everything</em> so the model absorbs the domain; SFT grades only the <a href="#lossmasking" style="color:#a5b4fc;">completion</a> so it learns to answer rather than to echo. Getting that second mask wrong is the single most common reason "SFT came out worse than CPT."</div>
+  </div>
   <div class="grid2">
 
     <div class="card">
