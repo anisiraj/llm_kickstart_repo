@@ -101,17 +101,17 @@ fi
 S="$LOGDIR/SUMMARY.md"
 {
   echo "# Case study results — $MODEL ($CASE_STUDY_MODE)   $(date)"
-  dig() { grep -rhE "$1" "$LOGDIR"/*.log 2>/dev/null | sed 's/^ *//'; }
+  dig() { grep -rhaE "$1" "$LOGDIR"/*.log 2>/dev/null | sed 's/^ *//'; }
   echo; echo "## §1 Corpus";            dig "Corpus: .* unique pages"
   echo; echo "## §2 Data availability"; dig "Asymmetry:|pairs \| ~"
-  echo; echo "## §3 CPT (perplexity)";  dig "RESULT.*perplexity|perplexity (BEFORE|AFTER)"
-  echo; echo "## §4 Forgetting";        dig "after CPT:|domain ppl Δ"
-  echo; echo "## §5 SFT (masking)";     dig "Unmasked .*%|unmasked-token fraction"
-  echo; echo "## §6 Base-vs-instruct sweep"; dig "init=.*N=|winner|completion perplexity \(lower"
-  echo; echo "## §7 Eval scorecard";    dig "\[instruct|domain_ppl|completion_ppl|keyword_recall|metric "
-  echo; echo "## §8 Unsloth-vs-HF";     dig "wall time|peak VRAM|Unsloth speedup"
-  echo; echo "## §11 Edge";             dig "FOOTPRINT|SPEED:"
-  echo; echo "## §13 Tool-calling";     dig "tool_call|NO tool_call|TAKEAWAY|tools API error"
+  echo; echo "## §3 CPT (perplexity)";  dig "RESULT.*perplexity|held-out perplexity (BEFORE|AFTER)"
+  echo; echo "## §4 Forgetting";        dig "before CPT:|after CPT:|^(base|instruct) +\|"
+  echo; echo "## §5 SFT (masking)";     dig "[Uu]nmasked.*%"
+  echo; echo "## §6 Base-vs-instruct sweep"; dig "init=.*N=|winner|held-out completion perplexity"
+  echo; echo "## §7 Eval scorecard";    dig "\[instruct|domain_ppl|completion_ppl|keyword_recall|^[a-z_]+ +\| +[0-9]"
+  echo; echo "## §8 Unsloth-vs-HF";     dig "wall time|peak VRAM|speedup"
+  echo; echo "## §11 Edge";             dig "FOOTPRINT|SPEED"
+  echo; echo "## §13 Tool-calling";     dig "tool_call|NO tool_call|TAKEAWAY|tools API error|tool-use"
 } > "$S"
 
 say "════════════════════════════════════════════════════════════════"
