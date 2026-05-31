@@ -1,15 +1,22 @@
 r"""
-13_smollm3_toolcall.py — can a LARGER model do tool-calling where the 135M failed?
+13_smollm3_toolcall.py — can OUR fine-tuned model do tool-calling? (size vs capability)
 
-§12 showed our fine-tuned SmolLM2-135M cannot emit a valid tool call — too small. This section runs the
-SAME kind of tool-use task against a tool-capable model (SmolLM3-3B) via Ollama's NATIVE function-calling
-API (`/api/chat` with a `tools` schema), and contrasts the two. Lesson for the book: tool-use/agentic
-behavior is an emergent capability that needs scale — fine-tuning a 135M won't conjure it.
+§12 showed our fine-tuned SmolLM2-135M cannot emit a valid tool call — too small. The interesting
+question is whether the SAME recipe on a bigger model (our fine-tuned SmolLM3-3B) CAN. This tests
+**our own deployed fine-tunes** through Ollama's native function-calling API (`/api/chat` + `tools`):
+  • chem-sft-smollm3-<mode>      — our QLoRA-fine-tuned SmolLM3-3B   (expected: tool-calls)
+  • chem-sft-smollm2-135m-<mode> — our fine-tuned 135M               (expected: cannot)
+Lesson: tool-use is an emergent, scale-dependent capability — fine-tuning teaches a task/format, it
+does not add a capability the base model never had. Pick model SIZE for the job.
 
-CONTRACT: graceful — pulls the model via Ollama if missing; skips cleanly if Ollama/model unavailable.
+OPTIONAL CONTROL (`--stock`): also pull stock SmolLM3 and test it, to confirm our domain fine-tuning
+did not *break* tool-calling. Off by default — the point is our models, no extra download needed.
+
+CONTRACT: graceful — uses whatever fine-tuned models are already deployed (via the §10 step of each
+pipeline); skips cleanly if Ollama/model unavailable.
 
 Run:  python case_study/13_smollm3_toolcall.py
-      python case_study/13_smollm3_toolcall.py --model hf.co/HuggingFaceTB/SmolLM3-3B-GGUF:Q4_K_M
+      python case_study/13_smollm3_toolcall.py --stock     # also test stock SmolLM3 as a control
 """
 from __future__ import annotations
 import argparse
@@ -44,12 +51,16 @@ def _server_up() -> bool:
         return False
 
 
-def _have_model(name: str) -> bool:
+def _deployed() -> set[str]:
     try:
         tags = json.loads(urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=5).read())
-        return any(m["name"].startswith(name.split(":")[0]) for m in tags.get("models", []))
+        return {m["name"] for m in tags.get("models", [])}
     except Exception:
-        return False
+        return set()
+
+
+def _has(name: str, deployed: set[str]) -> bool:
+    return any(d.startswith(name) for d in deployed)
 
 
 def _chat(model: str, messages: list, tools=None) -> dict:
@@ -63,75 +74,72 @@ def _chat(model: str, messages: list, tools=None) -> dict:
 
 
 def tool_call_test(model: str) -> dict:
-    """Ask a multiplication question with the multiply tool; see if the model calls it correctly."""
+    """Ask a multiplication question with the multiply tool; did the model call it correctly?"""
     messages = [{"role": "user", "content": "What is 23 times 19? Use the multiply tool."}]
-    resp = _chat(model, messages, tools=TOOLS)
+    try:
+        resp = _chat(model, messages, tools=TOOLS)
+    except Exception as e:
+        print(f"  [{model}] tools API error ({type(e).__name__}) — model likely has no tool template.")
+        return {"model": model, "tool_called": False, "error": type(e).__name__}
     msg = resp.get("message", {})
     calls = msg.get("tool_calls") or []
     if not calls:
-        print(f"  [{model}] NO tool_call emitted. reply: {msg.get('content','')[:160]!r}")
+        print(f"  [{model}] NO tool_call. reply: {msg.get('content','')[:140]!r}")
         return {"model": model, "tool_called": False}
-
-    fn = calls[0]["function"]
-    args = fn.get("arguments", {})
+    args = calls[0]["function"].get("arguments", {})
     a, b = float(args.get("a")), float(args.get("b"))
     product = a * b
-    print(f"  [{model}] tool_call: multiply(a={a}, b={b}) -> {product}")
-    # feed the tool result back for a final natural-language answer
     messages += [msg, {"role": "tool", "content": str(product)}]
     final = _chat(model, messages).get("message", {}).get("content", "").strip()
     ok = str(int(product)) in final or str(product) in final
-    print(f"  [{model}] final answer: {final[:160]!r}  (correct: {ok})")
-    return {"model": model, "tool_called": True, "args": {"a": a, "b": b},
-            "product": product, "answer_correct": bool(ok)}
+    print(f"  [{model}] tool_call multiply({a},{b})={product}; final: {final[:120]!r} (correct={ok})")
+    return {"model": model, "tool_called": True, "product": product, "answer_correct": bool(ok)}
 
 
-def run(model: str | None = None) -> dict:
+def run(include_stock: bool = False) -> dict:
     config.set_all_seeds()
-    model = model or config.SMOLLM3_OLLAMA
-    print(f"=== §13 SmolLM3 tool-calling (vs the 135M's failure in §12) ===")
+    mode = config.RUN_MODE
+    print("=== §13 tool-calling: does OUR fine-tuned model do it? (size vs capability) ===")
     if not shutil.which("ollama") or not _server_up():
-        print("  [skip] Ollama not available — install/start it, then re-run (see §10).")
+        print("  [skip] Ollama not available — deploy our models via the §10 step first (see §10).")
         return {"skipped": "no ollama"}
 
-    if not _have_model(model):
-        print(f"  pulling '{model}' via Ollama (large download the first time)...")
-        r = subprocess.run(["ollama", "pull", model], capture_output=True, text=True)
-        if r.returncode != 0:
-            print(f"  [skip] `ollama pull {model}` failed:\n{r.stderr[-500:]}")
-            print("  Try a HF GGUF, e.g.:  --model hf.co/HuggingFaceTB/SmolLM3-3B-GGUF:Q4_K_M")
-            return {"skipped": "pull failed"}
+    deployed = _deployed()
+    out = {}
+    # our fine-tuned models (deployed by each pipeline's §10), big first
+    for key in ("smollm3", "smollm2-135m"):
+        name = f"chem-sft-{key}-{mode}"
+        if _has(name, deployed):
+            print(f"\n  >>> our fine-tuned {key}:")
+            out[key] = tool_call_test(name)
+        else:
+            print(f"\n  [not deployed] {name} — run `run.sh {key}` (it deploys via §10) to include it.")
 
-    print("\n  >>> tool-capable model (SmolLM3):")
-    big = tool_call_test(model)
+    if include_stock:
+        m = config.SMOLLM3_OLLAMA
+        if not _has(m, deployed):
+            print(f"\n  pulling stock control '{m}'...")
+            if subprocess.run(["ollama", "pull", m]).returncode != 0:
+                print("  [skip stock] pull failed.")
+                m = None
+        if m:
+            print("\n  >>> stock SmolLM3 (control — did our fine-tuning break tools?):")
+            out["stock_smollm3"] = tool_call_test(m)
 
-    # contrast: the fine-tuned 135M from §10 (if present) — expected to NOT tool-call
-    small_name = f"chem-sft-{config.RUN_MODE}"
-    small = None
-    if _have_model(small_name):
-        print("\n  >>> our fine-tuned 135M (for contrast):")
-        try:
-            small = tool_call_test(small_name)
-        except Exception as e:
-            print(f"  [{small_name}] errored on tools API ({type(e).__name__}) — 135M lacks tool support.")
-            small = {"model": small_name, "tool_called": False}
-
-    print("\n  TAKEAWAY: tool-use is an emergent, scale-dependent capability. SmolLM3-3B can call the tool;")
-    print("  the fine-tuned 135M cannot. Fine-tuning teaches a task/format, it does not add capabilities")
-    print("  the base model never had. Pick model SIZE for the job (agentic => bigger).")
-    out = {"smollm3": big, "small_135m": small}
-    (config.OUTPUTS / "smollm3_toolcall.json").write_text(json.dumps(out, indent=2))
+    print("\n  TAKEAWAY: tool-use is emergent/scale-dependent. If our 3B tool-calls and our 135M does not,")
+    print("  that gap is about MODEL SIZE, not fine-tuning — the recipe is identical for both.")
+    (config.OUTPUTS / "toolcall.json").write_text(json.dumps(out, indent=2))
     return out
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="SmolLM3 tool-calling test via Ollama native tools API.")
-    ap.add_argument("--model", help="Ollama model name (default config.SMOLLM3_OLLAMA)")
+    ap = argparse.ArgumentParser(description="Tool-calling test on our fine-tuned models (Ollama tools API).")
+    ap.add_argument("--stock", action="store_true", help="also test stock SmolLM3 as a control")
     ap.add_argument("--mode", choices=["trial", "full"])
     args = ap.parse_args()
     if args.mode:
         config.set_mode(args.mode)
-    run(model=args.model)
+    run(include_stock=args.stock)
 
 
 if __name__ == "__main__":

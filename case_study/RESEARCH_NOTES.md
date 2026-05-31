@@ -62,6 +62,19 @@ Running §3 both ways surfaced concrete, documentable differences (numbers are t
 - **Tied embeddings gotcha (both backends):** SmolLM2 has `tie_word_embeddings=True`; PEFT warns when a tied layer is in the adapter and auto-sets `save_embedding_layers=True`. Matters for GGUF export (Part B).
 - **Env:** HF path runs in `.venv-rl` (trl 1.2); Unsloth path requires `.venv` (unsloth 2026.4.8 + trl 0.24). Same script, `--backend` flag, separate output dirs so both coexist.
 
+## 10. Validation: is "CPT → SFT" (and our model choice) a sound recipe? (literature)
+**The recipe is well-supported.** CPT-then-SFT is the standard domain-adaptation pipeline:
+- **"Reuse, Don't Retrain: A Recipe for Continued Pretraining"** (arXiv 2407.07263) — the canonical CPT recipe.
+- **"Domain-Adaptive Continued Pre-Training of Small Language Models"** (arXiv 2504.09687) — directly about *small* models (our regime).
+- **"Modelling the Optimal Trade-Off Between CPT and SFT for LLM Domain Adaptation"** (OpenReview guUUlHPXRw) — formalizes the CPT↔SFT split.
+- **CPT on an *instruct* model** + model merging: "Domain Adaptation of Llama3-70B-**Instruct** through Continual Pre-Training and Model Merging" (arXiv 2406.14971) — supports CPT *on instruct* and recovering general ability via merging/replay.
+- npj Computational Materials 2025 (s41524-025-01564-y) — training strategies, scaling, merging for domain adaptation.
+- **Practical knobs the literature converges on** (we follow these): mix ~**1:1 domain:replay** to prevent forgetting (works even at 3B); **stop CPT after 1–2 passes** over in-domain data (overfitting); in data-constrained settings use **much higher weight decay** (up to ~30×); **replay + distillation** are the most effective forgetting mitigations. → our config (1 epoch, replay fraction, low LR) is in line; consider raising weight decay for FULL.
+
+**Model choice is sound.** SmolLM2 (135M/360M/1.7B) is state-of-the-art for its size and explicitly suited to LoRA/QLoRA domain fine-tuning (SmolLM2 paper arXiv 2502.02737; it beats Qwen2.5 base on HellaSwag/ARC at size). Qwen2.5-0.5B-Instruct is a strong alternative tiny instruct model. For the tool-capable end, **SmolLM3-3B** is the right pick. (distil labs benchmarked 12 SLMs for fine-tuning base selection — useful if revisiting.) **SmolLM2-360M** is a sensible middle option if 135M underperforms.
+
+**SFTTrainer specifics confirmed** (HF/TRL docs): `completion_only_loss=None` defaults to completion-only for prompt-completion data and full-sequence for LM data; adapter LR ≈ **1e-4** (vs 2e-5 full FT); `packing=True` for throughput; LoRA is the recommended path. (Matches our §5/§6.)
+
 ## Sources
 - Unsloth — Continued Pretraining: https://unsloth.ai/docs/basics/continued-pretraining ; blog https://unsloth.ai/blog/contpretraining ; fine-tuning guide https://unsloth.ai/docs/get-started/fine-tuning-llms-guide ; notebooks https://unsloth.ai/docs/get-started/unsloth-notebooks
 - "Reuse, Don't Retrain: A Recipe for Continued Pretraining" — https://arxiv.org/pdf/2407.07263
@@ -75,3 +88,6 @@ Running §3 both ways surfaced concrete, documentable differences (numbers are t
 - TRL SFTTrainer (full vs completion-only vs assistant-only loss, EOS, packing, label shift/−100) — https://huggingface.co/docs/trl/sft_trainer
 - Unsloth chat templates / add_new_tokens — https://unsloth.ai/docs/basics/chat-templates
 - Corpus prep: D4 dedup https://arxiv.org/pdf/2308.12284 ; Fewer Truncations Improve LM (best-fit packing) https://arxiv.org/pdf/2404.10830 ; HF sequence packing https://huggingface.co/blog/sirluk/llm-sequence-packing
+- Recipe validation: Reuse Don't Retrain https://arxiv.org/pdf/2407.07263 ; Domain-Adaptive CPT of Small LMs https://arxiv.org/abs/2504.09687 ; CPT↔SFT trade-off https://openreview.net/forum?id=guUUlHPXRw ; CPT on Llama3-70B-Instruct + merging https://arxiv.org/html/2406.14971v1 ; npj Comp Materials https://www.nature.com/articles/s41524-025-01564-y
+- Model choice: SmolLM2 paper https://arxiv.org/html/2502.02737v1 ; distil labs SLM fine-tuning benchmark https://www.distillabs.ai/blog/we-benchmarked-12-small-language-models-across-8-tasks-to-find-the-best-base-model-for-fine-tuning/
+- SmolLM3 GGUF (Ollama pull): hf.co/ggml-org/SmolLM3-3B-GGUF:Q4_K_M

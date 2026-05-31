@@ -32,7 +32,9 @@ MODELS = {
 MODEL_KEY = _os.environ.get("CASE_STUDY_MODEL", "smollm2-135m").lower()
 
 # §13: Ollama name for the stock tool-capable model (override with --model).
-SMOLLM3_OLLAMA = "smollm3"
+# Ollama's library has no `smollm3`; pull the official GGUF from HF instead:
+#   ollama pull hf.co/ggml-org/SmolLM3-3B-GGUF:Q4_K_M
+SMOLLM3_OLLAMA = "hf.co/ggml-org/SmolLM3-3B-GGUF:Q4_K_M"
 
 # Resolved per active model (updated by set_model). OUTPUTS is model-scoped so the two models'
 # adapters/metrics never collide; DATA (corpus, seed Q&A) is shared.
