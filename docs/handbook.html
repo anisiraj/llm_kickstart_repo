@@ -1559,10 +1559,14 @@ trainer.<span class="fn">train</span>()
     <div class="card">
       <div class="card-title">🎯 Train on Responses Only (SFT — mask prompt loss)</div>
       <div class="card-body"><pre>
-<span class="cm"># Standard SFT computes loss on BOTH prompt + response.</span>
-<span class="cm"># train_on_responses_only() masks the prompt — more efficient.</span>
-<span class="kw">from</span> trl <span class="kw">import</span> SFTTrainer
-<span class="kw">from</span> unsloth.chat_templates <span class="kw">import</span> train_on_responses_only
+<span class="cm"># ⚙️ MIXING TWO LIBRARIES — keep them straight:</span>
+<span class="cm">#   SFTTrainer            → from TRL (trl 0.24.0)</span>
+<span class="cm">#   train_on_responses_only → from UNSLOTH (re-exported from unsloth_zoo 2026.4.9)</span>
+<span class="cm"># It WRAPS an existing trainer and rewrites the prompt's labels to -100.</span>
+<span class="cm"># On the plain-TRL path you would NOT use this — you'd set</span>
+<span class="cm"># SFTConfig(completion_only_loss=True) instead (see the Loss-Masking chapter).</span>
+<span class="kw">from</span> trl <span class="kw">import</span> SFTTrainer                              <span class="cm"># TRL</span>
+<span class="kw">from</span> unsloth.chat_templates <span class="kw">import</span> train_on_responses_only  <span class="cm"># Unsloth</span>
 
 trainer = <span class="fn">SFTTrainer</span>(
     model=model, tokenizer=tokenizer,
@@ -1572,11 +1576,14 @@ trainer = <span class="fn">SFTTrainer</span>(
     args=<span class="fn">TrainingArguments</span>(...),
 )
 
-<span class="cm"># Wrap trainer to mask prompt tokens from loss</span>
+<span class="cm"># Verified signature (unsloth_zoo.dataset_utils.train_on_responses_only):</span>
+<span class="cm">#   (trainer, instruction_part=None, response_part=None, force_match=True,</span>
+<span class="cm">#    tokenizer=None, return_function=False, num_proc=None, last_response_only=False)</span>
+<span class="cm"># Wrap trainer to mask prompt tokens (force_match=True also matches newlines):</span>
 trainer = <span class="fn">train_on_responses_only</span>(
     trainer,
-    instruction_part = <span class="st">"&lt;|im_start|&gt;user\n"</span>,   <span class="cm"># ChatML</span>
-    response_part    = <span class="st">"&lt;|im_start|&gt;assistant\n"</span>,
+    instruction_part = <span class="st">"&lt;|im_start|&gt;user\n"</span>,        <span class="cm"># ChatML (SmolLM2/Qwen)</span>
+    response_part    = <span class="st">"&lt;|im_start|&gt;assistant\n"</span>,   <span class="cm"># must match template byte-for-byte</span>
 )
 trainer.<span class="fn">train</span>()
 
@@ -1932,6 +1939,54 @@ text = tok.<span class="fn">apply_chat_template</span>(msgs, tokenize=<span clas
 <span class="cm"># SFT  → 0.78–0.81 (prompt masked)   ← measured in the case study</span></pre>
         <div class="good">If your SFT number is 1.0, the prompt isn't masked. Catch it in seconds, not after a wasted run.</div>
       </div>
+    </div>
+  </div>
+
+  <div class="card full" style="border-color:#4f46e5; margin-top:16px;">
+    <div class="card-title" style="background:#312e81; color:#c7d2fe;">🎛️ Training parameters that actually move the needle — defaults read from installed <code>trl 0.24.0</code></div>
+    <div class="card-body">
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75; margin-bottom:10px;">Every default below was read straight from the docstrings in the installed <code>trl/trainer/sft_config.py</code> — <strong>not from memory</strong>. <code>SFTConfig</code> subclasses <code>transformers.TrainingArguments</code>, so you get every standard arg <em>plus</em> these; the <span style="color:#fbbf24;">†</span> marks defaults TRL deliberately overrides from transformers.</div>
+      <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.82em;">
+        <tr style="border-bottom:2px solid #475569;">
+          <th style="text-align:left; padding:6px 8px;">Parameter</th>
+          <th style="text-align:left; padding:6px 8px;">Default</th>
+          <th style="text-align:left; padding:6px 8px;">Lib</th>
+          <th style="text-align:left; padding:6px 8px;">What it does (per the installed docstring)</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>completion_only_loss</code></td><td style="padding:6px 8px;"><code>None</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;"><code>None</code> = auto: completion-only for prompt-completion data, full sequence for language-modeling data. <code>True</code> forces completion-only (prompt-completion only).</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>assistant_only_loss</code></td><td style="padding:6px 8px;"><code>False</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">Loss only on assistant turns; <strong>conversational datasets only</strong>; needs <code>{% generation %}</code> markers in the template.</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>max_length</code></td><td style="padding:6px 8px;"><code>1024</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">Tokenized length cap; longer sequences truncated from the right. <code>None</code> = no truncation. With packing on, it sets the block length. <strong>1024 is shorter than many expect — long samples get silently cut.</strong></td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>packing</code></td><td style="padding:6px 8px;"><code>False</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">"Group multiple sequences into fixed-length blocks to improve computational efficiency and reduce padding." See the packing card below.</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>packing_strategy</code></td><td style="padding:6px 8px;"><code>"bfd"</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">"<code>'bfd'</code> (best-fit decreasing, default), or <code>'wrapped'</code>." With <code>bfd</code>, padding-free turns on automatically.</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>padding_free</code></td><td style="padding:6px 8px;"><code>False</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">Flatten the batch into one continuous sequence, no padding. "Only supported with FlashAttention 2 or 3."</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>eval_packing</code></td><td style="padding:6px 8px;"><code>None</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">Pack the eval set; if <code>None</code>, uses the same value as <code>packing</code>.</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>chat_template_path</code></td><td style="padding:6px 8px;"><code>None</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">Set the model's chat template from a tokenizer/Hub id, or a Jinja file (then you must add referenced special tokens and resize embeddings yourself).</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>eos_token</code></td><td style="padding:6px 8px;"><code>None</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">End-of-turn token; defaults to <code>processing_class.eos_token</code>. <strong>Align with your template or generations won't stop.</strong></td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>pad_token</code></td><td style="padding:6px 8px;"><code>None</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">Defaults to <code>processing_class.pad_token</code>; if that's also <code>None</code>, falls back to the EOS token.</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>loss_type</code></td><td style="padding:6px 8px;"><code>"nll"</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;"><code>"nll"</code> (standard) or <code>"dft"</code> (Dynamic Fine-Tuning).</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>dataset_num_proc</code></td><td style="padding:6px 8px;"><code>None</code></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">Processes for dataset preprocessing (used when <code>packing=False</code>). Set <code>=1</code> on the Unsloth path — see the Engines chapter.</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>learning_rate</code></td><td style="padding:6px 8px;"><code>2e-5</code> <span style="color:#fbbf24;">†</span></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">"The initial learning rate for AdamW." <span style="color:#fbbf24;">†transformers default is <code>5e-5</code>.</span> For LoRA adapters, usually raise to ~1e-4.</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>gradient_checkpointing</code></td><td style="padding:6px 8px;"><code>True</code> <span style="color:#fbbf24;">†</span></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">"Save memory at the expense of slower backward pass." <span style="color:#fbbf24;">†transformers default is <code>False</code>.</span></td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;"><code>bf16</code></td><td style="padding:6px 8px;"><code>None</code>→<code>True</code> <span style="color:#fbbf24;">†</span></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">bf16 mixed precision; "if not set, defaults to <code>True</code> if <code>fp16</code> is not set." Needs Ampere+ / XPU / NPU / CPU. <span style="color:#fbbf24;">†transformers default is <code>False</code>.</span></td></tr>
+        <tr><td style="padding:6px 8px;"><code>logging_steps</code></td><td style="padding:6px 8px;"><code>10</code> <span style="color:#fbbf24;">†</span></td><td style="padding:6px 8px;">TRL</td><td style="padding:6px 8px;">Log every N steps (a float in <code>[0,1)</code> = ratio of total steps). <span style="color:#fbbf24;">†transformers default is <code>500</code>.</span></td></tr>
+      </table>
+      </div>
+      <div class="tip" style="margin-top:10px;"><strong>The workhorses you'll set on nearly every run</strong> live in <code>transformers.TrainingArguments</code> (inherited by <code>SFTConfig</code>), so their defaults come from <em>transformers</em>, not TRL — confirm them against your installed version: <code>num_train_epochs</code>, <code>per_device_train_batch_size</code>, <code>gradient_accumulation_steps</code> (effective batch = batch_size × accumulation × #GPUs), <code>warmup_ratio</code> (a small value like <code>0.03</code> stabilizes the start), and <code>lr_scheduler_type</code> (e.g. <code>"cosine"</code>). Print any default live with <code>from trl import SFTConfig; SFTConfig.__dataclass_fields__["max_length"].default</code>.</div>
+    </div>
+  </div>
+
+  <div class="card full" style="border-color:#15803d; margin-top:16px;">
+    <div class="card-title" style="background:#14532d; color:#bbf7d0;">📦 Packing — what it really does, and the one way it bites you</div>
+    <div class="card-body">
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75;">Most fine-tuning batches are mostly <em>padding</em>: to make a rectangular tensor you pad every short example up to the longest in the batch. On one-line Q&amp;A pairs, the GPU can spend the majority of its FLOPs multiplying zeros. <strong>Packing</strong> concatenates many examples into dense <code>max_length</code> blocks so almost every token is real work — the installed docstring: <em>"group multiple sequences into fixed-length blocks to improve computational efficiency and reduce padding."</em></div>
+<pre style="margin-top:10px;"><span class="kw">from</span> trl <span class="kw">import</span> SFTConfig
+args = <span class="fn">SFTConfig</span>(
+    packing=<span class="kw">True</span>,
+    packing_strategy=<span class="st">"bfd"</span>,    <span class="cm"># best-fit decreasing (default); also enables padding-free</span>
+    max_length=<span class="nb">2048</span>,           <span class="cm"># with packing on, this is the BLOCK length</span>
+)</pre>
+      <div class="warn" style="margin-top:8px;"><strong>The bite:</strong> the older <code>"wrapped"</code> strategy concatenates all tokens into a stream and cuts fixed-length blocks, so one example can span a boundary and a block can mix two unrelated examples — which can hurt quality. The modern default <code>"bfd"</code> packs whole examples and, combined with <code>padding_free</code>, keeps them from attending across each other — but that correctness <strong>depends on FlashAttention 2/3</strong>. So: if you pack, prefer <code>"bfd"</code> on a flash-attention build; note <code>dataset_num_proc</code> is ignored while packing is on; and for short-context or small runs, leaving <code>packing=False</code> is perfectly fine — the win shows up at scale.</div>
     </div>
   </div>
 </div>
