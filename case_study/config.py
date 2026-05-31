@@ -21,6 +21,10 @@ for _d in (DATA, OUTPUTS, CORPUS_DIR, SFT_DIR):
 # ── Models (Apache-2.0, tiny) ─────────────────────────────────────────────────
 BASE_MODEL = "HuggingFaceTB/SmolLM2-135M"
 INSTRUCT_MODEL = "HuggingFaceTB/SmolLM2-135M-Instruct"
+# §13: a larger, tool-capable model to contrast with the 135M's inability to tool-call.
+# Ollama model name; override with --model. If `ollama pull smollm3` 404s, try a HF GGUF, e.g.
+#   ollama pull hf.co/HuggingFaceTB/SmolLM3-3B-GGUF:Q4_K_M   (then pass --model that name)
+SMOLLM3_OLLAMA = "smollm3"
 
 # ── Run mode: TRIAL (fast smoke test) vs FULL (the real run) ──────────────────
 # Top-level flag every script/notebook reads. TRIAL caps data volume + training steps so the

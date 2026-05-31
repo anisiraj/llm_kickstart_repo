@@ -3,3 +3,4 @@ data/
 # Trained adapters, merged/GGUF models, checkpoints, metrics — large + reproducible from a FULL run.
 outputs/
 __pycache__/
+logs/
