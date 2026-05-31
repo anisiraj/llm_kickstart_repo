@@ -141,6 +141,17 @@ SFT = dict(max_seq_len=1024, lr=2e-4, epochs=3, batch_size=4, grad_accum=2,
            lora_r=16, lora_alpha=16, lora_dropout=0.0,
            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                            "gate_proj", "up_proj", "down_proj"])
+# A few held-out questions printed at the end of every run for quick *visual* assessment.
+# Deliberately overlap the domain so you can eyeball whether CPT/SFT changed the answers.
+SAMPLE_QUESTIONS = [
+    "What is the Hartree-Fock method?",
+    "What does density functional theory compute?",
+    "What is a basis set in quantum chemistry?",
+    "What is electron correlation?",
+    "What is coupled cluster theory?",
+    "What is the Born-Oppenheimer approximation?",
+]
+
 SFT_SWEEP_SIZES = [10, 30, 100]   # centerpiece data-availability experiment
 REPLAY_FRACTION = 0.10            # general-data rehearsal to mitigate forgetting
 QUANT = "Q4_K_M"                  # GGUF quantization target

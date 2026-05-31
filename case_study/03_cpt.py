@@ -218,6 +218,11 @@ def _cpt_hf(force: bool = False) -> dict:
     print(f"\n  adapter + metrics saved to {out_dir}")
     print(f"  RESULT: CPT moved held-out perplexity {ppl_before:.2f} -> {ppl_after:.2f} ({delta:+.1f}%)")
     print("  (lower = the model fits domain text better). Next: §4 base-vs-instruct + forgetting.")
+    # Quick visual assessment: a CPT'd base model isn't instruction-tuned, so we let it CONTINUE
+    # the question text (chat=False). Eyeball whether the continuations sound domain-fluent.
+    import utils
+    utils.generate_samples(model, tok, n=lim["gen_samples"], chat=False,
+                           title=f"§3 CPT continuations (backend=hf, mode={mode})")
     return m
 
 
@@ -291,6 +296,9 @@ def _cpt_unsloth(force: bool = False) -> dict:
     (out_dir / "metrics.json").write_text(json.dumps(m, indent=2))
     print(f"\n  adapter + metrics saved to {out_dir}")
     print(f"  RESULT (unsloth): ppl {ppl_before:.2f} -> {ppl_after:.2f} ({delta:+.1f}%)")
+    import utils
+    utils.generate_samples(model, tok, n=lim["gen_samples"], chat=False,
+                           title=f"§3 CPT continuations (backend=unsloth, mode={mode})")
     return m
 
 
