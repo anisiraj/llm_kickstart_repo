@@ -34,12 +34,14 @@ def generate_samples(model, tokenizer, questions: list[str] | None = None, *,
             enc = tokenizer.apply_chat_template(
                 [{"role": "user", "content": q}], add_generation_prompt=True,
                 return_tensors="pt", return_dict=True)
-            ids = enc["input_ids"].to(device)
         else:
-            ids = tokenizer(q, return_tensors="pt").input_ids.to(device)
+            enc = tokenizer(q, return_tensors="pt")
+        ids = enc["input_ids"].to(device)
+        attn = enc.get("attention_mask")
+        attn = attn.to(device) if attn is not None else None
         with torch.no_grad():
-            out = model.generate(ids, max_new_tokens=max_new_tokens, do_sample=False,
-                                 pad_token_id=eos)
+            out = model.generate(ids, attention_mask=attn, max_new_tokens=max_new_tokens,
+                                 do_sample=False, pad_token_id=eos)
         answer = tokenizer.decode(out[0][ids.shape[1]:], skip_special_tokens=True).strip()
         results.append({"question": q, "answer": answer})
         print(f"\nQ: {q}\nA: {answer}")
