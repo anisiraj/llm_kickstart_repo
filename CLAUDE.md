@@ -21,4 +21,8 @@ Building a neutral, end-to-end **case-study chapter**: scrape Wikipedia (comp/qu
 
 ## Resume pointers
 - File-based memory: `~/.claude/projects/-home-deepti-tutorials-llm-kickstart-repo/memory/` (see MEMORY.md).
-- Uncommitted handbook/cheatsheet absorption work (5 scripts + handbook cards) on branch `dev` — see memory `project-cheatsheet-absorption-status`.
+- Branch `dev` is fully committed + pushed (latest `1b766f8`). Case study rewritten (first-person, measured); FULL SmolLM3 + overnight MiniCPM5/rank-sweep numbers folded in.
+- Scripts now §1–§20 in `case_study/scripts/` (new: 17 push-to-HF, 18 token-surgery, 19 synth-data, 20 merge — all tested).
+- Site additions: 5 cheatsheets (`docs/cheatsheet_{sft_trainer,chat_templates_data,metrics,deployment,datagen_merge_hf}.html`) + 7 handbook "Deep Dives" chapters + Evaluation format-trap upgrade. See memory `project-cheatsheets-deepdives-hf`.
+- HF artifacts published under `anisiraj/` (dataset + 3 adapters live; MiniCPM5 merged was finishing). HF_TOKEN env var is INVALID → use `env -u HF_TOKEN` (cached token); hf.co uploads flaky.
+- Superseded: the old cheatsheet-absorption work is now committed (ignore `project-cheatsheet-absorption-status` as "uncommitted").
