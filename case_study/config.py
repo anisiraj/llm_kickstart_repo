@@ -45,7 +45,7 @@ def limits() -> dict:
     """Mode-dependent volumes/steps. One place to tune both regimes."""
     if is_trial():
         return dict(cpt_char_cap=80_000, cpt_max_steps=8, sft_max_steps=8,
-                    sweep_sizes=[10, 30], eval_blocks=2, gen_samples=2)
+                    sweep_sizes=[4, 8], eval_blocks=2, gen_samples=2)
     return dict(cpt_char_cap=None, cpt_max_steps=-1, sft_max_steps=-1,
                 sweep_sizes=SFT_SWEEP_SIZES, eval_blocks=12, gen_samples=8)
 
@@ -161,7 +161,10 @@ GENERAL_QUESTIONS = [
     "Write one short sentence about a dog.",
 ]
 
-SFT_SWEEP_SIZES = [10, 30, 100]   # centerpiece data-availability experiment
+# §6 centerpiece: SFT-set sizes for the base-vs-instruct sweep. Capped by how many pairs we
+# actually hand-authored (32) minus the held-out test set — which is itself the scarcity lesson.
+SFT_TEST_HOLDOUT = 8              # fixed held-out Q&A for evaluating every sweep point
+SFT_SWEEP_SIZES = [4, 8, 16, 24]  # train-set sizes (FULL); TRIAL uses a subset via limits()
 REPLAY_FRACTION = 0.10            # general-data rehearsal to mitigate forgetting
 QUANT = "Q4_K_M"                  # GGUF quantization target
 
