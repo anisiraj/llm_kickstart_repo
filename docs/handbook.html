@@ -279,8 +279,28 @@ model.<span class="fn">load_state_dict</span>(torch.<span class="fn">load</span>
 </pre></div>
     </div>
 
+    <!-- Absorbed from cheatsheet_pytorch.html GPU-tips card — now timed, not asserted -->
+    <div class="card">
+      <div class="card-title">⚡ Mixed Precision (AMP) — measured, not assumed</div>
+      <div class="card-body"><pre>
+<span class="cm"># autocast picks fp16/bf16 per-op; GradScaler keeps grads from underflowing</span>
+scaler = torch.amp.<span class="fn">GradScaler</span>(device)
+<span class="kw">for</span> X, y <span class="kw">in</span> loader:
+    opt.<span class="fn">zero_grad</span>()
+    <span class="kw">with</span> torch.<span class="fn">autocast</span>(device_type=device):
+        loss = <span class="fn">loss_fn</span>(model(X), y)
+    scaler.<span class="fn">scale</span>(loss).<span class="fn">backward</span>()
+    scaler.<span class="fn">step</span>(opt); scaler.<span class="fn">update</span>()
+</pre>
+<div class="good">01_pytorch_basics.py §8 times fp32 vs AMP with warmup on a compute-bound stack: <strong>~1.5–2× on Tensor-Core GPUs</strong> (measured 1.52× on an RTX 3080 Ti; ~1× on CPU — no Tensor Cores, shown honestly).</div>
+</div>
+    </div>
+
   </div>
   <div class="warn" style="margin-top:12px;">⚠️  Always call model.train() before training and model.eval() before validation — Dropout and BatchNorm behave differently in each mode.</div>
+  <div style="margin-top:10px; font-size:.76em; color:#475569;">
+    Script: <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/01_pytorch_basics.py" target="_blank" style="color:#38bdf8;">01_pytorch_basics.py</a> — tensors → autograd → nn.Module → training loop → save/load → AMP benchmark, all runnable.
+  </div>
 </div>
 
 <!-- ══════════════════ CHAPTER 2: DATASETS ══════════════════ -->
@@ -358,6 +378,21 @@ ds = ds.<span class="fn">map</span>(fn, batched=<span class="kw">True</span>, nu
 </pre></div>
     </div>
 
+    <!-- Absorbed from cheatsheet_hf_datasets.html tips card — now timed, not asserted -->
+    <div class="card">
+      <div class="card-title">⏱️ batched=True — measured, not assumed</div>
+      <div class="card-body"><pre>
+<span class="cm"># batched=True hands the whole batch to ONE fast-tokenizer call</span>
+<span class="cm"># instead of N Python round-trips:</span>
+ds.<span class="fn">map</span>(tok, batched=<span class="kw">True</span>, batch_size=<span class="nb">1000</span>)
+</pre>
+<div class="good">02_hf_datasets.py §11 times it on 4000 rows with a fast (Rust) tokenizer: <strong>8.8× measured</strong> on a tiny tokenizer; larger fast tokenizers reach the cheatsheet's <strong>10–100×</strong> range. The win comes from amortizing per-call overhead, so it scales with batch size and tokenizer speed.</div>
+</div>
+    </div>
+
+  </div>
+  <div style="margin-top:10px; font-size:.76em; color:#475569;">
+    Script: <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/02_hf_datasets.py" target="_blank" style="color:#38bdf8;">02_hf_datasets.py</a> — load → inspect → map → filter → split → format → save → batched benchmark, all runnable.
   </div>
 </div>
 
@@ -428,6 +463,28 @@ trainer.<span class="fn">push_to_hub</span>(<span class="st">"username/my-model"
 </pre></div>
     </div>
 
+    <!-- Absorbed from cheatsheet_hf_transformers.html Evaluation card — now runnable -->
+    <div class="card full">
+      <div class="card-title">📊 Evaluation &amp; Metrics — compute_metrics</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="cm"># evaluate.load("accuracy") is the library way; inline numpy keeps it offline</span>
+<span class="kw">def</span> <span class="fn">compute_metrics</span>(eval_pred):
+    logits, labels = eval_pred
+    preds = np.<span class="fn">argmax</span>(logits, axis=<span class="nb">-1</span>)
+    <span class="kw">return</span> {<span class="st">"accuracy"</span>: <span class="fn">float</span>((preds == labels).<span class="fn">mean</span>())}
+
+trainer = <span class="fn">Trainer</span>(..., compute_metrics=compute_metrics)
+trainer.<span class="fn">evaluate</span>()                 <span class="cm"># {'eval_loss':..., 'eval_accuracy':...}</span>
+out = trainer.<span class="fn">predict</span>(test_ds)      <span class="cm"># out.predictions (logits), out.label_ids</span>
+</pre>
+<div class="good">03_hf_transformers.py §5 runs this end-to-end on a tiny set: a real Trainer fit, then evaluate() reports eval_accuracy and predict() returns logits + true labels. Other metrics: swap in "f1", "rouge", "bleu", "seqeval".</div>
+</div>
+    </div>
+
+  </div>
+  <div style="margin-top:10px; font-size:.76em; color:#475569;">
+    Script: <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/03_hf_transformers.py" target="_blank" style="color:#38bdf8;">03_hf_transformers.py</a> — tokenizer → AutoModel → pipeline → Trainer → compute_metrics → save/reload, all runnable.
   </div>
 </div>
 
@@ -483,6 +540,38 @@ trainer.<span class="fn">push_to_hub</span>(<span class="st">"username/my-model"
       </div>
     </div>
 
+  </div>
+
+  <!-- Absorbed from cheatsheet_unsloth_lora.html — now backed by a running example -->
+  <div class="card" style="margin-top:14px;">
+    <div class="card-title">🧮 LoRA vs QLoRA vs Full FT — and how to prove it</div>
+    <div class="card-body">
+      <table>
+        <tr><th>Method</th><th>VRAM (8B)</th><th>Speed</th><th>When to use</th></tr>
+        <tr><td>Full FT</td><td>80GB+</td><td>Fastest</td><td>Many GPUs, max quality</td></tr>
+        <tr><td>LoRA</td><td>~14GB</td><td>Fast</td><td>1× A100, good quality</td></tr>
+        <tr><td>QLoRA</td><td>~5.5GB</td><td>~39% slower</td><td>Single consumer GPU / Colab</td></tr>
+      </table>
+      <p style="font-size:.82em; color:#cbd5e1; line-height:1.7; margin-top:8px;">
+        These aren't magic numbers. <code style="color:#60a5fa; font-family:'Fira Mono';">15_lora_footprint.py</code>
+        counts the trainable parameters straight from Llama-3.1-8B's layer dimensions —
+        no GPU or download needed — and reproduces the headline figure exactly:
+      </p>
+      <pre style="font-size:.8em;">
+ rank r |    trainable | % of model
+--------+--------------+-----------
+      8 |       21.0M  |      0.26%
+     16 |       41.9M  |      0.52%   <span class="cm">&lt;- the "0.52%" claim, demonstrated</span>
+     32 |       83.9M  |      1.04%
+     64 |      167.8M  |      2.09%</pre>
+      <div class="good">It also does a live PEFT attach (verifying the A×B mechanism on a real module) and reports actual VRAM via <code>torch.cuda.max_memory_allocated()</code> when a GPU is present.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:14px; font-size:.76em; color:#475569;">
+    Script: <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/15_lora_footprint.py" target="_blank" style="color:#38bdf8;">15_lora_footprint.py</a> — every number in the tables above, runnable.
+    &nbsp;·&nbsp; <a href="https://arxiv.org/abs/2106.09685" target="_blank" style="color:#38bdf8;">LoRA paper</a>
+    &nbsp;·&nbsp; <a href="https://arxiv.org/abs/2305.14314" target="_blank" style="color:#38bdf8;">QLoRA paper</a>
   </div>
 </div>
 
@@ -583,7 +672,10 @@ model.<span class="fn">push_to_hub_merged</span>(<span class="st">"user/MyModel"
     </div>
 
   </div>
-  <div class="tip" style="margin-top:12px;">⚡ GPU times (100k samples, 1 epoch): A100 40GB ≈ 4h45m &nbsp;|&nbsp; L4 ≈ 19h &nbsp;|&nbsp; Free T4 ≈ 47h &nbsp;|&nbsp; VRAM: QLoRA 8B ≈ 5.5GB</div>
+  <div class="tip" style="margin-top:12px;">⚡ GPU times (100k samples, 1 epoch): A100 40GB ≈ 4h45m &nbsp;|&nbsp; L4 ≈ 19h &nbsp;|&nbsp; Free T4 ≈ 47h &nbsp;|&nbsp; VRAM: QLoRA 8B ≈ 5.5GB &nbsp;—&nbsp; see <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/15_lora_footprint.py" target="_blank" style="color:#38bdf8;">15_lora_footprint.py</a> to reproduce the param-count &amp; VRAM figures.</div>
+  <div style="margin-top:10px; font-size:.76em; color:#475569;">
+    Script: <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/08_unsloth_sft.py" target="_blank" style="color:#38bdf8;">08_unsloth_sft.py</a> — the full ①–⑥ workflow above, runnable.
+  </div>
 </div>
 
 <!-- ══════════════════ CHAPTER 6: CAUSAL LM & PRETRAINING ══════════════════ -->
@@ -1068,8 +1160,21 @@ predictor.<span class="fn">delete_endpoint</span>()   <span class="cm"># ← alw
 </pre></div>
     </div>
 
+    <!-- Absorbed from cheatsheet instance table — now a runnable recommender -->
+    <div class="card">
+      <div class="card-title">🖥️ Which instance? — runnable recommender</div>
+      <div class="card-body"><pre>
+<span class="cm"># SageMaker calls need AWS creds, but instance *sizing* is just arithmetic:</span>
+<span class="cm"># VRAM ≈ params × {qlora:0.7, lora:2.0, full:16.0} GB/B × 1.25 headroom</span>
+need = params_b * VRAM_PER_B[method] * <span class="nb">1.25</span>
+<span class="cm"># then pick the cheapest box whose VRAM >= need</span>
+</pre>
+<div class="good">09_sagemaker_train.py runs this for 7B–70B × {qlora, lora, full}. Sample: 8B QLoRA → ~7GB → V100 16GB; 8B LoRA → ~20GB → A10G 24GB; 8B Full → ~160GB → 8×V100. Heuristics match <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/15_lora_footprint.py" target="_blank" style="color:#38bdf8;">15_lora_footprint.py</a>.</div>
+</div>
+    </div>
+
   </div>
-  <div class="tip" style="margin-top:12px;"><strong>Instances:</strong> ml.g5.2xlarge (A10G 24GB) → 7B-8B &nbsp;|&nbsp; ml.p3.2xlarge (V100 16GB) → small models &nbsp;|&nbsp; ml.g5.12xlarge (4×A10G) → 34B &nbsp;|&nbsp; use_spot_instances=True → 70% cheaper</div>
+  <div class="tip" style="margin-top:12px;"><strong>Instances:</strong> ml.g5.2xlarge (A10G 24GB) → 7B-8B &nbsp;|&nbsp; ml.p3.2xlarge (V100 16GB) → small models &nbsp;|&nbsp; ml.g5.12xlarge (4×A10G) → 34B &nbsp;|&nbsp; use_spot_instances=True → up to 70% cheaper (AWS spot pricing) &nbsp;—&nbsp; run <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank" style="color:#38bdf8;">09_sagemaker_train.py</a> for the sizing math.</div>
 </div>
 
 <!-- ══════════════════ CHAPTER 7: BEDROCK ══════════════════ -->
@@ -2548,6 +2653,14 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
           <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">SageMaker HuggingFace estimator pattern + Bedrock converse API. Prints templates dry-run.</td>
           <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
           <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">AWS creds for live run</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px; white-space:nowrap;">
+            <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/15_lora_footprint.py" target="_blank" class="script-link">15_lora_footprint.py</a>
+          </td>
+          <td style="padding:10px 14px; font-size:0.82em; color:#94a3b8;">Proves the LoRA/QLoRA tables: counts trainable params at r=8/16/32/64, live PEFT attach, VRAM report.</td>
+          <td style="padding:10px 14px;"><span style="background:#0f3460;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em;font-family:monospace;white-space:nowrap;">.venv</span></td>
+          <td style="padding:10px 14px; font-size:0.78em; color:#64748b;">CPU-only · no download</td>
         </tr>
       </tbody>
     </table>

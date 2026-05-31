@@ -211,4 +211,37 @@ try:
 except ImportError:
     print("  sagemaker not installed. Install: uv pip install sagemaker")
 
+# ── Running example: pick a SageMaker instance for a model + method ───────────
+# The cheatsheet shows a static instance table. SageMaker/Bedrock calls need AWS
+# credentials, but instance *selection* is pure arithmetic we can run offline:
+# estimate VRAM from model size + fine-tuning method, then pick the cheapest box
+# that fits. The GB/B heuristics match the handbook's LoRA/QLoRA/Full-FT figures
+# (QLoRA 8B≈5.5GB, LoRA≈14GB, Full≈80GB+) — see 15_lora_footprint.py.
+print("\n━━━ Instance recommender (offline) ━━━")
+
+# (instance, total VRAM GB) — smallest first
+INSTANCES = [
+    ("ml.p3.2xlarge  (V100 16GB)", 16),
+    ("ml.g5.2xlarge  (A10G 24GB)", 24),
+    ("ml.g5.12xlarge (4×A10G 96GB)", 96),
+    ("ml.p3dn.24xlarge (8×V100 256GB)", 256),
+]
+VRAM_PER_B = {"qlora": 0.7, "lora": 2.0, "full": 16.0}   # GB per billion params
+
+
+HEADROOM = 1.25   # +25% for activations, optimizer transients, fragmentation
+
+
+def recommend_instance(params_b: float, method: str) -> str:
+    need = params_b * VRAM_PER_B[method] * HEADROOM
+    for name, vram in INSTANCES:
+        if vram >= need:
+            return f"{params_b:>4.0f}B {method:<5} -> ~{need:>5.1f}GB -> {name}"
+    return f"{params_b:>4.0f}B {method:<5} -> ~{need:>5.1f}GB -> needs multi-node (>256GB)"
+
+
+for pb in (7, 8, 13, 34, 70):
+    for m in ("qlora", "lora", "full"):
+        print("  " + recommend_instance(pb, m))
+
 print("\nSageMaker/Bedrock pattern reference printed OK!")

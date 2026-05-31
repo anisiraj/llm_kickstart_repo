@@ -242,7 +242,7 @@ optimizer.<span class="fn">load_state_dict</span>(ckpt[<span class="st">"optimiz
 model = model.<span class="fn">to</span>(device)
 X, y = X.<span class="fn">to</span>(device), y.<span class="fn">to</span>(device)
 
-<span class="cm"># Mixed precision (2x faster on modern GPUs)</span>
+<span class="cm"># Mixed precision (~1.5-2x faster on Tensor-Core GPUs)</span>
 scaler = torch.cuda.amp.<span class="fn">GradScaler</span>()
 <span class="kw">with</span> torch.cuda.amp.<span class="fn">autocast</span>():
     loss = <span class="fn">loss_fn</span>(model(X), y)
