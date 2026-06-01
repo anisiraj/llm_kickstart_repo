@@ -1365,6 +1365,197 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
     <div><div class="chapter-title">The Engines — Unsloth vs TRL / Transformers</div><div class="chapter-subtitle">Same fine-tune, different machinery — when to reach for which</div></div>
   </div>
   <p class="chapter-intro">TRL+Transformers is the flexible standard; Unsloth is the fast single-GPU specialist with hand-written kernels. They produce the same kind of adapter — the differences are speed, memory, model coverage, and a couple of sharp edges. References: <a href="cheatsheet_unsloth_lora.html" style="color:#fcd34d;">Unsloth cheatsheet</a> · <a href="cheatsheet_sft_trainer.html" style="color:#fcd34d;">SFT Trainer cheatsheet</a>. <strong style="color:#fcd34d;">🧪 Runnable:</strong> <code>scripts/03_cpt.py</code> runs the same CPT both ways (<code>--backend hf</code> / <code>--backend unsloth</code>); <code>scripts/08_unsloth_vs_hf.py</code> benchmarks them head-to-head.</p>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em;">📄 Full runnable code &mdash; <code>case_study/scripts/08_unsloth_vs_hf.py</code> &middot; 186 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/08_unsloth_vs_hf.py @ 4e1e381 — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+08_unsloth_vs_hf.py — head-to-head: the SAME SFT workload via HF/PEFT vs Unsloth.
+
+This answers research question #5 (workflow differences) with measured numbers: wall-clock time,
+peak VRAM, and trainable-parameter count, for an identical small SFT run. To keep it a clean
+speed/VRAM comparison we train plain language-modeling on a &quot;Q: .. / A: ..&quot; text field (loss
+semantics are covered in §3/§5), with a FIXED step count so both backends do the same work.
+
+THE ENV SPLIT (the workflow difference itself): Unsloth pins trl/xformers, so it lives in `.venv`;
+the HF/PEFT path lives in `.venv-rl`. A single process can&#x27;t import both. So this script measures the
+backend available in the current interpreter, writes its numbers, then shells out to the OTHER venv&#x27;s
+python to measure the other, and finally prints the comparison.
+
+CONTRACT: TRIAL/FULL, idempotent (caches outputs/bench_&lt;backend&gt;_&lt;mode&gt;.json), reproducible.
+
+Run:  python case_study/08_unsloth_vs_hf.py            # measures HF here, shells to .venv for Unsloth
+      ./.venv/bin/python case_study/08_unsloth_vs_hf.py --only unsloth   # (what the shell-out runs)
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import importlib.util
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+
+ROOT = Path(__file__).resolve().parent              # case_study/scripts/
+REPO = ROOT.parent.parent                            # repo root (holds .venv / .venv-rl)
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+def _text_dataset():
+    rows = _sib(&quot;05_sft.py&quot;, &quot;s5_for_08&quot;).load_seed(None)
+    from datasets import Dataset
+    return Dataset.from_list([{&quot;text&quot;: f&quot;Q: {r[&#x27;prompt&#x27;]}\nA: {r[&#x27;completion&#x27;]}&quot;} for r in rows])
+
+
+def _bench_path(backend: str) -&gt; Path:
+    return config.OUTPUTS / f&quot;bench_{backend}_{config.RUN_MODE}.json&quot;
+
+
+def measure_hf() -&gt; dict:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from trl import SFTConfig, SFTTrainer
+    from peft import LoraConfig
+    lim = config.limits()
+    tok = AutoTokenizer.from_pretrained(config.INSTRUCT_MODEL)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+    args = SFTConfig(output_dir=&quot;/tmp/bench_hf&quot;, per_device_train_batch_size=config.SFT[&quot;batch_size&quot;],
+                     gradient_accumulation_steps=1, max_steps=max(lim[&quot;sft_max_steps&quot;], 10),
+                     learning_rate=config.SFT[&quot;lr&quot;], max_length=config.SFT[&quot;max_seq_len&quot;],
+                     dataset_text_field=&quot;text&quot;, packing=False, bf16=torch.cuda.is_available(),
+                     logging_steps=1000, save_strategy=&quot;no&quot;, report_to=[], seed=config.SEED)
+    model = AutoModelForCausalLM.from_pretrained(
+        config.INSTRUCT_MODEL, dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32)
+    trainer = SFTTrainer(model=model, args=args, train_dataset=_text_dataset(), processing_class=tok,
+                         peft_config=LoraConfig(r=config.SFT[&quot;lora_r&quot;], lora_alpha=config.SFT[&quot;lora_alpha&quot;],
+                                                use_rslora=config.SFT[&quot;use_rslora&quot;],
+                                                target_modules=config.SFT[&quot;target_modules&quot;], task_type=&quot;CAUSAL_LM&quot;))
+    trainable = sum(p.numel() for p in trainer.model.parameters() if p.requires_grad)
+    t0 = time.perf_counter(); trainer.train(); dt = time.perf_counter() - t0
+    vram = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0.0
+    return dict(backend=&quot;hf&quot;, seconds=dt, peak_vram_gb=vram, trainable_params=trainable,
+                steps=args.max_steps, env=config.record_env())
+
+
+def measure_unsloth() -&gt; dict:
+    from unsloth import FastLanguageModel, is_bfloat16_supported
+    from trl import SFTConfig, SFTTrainer
+    lim = config.limits()
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+    model, tok = FastLanguageModel.from_pretrained(
+        model_name=config.INSTRUCT_MODEL, max_seq_length=config.SFT[&quot;max_seq_len&quot;],
+        dtype=None, load_in_4bit=False)
+    model = FastLanguageModel.get_peft_model(
+        model, r=config.SFT[&quot;lora_r&quot;], lora_alpha=config.SFT[&quot;lora_alpha&quot;],
+        target_modules=config.SFT[&quot;target_modules&quot;], use_rslora=config.SFT[&quot;use_rslora&quot;],
+        use_gradient_checkpointing=&quot;unsloth&quot;, random_state=config.SEED)
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    args = SFTConfig(output_dir=&quot;/tmp/bench_unsloth&quot;, per_device_train_batch_size=config.SFT[&quot;batch_size&quot;],
+                     gradient_accumulation_steps=1, max_steps=max(lim[&quot;sft_max_steps&quot;], 10),
+                     learning_rate=config.SFT[&quot;lr&quot;], max_seq_length=config.SFT[&quot;max_seq_len&quot;],
+                     dataset_text_field=&quot;text&quot;, packing=False, bf16=is_bfloat16_supported(),
+                     logging_steps=1000, save_strategy=&quot;no&quot;, report_to=[], seed=config.SEED)
+    trainer = SFTTrainer(model=model, tokenizer=tok, train_dataset=_text_dataset(), args=args)
+    t0 = time.perf_counter(); trainer.train(); dt = time.perf_counter() - t0
+    vram = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0.0
+    return dict(backend=&quot;unsloth&quot;, seconds=dt, peak_vram_gb=vram, trainable_params=trainable,
+                steps=args.max_steps, env=config.record_env())
+
+
+def _current_backend() -&gt; str:
+    return &quot;unsloth&quot; if importlib.util.find_spec(&quot;unsloth&quot;) else &quot;hf&quot;
+
+
+def _other_python(cur: str) -&gt; Path:
+    return REPO / (&quot;.venv/bin/python&quot; if cur == &quot;hf&quot; else &quot;.venv-rl/bin/python&quot;)
+
+
+def run(force: bool = False) -&gt; dict:
+    config.set_all_seeds()
+    cur = _current_backend()
+    print(f&quot;=== §8 Unsloth-vs-HF | mode={config.RUN_MODE} | this interpreter = {cur} ===&quot;)
+
+    # measure the backend available here
+    p = _bench_path(cur)
+    if p.exists() and not force:
+        print(f&quot;  [cached] {cur}: {json.loads(p.read_text())[&#x27;seconds&#x27;]:.2f}s&quot;)
+    else:
+        m = (measure_unsloth if cur == &quot;unsloth&quot; else measure_hf)()
+        p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps(m, indent=2))
+        print(f&quot;  measured {cur}: {m[&#x27;seconds&#x27;]:.2f}s | peak VRAM {m[&#x27;peak_vram_gb&#x27;]:.2f} GB | &quot;
+              f&quot;trainable {m[&#x27;trainable_params&#x27;]:,}&quot;)
+
+    # shell out to the other env (only at top level, not recursively)
+    other = &quot;hf&quot; if cur == &quot;unsloth&quot; else &quot;unsloth&quot;
+    op = _bench_path(other)
+    other_py = _other_python(cur)
+    if not op.exists() or force:
+        if other_py.exists():
+            print(f&quot;  shelling out to {other_py.name}-env to measure {other}...&quot;)
+            subprocess.run([str(other_py), str(ROOT / &quot;08_unsloth_vs_hf.py&quot;), &quot;--only&quot;, other,
+                            &quot;--mode&quot;, config.RUN_MODE] + ([&quot;--force&quot;] if force else []),
+                           cwd=str(ROOT))
+        else:
+            print(f&quot;  [skip] {other} env not found at {other_py} — run it there manually.&quot;)
+
+    _compare()
+    return {&quot;compared&quot;: [cur, other]}
+
+
+def _compare() -&gt; None:
+    hf, us = _bench_path(&quot;hf&quot;), _bench_path(&quot;unsloth&quot;)
+    if not (hf.exists() and us.exists()):
+        print(&quot;  (run in both envs to see the comparison table)&quot;)
+        return
+    a, b = json.loads(hf.read_text()), json.loads(us.read_text())
+    print(&quot;\n=== HF vs Unsloth (same SFT workload, measured on this machine) ===&quot;)
+    print(f&quot;  {&#x27;metric&#x27;:18} | {&#x27;HF/PEFT&#x27;:&gt;12} | {&#x27;Unsloth&#x27;:&gt;12}&quot;)
+    print(f&quot;  {&#x27;-&#x27;*18}-+-{&#x27;-&#x27;*12}-+-{&#x27;-&#x27;*12}&quot;)
+    print(f&quot;  {&#x27;wall time (s)&#x27;:18} | {a[&#x27;seconds&#x27;]:&gt;12.2f} | {b[&#x27;seconds&#x27;]:&gt;12.2f}&quot;)
+    print(f&quot;  {&#x27;peak VRAM (GB)&#x27;:18} | {a[&#x27;peak_vram_gb&#x27;]:&gt;12.2f} | {b[&#x27;peak_vram_gb&#x27;]:&gt;12.2f}&quot;)
+    print(f&quot;  {&#x27;trainable params&#x27;:18} | {a[&#x27;trainable_params&#x27;]:&gt;12,} | {b[&#x27;trainable_params&#x27;]:&gt;12,}&quot;)
+    if b[&quot;seconds&quot;]:
+        print(f&quot;\n  Unsloth speedup vs HF: {a[&#x27;seconds&#x27;]/b[&#x27;seconds&#x27;]:.2f}x (this run, this GPU)&quot;)
+    print(&quot;  Note: trainable-param differences reflect each backend&#x27;s LoRA/embedding choices (§3 §9).&quot;)
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;HF vs Unsloth speed/VRAM head-to-head.&quot;)
+    ap.add_argument(&quot;--only&quot;, choices=[&quot;hf&quot;, &quot;unsloth&quot;], help=&quot;measure just one backend (no shell-out)&quot;)
+    ap.add_argument(&quot;--force&quot;, action=&quot;store_true&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    if args.only:
+        fn = measure_unsloth if args.only == &quot;unsloth&quot; else measure_hf
+        p = _bench_path(args.only)
+        if p.exists() and not args.force:
+            print(f&quot;[cached] {args.only}&quot;)
+            return
+        m = fn(); p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps(m, indent=2))
+        print(f&quot;measured {args.only}: {m[&#x27;seconds&#x27;]:.2f}s | VRAM {m[&#x27;peak_vram_gb&#x27;]:.2f} GB&quot;)
+    else:
+        run(force=args.force)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
 
   <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #b45309; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#fcd34d;">Both roads end at the same place</strong> — a LoRA adapter you can merge and ship — so the choice isn't about the result, it's about the journey. TRL + Transformers is the standard-issue toolkit: every architecture, multi-GPU, every method (DPO/ORPO/GRPO), at the cost of leaving performance on the table. Unsloth is the tuned race car: hand-written CUDA kernels make the same fine-tune run ~2× faster in ~60% less memory — but on a single GPU, and only on architectures they've patched.<br><br>So the decision is short: one consumer GPU and a supported model → take the race car; many GPUs, an exotic architecture, or preference tuning → take the toolkit. The catch is the race car's sharp edges — and the gotchas card exists because every bullet in it is a debugging session someone already paid for.</div>
 
@@ -2420,6 +2611,193 @@ test_prompts = [<span class="st">"LoRA injects"</span>, <span class="st">"The le
     <div><div class="chapter-title">Catastrophic Forgetting</div><div class="chapter-subtitle">When teaching the new makes it forget the old — detect it, then prevent it</div></div>
   </div>
   <p class="chapter-intro">Fine-tuning can quietly erode general ability while it learns your domain. The good news: with LoRA it's rare, and it's trivial to <em>measure</em> so you never ship it blind. Seen in the <a href="handbook.html#casestudy" style="color:#5eead4;">🧪 Case Study</a> (we checked, and didn't forget). <strong style="color:#5eead4;">🧪 Runnable:</strong> <code>scripts/04_cpt_base_vs_instruct.py</code> measures domain vs general perplexity before/after CPT.</p>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em;">📄 Full runnable code &mdash; <code>case_study/scripts/04_cpt_base_vs_instruct.py</code> &middot; 182 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/04_cpt_base_vs_instruct.py @ 4e1e381 — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+04_cpt_base_vs_instruct.py — CPT from a BASE vs an INSTRUCT model, and a forgetting smoke test.
+
+RESEARCH QUESTION #4: when you continue-pretrain on a niche domain, does it matter whether you start
+from the base model or the instruct model — and does CPT damage general ability (&quot;catastrophic
+forgetting&quot;)?
+
+WHAT WE MEASURE (so the answer is shown, not asserted)
+------------------------------------------------------
+For each starting point (base, instruct) we record, before and after CPT on the chemistry corpus:
+  • DOMAIN perplexity on held-out chemistry text  -&gt; should DROP  (the model is learning the domain)
+  • GENERAL perplexity on held-out non-chemistry text -&gt; if it RISES, that is forgetting
+  • a few GENERAL question generations -&gt; eyeball whether instruction-following degraded
+The instruct model has more to lose (it can follow instructions); the base model has little general
+&quot;skill&quot; to forget. Mitigations (lower LR, ≤1 epoch, ~10% replay) are in PITFALLS.md / RESEARCH_NOTES.
+
+CONTRACT: TRIAL/FULL flag, self-sufficient (builds domain corpus + fetches a small general corpus if
+missing, downloads both models), idempotent (caches outputs/forgetting_&lt;mode&gt;.json), reproducible.
+
+Run:  python case_study/04_cpt_base_vs_instruct.py            # TRIAL (default)
+      CASE_STUDY_MODE=full python case_study/04_cpt_base_vs_instruct.py
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import utils   # noqa: E402
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+_CB = _sib(&quot;01_build_corpus.py&quot;, &quot;cb_for_04&quot;)     # fetch_plaintext, clean, slugify
+_CPT = _sib(&quot;03_cpt.py&quot;, &quot;cpt_for_04&quot;)            # load_corpus_texts, pack_blocks, perplexity
+
+
+def general_corpus_texts() -&gt; list[str]:
+    &quot;&quot;&quot;Fetch + cache a small NON-chemistry corpus for the forgetting metric (self-sufficient).&quot;&quot;&quot;
+    gdir = config.DATA / &quot;general&quot;
+    gdir.mkdir(parents=True, exist_ok=True)
+    texts = []
+    for title in config.GENERAL_PAGES:
+        f = gdir / f&quot;{_CB.slugify(title)}.txt&quot;
+        if not f.exists():
+            resolved, raw = _CB.fetch_plaintext(title)
+            txt, _ = _CB.clean(raw)
+            f.write_text(txt)
+        texts.append(f.read_text())
+    return texts
+
+
+def _train_cpt(model, lim):
+    &quot;&quot;&quot;Attach LoRA (incl. embeddings, split LR) and run CPT. Returns the trained PEFT model.&quot;&quot;&quot;
+    from transformers import Trainer, TrainingArguments
+    from peft import LoraConfig, get_peft_model
+    model = get_peft_model(model, LoraConfig(
+        r=config.CPT[&quot;lora_r&quot;], lora_alpha=config.CPT[&quot;lora_alpha&quot;],
+        lora_dropout=config.CPT[&quot;lora_dropout&quot;], use_rslora=config.CPT[&quot;use_rslora&quot;],
+        target_modules=config.CPT[&quot;target_modules&quot;], task_type=&quot;CAUSAL_LM&quot;))
+    emb = [p for n, p in model.named_parameters()
+           if p.requires_grad and (&quot;embed_tokens&quot; in n or &quot;lm_head&quot; in n)]
+    rest = [p for n, p in model.named_parameters()
+            if p.requires_grad and not (&quot;embed_tokens&quot; in n or &quot;lm_head&quot; in n)]
+    opt = torch.optim.AdamW([{&quot;params&quot;: rest, &quot;lr&quot;: config.CPT[&quot;lr&quot;]},
+                             {&quot;params&quot;: emb, &quot;lr&quot;: config.CPT[&quot;embedding_learning_rate&quot;]}])
+    return model, opt
+
+
+def run_one(model_name: str, tag: str, is_instruct: bool, domain_texts, general_texts, lim) -&gt; dict:
+    from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+    from datasets import Dataset
+
+    device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+    block = config.CPT[&quot;max_seq_len&quot;]
+    tok = AutoTokenizer.from_pretrained(model_name)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+
+    # held-out blocks (per this model&#x27;s tokenizer)
+    dom_all = _CPT.pack_blocks(tok, domain_texts, block)
+    n_held = min(lim[&quot;eval_blocks&quot;], max(1, len(dom_all) // 5))
+    dom_held, dom_train = dom_all[-n_held:], dom_all[:-n_held]
+    gen_held = _CPT.pack_blocks(tok, general_texts, block)[: lim[&quot;eval_blocks&quot;]]
+
+    print(f&quot;\n=== {tag} ({model_name}) ===&quot;)
+    model = utils.load_causal_lm(model_name, training=True)   # 4-bit QLoRA if active model needs it
+    dom_before = _CPT.perplexity(model, dom_held, device)
+    gen_before = _CPT.perplexity(model, gen_held, device)
+    print(f&quot;  before CPT: domain ppl {dom_before:.2f} | general ppl {gen_before:.2f}&quot;)
+    utils.generate_samples(model, tok, config.GENERAL_QUESTIONS, n=lim[&quot;gen_samples&quot;],
+                           chat=is_instruct, title=f&quot;{tag} GENERAL answers BEFORE CPT&quot;)
+
+    model, opt = _train_cpt(model, lim)
+    ds = Dataset.from_dict({&quot;input_ids&quot;: dom_train, &quot;labels&quot;: [b[:] for b in dom_train],
+                            &quot;attention_mask&quot;: [[1] * len(b) for b in dom_train]})
+    targs = TrainingArguments(
+        output_dir=str(config.OUTPUTS / f&quot;cpt_{tag}_{config.RUN_MODE}&quot; / &quot;ckpt&quot;),
+        per_device_train_batch_size=config.CPT[&quot;batch_size&quot;],
+        gradient_accumulation_steps=config.CPT[&quot;grad_accum&quot;],
+        num_train_epochs=1, max_steps=lim[&quot;cpt_max_steps&quot;], learning_rate=config.CPT[&quot;lr&quot;],
+        gradient_checkpointing=config.GRAD_CKPT,           # essential for a 3B in 4-bit on 12GB
+        gradient_checkpointing_kwargs={&quot;use_reentrant&quot;: False} if config.GRAD_CKPT else None,
+        bf16=(device == &quot;cuda&quot;), logging_steps=5, save_strategy=&quot;no&quot;, report_to=[], seed=config.SEED)
+    Trainer(model=model, args=targs, train_dataset=ds, optimizers=(opt, None)).train()
+
+    dom_after = _CPT.perplexity(model, dom_held, device)
+    gen_after = _CPT.perplexity(model, gen_held, device)
+    dom_delta = 100 * (dom_after - dom_before) / dom_before
+    gen_delta = 100 * (gen_after - gen_before) / gen_before
+    print(f&quot;  after CPT:  domain ppl {dom_after:.2f} ({dom_delta:+.1f}%) | &quot;
+          f&quot;general ppl {gen_after:.2f} ({gen_delta:+.1f}%  &lt;- forgetting if positive)&quot;)
+    utils.generate_samples(model, tok, config.GENERAL_QUESTIONS, n=lim[&quot;gen_samples&quot;],
+                           chat=is_instruct, title=f&quot;{tag} GENERAL answers AFTER CPT&quot;)
+
+    del model
+    if device == &quot;cuda&quot;:
+        torch.cuda.empty_cache()
+    return dict(tag=tag, model=model_name, is_instruct=is_instruct,
+                domain_ppl_before=dom_before, domain_ppl_after=dom_after, domain_delta_pct=dom_delta,
+                general_ppl_before=gen_before, general_ppl_after=gen_after, general_delta_pct=gen_delta)
+
+
+def run(force: bool = False) -&gt; dict:
+    config.set_all_seeds()
+    lim = config.limits()
+    out = config.OUTPUTS / f&quot;forgetting_{config.RUN_MODE}.json&quot;
+    if out.exists() and not force:
+        m = json.loads(out.read_text())
+        print(f&quot;[cached] §4 forgetting ({config.RUN_MODE}) — use --force to rerun.&quot;)
+        print(json.dumps(m[&quot;summary&quot;], indent=2))
+        return m
+
+    domain_texts = _CPT.load_corpus_texts()
+    general_texts = general_corpus_texts()
+    print(f&quot;=== §4 base-vs-instruct CPT + forgetting | mode={config.RUN_MODE} ===&quot;)
+    base = run_one(config.BASE_MODEL, &quot;base&quot;, False, domain_texts, general_texts, lim)
+    inst = run_one(config.INSTRUCT_MODEL, &quot;instruct&quot;, True, domain_texts, general_texts, lim)
+
+    print(&quot;\n=== SUMMARY: domain learning vs general forgetting ===&quot;)
+    print(f&quot;  {&#x27;start&#x27;:9} | {&#x27;domain ppl Δ&#x27;:&gt;13} | {&#x27;general ppl Δ&#x27;:&gt;14}&quot;)
+    print(f&quot;  {&#x27;-&#x27;*9}-+-{&#x27;-&#x27;*13}-+-{&#x27;-&#x27;*14}&quot;)
+    for r in (base, inst):
+        print(f&quot;  {r[&#x27;tag&#x27;]:9} | {r[&#x27;domain_delta_pct&#x27;]:&gt;+12.1f}% | {r[&#x27;general_delta_pct&#x27;]:&gt;+13.1f}%&quot;)
+    print(&quot;\n  Reading it: domain Δ negative = learned the domain; general Δ positive = forgetting.&quot;)
+    print(&quot;  Expectation: the INSTRUCT start has more general ability to lose, so watch its general Δ&quot;)
+    print(&quot;  and its AFTER answers above. Mitigate with lower LR, ≤1 epoch, and ~10% replay (PITFALLS.md).&quot;)
+
+    m = dict(mode=config.RUN_MODE, base=base, instruct=inst,
+             summary={&quot;base_domain_delta_pct&quot;: base[&quot;domain_delta_pct&quot;],
+                      &quot;base_general_delta_pct&quot;: base[&quot;general_delta_pct&quot;],
+                      &quot;instruct_domain_delta_pct&quot;: inst[&quot;domain_delta_pct&quot;],
+                      &quot;instruct_general_delta_pct&quot;: inst[&quot;general_delta_pct&quot;]},
+             env=config.record_env())
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(m, indent=2))
+    print(f&quot;\n  metrics saved to {out}. Next: §5 SFT (completion-only loss).&quot;)
+    return m
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;CPT base-vs-instruct + catastrophic-forgetting smoke test.&quot;)
+    ap.add_argument(&quot;--force&quot;, action=&quot;store_true&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run(force=args.force)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
 
   <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #0d9488; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#5eead4;">It sounds dramatic, and for full fine-tuning it can be</strong> — push a model hard on a narrow domain and it starts failing arithmetic it used to ace, because every weight is free to drift toward your data and away from everything it knew. The reassuring news: LoRA has forgetting nearly designed out of it. The base weights are frozen, so the original model is still physically present under the adapter — pop the adapter off and you have it back, bit for bit.<br><br>That reframes the topic from "how do I prevent a disaster" to "how do I notice a small one" — and noticing is cheap. Hold out a little general text, measure its perplexity before and after, watch whether it rises. The cards are exactly that loop: detect with one number, understand why LoRA gives you a net, and reach for mitigations (fewer epochs, a little replay, a modest rank) only if the number actually moves. The cardinal sin isn't forgetting — it's shipping a model that forgot without ever checking.</div>
 
@@ -2808,6 +3186,119 @@ dtype: bfloat16
     <div><div class="chapter-title">Quantization Internals</div><div class="chapter-subtitle">4-bit for training (QLoRA) and for deploy (GGUF) — and where it breaks</div></div>
   </div>
   <p class="chapter-intro">Quantization shows up twice: <strong>NF4</strong> to <em>train</em> a big model on one GPU (QLoRA), and <strong>GGUF Q-levels</strong> to <em>ship</em> it small. Same idea (fewer bits per weight), different stage. Reference: <a href="cheatsheet_deployment.html" style="color:#fdba74;">Deployment cheatsheet</a>. <strong style="color:#fdba74;">🧪 Runnable:</strong> the NF4 config lives in <code>scripts/utils.py</code>; <code>scripts/09_merge_and_gguf.py</code> + <code>11_edge_benchmark.py</code> produce the GGUF and measure the footprints quoted here (1.9 GB / 0.69 GB).</p>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em;">📄 Full runnable code &mdash; <code>case_study/scripts/11_edge_benchmark.py</code> &middot; 108 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/11_edge_benchmark.py @ 4e1e381 — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+11_edge_benchmark.py — Part B step 3: measure the on-device footprint and speed.
+
+The whole reason to fine-tune a 135M model is that it runs on small hardware. This measures, via the
+deployed Ollama model:
+  • FOOTPRINT — the quantized model size on disk (a good proxy for RAM needed to serve it)
+  • SPEED     — local generation tokens/sec (num_predict forces enough tokens to time it)
+
+WHY THIS IS THE EDGE STORY (research-backed, see RESEARCH_NOTES §5): a Raspberry Pi 5 runs 1–3B models
+at ~10–18 tok/s and TinyLlama-1.1B-Q4 at ~8–12 tok/s on a Pi 4. A 135M model is far smaller/faster and
+needs only tens of MB — comfortably real-time on a Pi/phone-class board. To reproduce on a Pi: install
+Ollama there, `ollama create` the same Modelfile, and hit the same `/api/generate` endpoint — the code
+below is identical; only the hardware changes.
+
+CONTRACT: self-sufficient (deploys via §10 if needed), idempotent, graceful skip without Ollama.
+
+Run:  python case_study/11_edge_benchmark.py
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import importlib.util
+import json
+import sys
+import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+
+OLLAMA_URL = &quot;http://localhost:11434&quot;
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+def _model_footprint(name: str) -&gt; dict | None:
+    try:
+        with urllib.request.urlopen(f&quot;{OLLAMA_URL}/api/tags&quot;, timeout=5) as r:
+            tags = json.load(r)
+    except Exception:
+        return None
+    for m in tags.get(&quot;models&quot;, []):
+        if m[&quot;name&quot;].startswith(name):
+            det = m.get(&quot;details&quot;, {})
+            return {&quot;size_gb&quot;: m.get(&quot;size&quot;, 0) / 1e9,
+                    &quot;params&quot;: det.get(&quot;parameter_size&quot;, &quot;?&quot;), &quot;quant&quot;: det.get(&quot;quantization_level&quot;, &quot;?&quot;)}
+    return None
+
+
+def _speed(name: str, n_predict: int = 128) -&gt; dict:
+    body = json.dumps({&quot;model&quot;: name, &quot;prompt&quot;: &quot;Explain what a basis set is, in detail.&quot;,
+                       &quot;stream&quot;: False, &quot;options&quot;: {&quot;num_predict&quot;: n_predict, &quot;temperature&quot;: 0.7}}).encode()
+    req = urllib.request.Request(f&quot;{OLLAMA_URL}/api/generate&quot;, data=body,
+                                 headers={&quot;Content-Type&quot;: &quot;application/json&quot;})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        d = json.load(r)
+    toks, secs = d.get(&quot;eval_count&quot;, 0), d.get(&quot;eval_duration&quot;, 0) / 1e9
+    return {&quot;tokens&quot;: toks, &quot;tok_per_s&quot;: (toks / secs) if (secs &gt; 0 and toks &gt;= 8) else None}
+
+
+def run() -&gt; dict:
+    import shutil
+    config.set_all_seeds()
+    print(f&quot;=== §11 edge benchmark | mode={config.RUN_MODE} ===&quot;)
+    if not shutil.which(&quot;ollama&quot;):
+        print(&quot;  [skip] no `ollama` — see §10. (On a Pi, install Ollama and re-run this same script.)&quot;)
+        return {&quot;skipped&quot;: &quot;no ollama&quot;}
+
+    name = f&quot;chem-sft-{config.MODEL_KEY}-{config.RUN_MODE}&quot;
+    fp = _model_footprint(name)
+    if fp is None:
+        print(&quot;  (model not deployed — deploying via §10)&quot;)
+        if _sib(&quot;10_ollama_deploy.py&quot;, &quot;s10_for_11&quot;).run().get(&quot;skipped&quot;):
+            return {&quot;skipped&quot;: &quot;deploy failed&quot;}
+        fp = _model_footprint(name)
+
+    print(f&quot;  FOOTPRINT: {fp[&#x27;size_gb&#x27;]:.3f} GB on disk | params {fp[&#x27;params&#x27;]} | quant {fp[&#x27;quant&#x27;]}&quot;)
+    sp = _speed(name)
+    if sp[&quot;tok_per_s&quot;] is not None:
+        print(f&quot;  SPEED: {sp[&#x27;tok_per_s&#x27;]:.1f} tok/s on {config.record_env()[&#x27;cuda&#x27;]} ({sp[&#x27;tokens&#x27;]} tokens)&quot;)
+    else:
+        print(f&quot;  SPEED: N/A (model generated {sp[&#x27;tokens&#x27;]} tokens — degenerate TRIAL model; &quot;
+              &quot;use a FULL fine-tune for a real number)&quot;)
+
+    print(&quot;\n  REFERENCE (research, RESEARCH_NOTES §5): Raspberry Pi 5 runs 1-3B models at ~10-18 tok/s;&quot;)
+    print(&quot;  a 135M model is far lighter (tens of MB RAM) and faster -&gt; genuinely real-time on edge HW.&quot;)
+    print(&quot;  Reproduce on a Pi: install Ollama, `ollama create` the same Modelfile, hit /api/generate.&quot;)
+    m = dict(mode=config.RUN_MODE, model=name, footprint=fp, speed=sp, gpu=config.record_env()[&quot;cuda&quot;])
+    (config.OUTPUTS / f&quot;edge_{config.RUN_MODE}.json&quot;).write_text(json.dumps(m, indent=2))
+    print(&quot;\n  Next: §12 — evaluate with lm-evaluation-harness + run the model as an agent.&quot;)
+    return m
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Edge footprint + speed benchmark via Ollama.&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
 
   <div style="margin:16px 0; padding:18px; background:#0a0f1a; border:1px solid #1e293b; border-radius:12px;">
   <svg viewBox="0 0 860 270" width="100%" style="height:auto; font-family:system-ui,-apple-system,sans-serif;" role="img" aria-label="Quantization bit-width ladder from FP16 16 bits down to Q2 2.6 bits, with Q4_K_M as the recommended default.">
@@ -3174,6 +3665,11 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
       </ul>
       Everything below ran on <strong>one RTX 3080 Ti (12&nbsp;GB)</strong>. The 3B fits via QLoRA (4-bit). Your numbers will differ a little with seed/hardware — that's expected, and it's why I report <em>direction and relative change</em>, never leaderboard scores.
     </div>
+    <div class="card-body" style="font-size:.84em; color:#94a3b8; line-height:1.7; border-top:1px solid #14532d; margin-top:4px; padding-top:10px;">
+      <strong style="color:#cbd5e1;">On provenance (so you can trust this chapter):</strong> two kinds of numbers appear below, and I label which is which.
+      <strong style="color:#86efac;">Independently re-verified</strong> from the committed data files in this repo: the corpus is <strong>41 pages / 1,149 equations</strong> (<code>data/corpus/manifest.json</code>) and the SFT set is <strong>32 hand-written pairs</strong> (<code>data/sft/seed_qa.jsonl</code>) — I recomputed these directly while writing this.
+      <strong style="color:#fcd34d;">From full training runs</strong> (the perplexity/recall/rank-sweep/tok-s tables): these come from the logged runs recorded in <code>RESEARCH_NOTES.md</code> and the JSON under <code>case_study/outputs/</code>; they take GPU-hours, so reproduce them with the commands at the end rather than expecting them to re-derive instantly. The training stack for those runs was <code>trl&nbsp;1.2 / transformers&nbsp;5.6</code> in a dedicated <code>.venv-rl</code> (the SFT API surface — <code>completion_only_loss</code>, <code>SFTConfig</code> — is the same one verified against the installed libraries in the <a href="#lossmasking" style="color:#5eead4;">Loss-Masking</a> chapter). Each foldable code block below is stamped with the exact commit it was copied from.
+    </div>
   </div>
 
   <!-- THE MENTAL MODEL -->
@@ -3190,6 +3686,27 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
         <tr><td><strong>what moves</strong></td><td>domain perplexity ↓</td><td>completion perplexity ↓, answer recall ↑</td></tr>
       </table>
       Everything that follows is me proving each row in code and numbers. The "loss computed on…" row is the one beginners get wrong, so I prove it twice (Steps&nbsp;4 and&nbsp;5) by literally counting masked tokens.
+    </div>
+  </div>
+
+  <!-- ROADMAP of the 10 steps -->
+  <div class="card full" style="margin-top:16px;">
+    <div class="card-title">The 10 steps, at a glance</div>
+    <div class="card-body" style="font-size:.9em; color:#cbd5e1; line-height:1.7;">
+      Each step is one card below, and each has a foldable <strong>full runnable script</strong>. If you just want the spine: <strong>build data (1–3) → train (4–5) → prove it worked (6–8) → ship it (9–10)</strong>.
+      <ol style="padding-left:20px; margin:8px 0; columns:2; column-gap:28px;">
+        <li><strong>Corpus</strong> — scrape Wikipedia, keep the LaTeX</li>
+        <li><strong>Data reality</strong> — the 99× raw-vs-instruction gap</li>
+        <li><strong>Chat templates</strong> — what the model actually reads</li>
+        <li><strong>CPT</strong> — teach the domain (loss on every token)</li>
+        <li><strong>SFT</strong> — teach the task (loss on the answer only)</li>
+        <li><strong>★ Base→CPT→SFT</strong> — the centerpiece comparison</li>
+        <li><strong>Base vs instruct init</strong> — and why perplexity lies</li>
+        <li><strong>★ LoRA rank sweep</strong> — the result that proved me wrong</li>
+        <li><strong>★ Deploy</strong> — sub-1 GB model serving locally</li>
+        <li><strong>Size vs capability</strong> — what fine-tuning can't buy</li>
+      </ol>
+      ★ marks the three steps worth reading even if you skim the rest.
     </div>
   </div>
 
