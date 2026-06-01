@@ -1156,6 +1156,60 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
   <div class="good" style="margin-top:16px; font-size:0.83em;">
     <strong>Full working example:</strong> <code>scripts/11_custom_data.py</code> demonstrates loading CSV, JSONL, and text files, converting to every trainer format, filtering, deduplication, and saving — all runnable with no GPU.
   </div>
+
+  <!-- THE FORMAT-vs-LOSS CLARITY CARD -->
+  <div class="card full" style="margin-top:18px; border:1px solid #7c3aed;">
+    <div class="card-title" style="background:#3b0764; color:#e9d5ff;">🧩 "Should I apply the chat template myself, or keep prompt + completion?" — the confusion, settled</div>
+    <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
+      You'll see tutorials that take <code>{"prompt", "completion"}</code>, run <code>apply_chat_template</code> over it, and store the result in a single <code>"text"</code> column before training. It works — but it <strong>silently changes what loss you're computing</strong>, and that's the source of the confusion. Here's the rule, verified against the installed TRL source:
+      <div style="margin:12px 0; padding:12px 16px; background:#0f172a; border-radius:8px; border-left:3px solid #a855f7;">
+        <strong style="color:#e9d5ff;">The mask lives in the columns, not the text.</strong> TRL builds a <code>completion_mask</code> <em>only</em> when it can see separate <code>prompt</code> and <code>completion</code> fields. Once you flatten everything into one <code>"text"</code> string, that boundary is gone — there is nothing left to mask, so the only option is full-sequence loss.
+      </div>
+      <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.84em;">
+        <tr style="border-bottom:2px solid #475569;">
+          <th style="text-align:left; padding:6px 8px;">What you hand TRL</th>
+          <th style="text-align:left; padding:6px 8px;">Who applies the template</th>
+          <th style="text-align:left; padding:6px 8px;">Loss you get</th>
+          <th style="text-align:left; padding:6px 8px;"><code>completion_only_loss</code>?</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px 8px;"><code>prompt</code> + <code>completion</code> (strings or message lists)</td>
+          <td style="padding:6px 8px;"><strong>TRL does it</strong> (for conversational) and keeps the boundary</td>
+          <td style="padding:6px 8px;"><strong>Completion-only</strong> (prompt → -100)</td>
+          <td style="padding:6px 8px;">✅ available; <code>True</code> by default</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px 8px;"><code>messages</code> (multi-turn)</td>
+          <td style="padding:6px 8px;"><strong>TRL does it</strong></td>
+          <td style="padding:6px 8px;">Full, or <strong>assistant-only</strong> if you opt in</td>
+          <td style="padding:6px 8px;">use <code>assistant_only_loss=True</code></td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px 8px;">You pre-rendered into <code>"text"</code> (template already applied)</td>
+          <td style="padding:6px 8px;"><strong>You did</strong>, before TRL saw it</td>
+          <td style="padding:6px 8px;"><strong>Full sequence</strong> (every token graded)</td>
+          <td style="padding:6px 8px;">❌ not available — see below</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 8px;"><code>formatting_func</code> returning a string</td>
+          <td style="padding:6px 8px;">Your function</td>
+          <td style="padding:6px 8px;"><strong>Full sequence</strong></td>
+          <td style="padding:6px 8px;">❌ converts to a language-modeling dataset</td>
+        </tr>
+      </table>
+      </div>
+      <div class="warn" style="margin-top:10px;"><strong>This isn't a style preference — TRL enforces it.</strong> On the installed version, asking for completion-only loss on a flattened/text dataset raises: <code>"The completion_only_loss argument is not supported for language modeling datasets."</code> And the docs state a <code>formatting_func</code> <em>"explicitly converts the dataset into a language modeling type."</em> So: <strong>flatten-to-text and completion-only loss are mutually exclusive.</strong></div>
+      <div style="margin-top:10px;">So when <em>is</em> pre-flattening the right move? Three legitimate cases:
+        <ul style="padding-left:18px; margin:6px 0; color:#94a3b8;">
+          <li><strong>You actually want full-sequence loss</strong> — i.e. CPT / continued pretraining on chat-formatted text (you <em>want</em> it to learn the whole turn structure).</li>
+          <li><strong>Your data doesn't fit the four shapes</strong> (odd columns like Alpaca's <code>instruction/input/output</code>) and you'd rather format once with <code>formatting_func</code> — accepting full-sequence loss.</li>
+          <li><strong>You're using Unsloth's <code>train_on_responses_only</code></strong>, which re-introduces the mask <em>after</em> templating by string-matching the response marker — the one supported way to get completion-only behavior from flattened chat text (see <a href="#engines" style="color:#c4b5fd;">Engines</a>).</li>
+        </ul>
+      </div>
+      <div class="good" style="margin-top:6px;"><strong>Default recommendation:</strong> for instruction/Q&amp;A SFT, keep your data as <code>prompt</code> + <code>completion</code> (or <code>messages</code>) and let TRL apply the template. You get correct completion-only masking for free, and your dataset stays inspectable. Only flatten to <code>"text"</code> when you genuinely want full-sequence loss. Full mechanics in the <a href="#lossmasking" style="color:#c4b5fd;">Loss-Masking chapter</a>; sources: <a href="https://huggingface.co/docs/trl/sft_trainer" target="_blank" style="color:#c4b5fd;">TRL SFT Trainer</a> · <a href="https://huggingface.co/docs/trl/dataset_formats" target="_blank" style="color:#c4b5fd;">Dataset formats</a>.</div>
+    </div>
+  </div>
 </div>
 
 <div class="chapter" id="synthdata" style="background:#0d1117; border-top:2px solid #15803d;">
