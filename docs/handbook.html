@@ -1165,6 +1165,41 @@ Heating, Ventilation, and Air Conditioning.<span class="kw">&lt;|im_end|&gt;</sp
     </div>
   </div>
 
+  <!-- THE TRIPWIRE: who applies the template, and the add_generation_prompt asymmetry -->
+  <div class="card full" style="margin-top:14px; border:2px solid #ef4444; background:#170b0b;">
+    <div class="card-title" style="background:#7f1d1d; color:#fecaca;">⚠️ The tripwire: who applies the template — and why <code>add_generation_prompt</code> is asymmetric</div>
+    <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
+      Two questions cause more silent SFT failures than anything else, and the honest answers are not symmetric. Both are verified against the <strong>installed TRL source</strong> (<code>sft_trainer.py</code>) and the transformers docs, not guessed.
+
+      <div style="margin:12px 0; padding:12px 16px; background:#0f172a; border-radius:8px; border-left:3px solid #ef4444;">
+        <strong style="color:#fecaca;">Q1 — Do I apply the chat template, or does the trainer?</strong><br>
+        <strong>For training: the trainer does it — when (and only when) your data is conversational.</strong> If your rows are <code>messages</code>, or <code>prompt</code>/<code>completion</code> as <em>message lists</em>, <code>SFTTrainer</code> calls <code>apply_chat_template</code> internally. <strong>Do not pre-apply it yourself</strong> — you'd double-wrap the special tokens. If your rows are plain <code>{"text": …}</code> strings, the trainer does <em>not</em> template (there are no roles to template) — what you put in the string is what it trains on.<br>
+        <strong>For inference: you do it.</strong> The trainer isn't involved at generation time — you call <code>apply_chat_template(...)</code> in your own code.
+      </div>
+
+      <div style="margin:12px 0; padding:12px 16px; background:#0f172a; border-radius:8px; border-left:3px solid #f59e0b;">
+        <strong style="color:#fde68a;">Q2 — Where does <code>add_generation_prompt</code> go? (the asymmetry)</strong><br>
+        It is an <strong>inference-time</strong> flag <em>you</em> set to <code>True</code> so the string ends at the open assistant turn (<code>…&lt;|im_start|&gt;assistant\n</code>) and the model continues. At <strong>training</strong> time the <em>full</em> sequence must contain the real answer, so the conversation is <em>not</em> left open. You essentially never pass <code>add_generation_prompt=True</code> yourself for training.
+        <div style="margin-top:8px; padding:8px 12px; background:#1c1206; border-radius:6px; font-size:0.92em;"><strong style="color:#fdba74;">The subtlety that surprises people (and looks like a contradiction):</strong> for a <em>prompt-completion</em> dataset, TRL internally renders the <em>prompt half</em> with <code>add_generation_prompt=True</code> — <em>but only to find where the prompt ends so it can mask it.</em> It then renders <code>prompt + completion</code> normally for the actual training tokens. So "training uses <code>False</code>" is the rule you act on; under the hood TRL uses <code>True</code> on the prompt purely as a measuring tape for the loss mask. You never set this — the trainer does, correctly. (Verified: <code>sft_trainer.py</code> tokenize step, prompt-completion branch.)</div>
+      </div>
+
+      <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.82em;">
+        <tr style="border-bottom:2px solid #475569;">
+          <th style="text-align:left; padding:6px 8px;">Your data</th>
+          <th style="text-align:left; padding:6px 8px;">Template applied by…</th>
+          <th style="text-align:left; padding:6px 8px;"><code>add_generation_prompt</code></th>
+          <th style="text-align:left; padding:6px 8px;">You must…</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;">TRAIN · <code>messages</code> / conversational <code>prompt+completion</code></td><td style="padding:6px 8px;"><strong>the trainer</strong></td><td style="padding:6px 8px;"><code>False</code> (TRL handles the prompt-mask internally)</td><td style="padding:6px 8px;">pass raw messages — <em>don't</em> pre-template</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;">TRAIN · plain <code>{"text"}</code></td><td style="padding:6px 8px;"><strong>you</strong>, before training (or nobody, for CPT)</td><td style="padding:6px 8px;"><code>False</code> when you render it</td><td style="padding:6px 8px;">render with <code>tokenize=False, add_special_tokens=False</code></td></tr>
+        <tr><td style="padding:6px 8px;">INFERENCE · any chat model</td><td style="padding:6px 8px;"><strong>you</strong>, in your generate code</td><td style="padding:6px 8px;"><code>True</code></td><td style="padding:6px 8px;">stop at the open assistant turn, then <code>generate()</code></td></tr>
+      </table>
+      </div>
+      <div class="warn" style="margin-top:8px;"><strong>The failure this prevents:</strong> if you pre-template a conversational dataset into <code>text</code> <em>and</em> let the trainer template again → doubled <code>&lt;|im_start|&gt;</code>/<code>&lt;bos&gt;</code> tokens, and training silently learns a malformed format. At inference, forgetting <code>add_generation_prompt=True</code> → the model "continues the user's message instead of replying to it" (transformers docs). Two different mistakes, same symptom: "my fine-tune is broken." Sources: <a href="https://huggingface.co/docs/transformers/chat_templating#model-training" target="_blank" style="color:#fca5a5;">transformers · Model training</a> · <a href="https://huggingface.co/docs/trl/sft_trainer" target="_blank" style="color:#fca5a5;">TRL SFT Trainer</a> · installed <code>trl/trainer/sft_trainer.py</code>.</div>
+    </div>
+  </div>
+
   <div style="margin-top:18px; font-size:0.7em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#7c3aed;">Now the mechanics: loading &amp; reshaping your files</div>
 
   <div class="grid2" style="gap:14px; margin-top:8px;">
