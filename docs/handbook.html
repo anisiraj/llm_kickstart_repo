@@ -49,6 +49,12 @@
   .card-title { font-size: 0.7em; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
   .card-body { padding: 10px 12px; }
   pre { font-family: 'Fira Mono', monospace; font-size: 0.84em; line-height: 1.6; white-space: pre-wrap; color: #e2e8f0; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: '▸ '; color: #34d399; }
+  details[open] > summary::before { content: '▾ '; }
+  details > summary:hover { filter: brightness(1.25); }
+  details pre { font-size: 0.78em; white-space: pre; }
 
   /* SYNTAX */
   .kw  { color: #c084fc; font-weight: 600; }
@@ -3187,6 +3193,404 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
     </div>
   </div>
 
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ Shared setup used by every step (config + helpers)</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/config.py</code> &middot; 235 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/config.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">&quot;&quot;&quot;
+config.py — single source of truth for the case study (edit here, not in the scripts).
+
+Keeping every knob in one place is what makes the pipeline reproducible: same seed, same
+model IDs, same page list, same hyperparameters → same results (within hardware variance).
+&quot;&quot;&quot;
+from __future__ import annotations
+import os
+import random
+from pathlib import Path
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+# config.py lives in case_study/scripts/, so the case-study root (where data/outputs live) is parent.parent.
+ROOT = Path(__file__).resolve().parent.parent
+import os as _os
+
+DATA = ROOT / &quot;data&quot;
+CORPUS_DIR = DATA / &quot;corpus&quot;          # raw Wikipedia text (shared across models)
+SFT_DIR = DATA / &quot;sft&quot;                # instruction Q&amp;A sets (shared across models)
+
+# ── Model registry — the pipeline runs on either model ────────────────────────
+# Pick with env CASE_STUDY_MODEL or set_model(). SmolLM3-3B uses QLoRA (4-bit) so it fits a 12GB GPU;
+# it must run in the Unsloth env (.venv) which has bitsandbytes. The 135M runs bf16 in either env.
+MODELS = {
+    &quot;smollm2-135m&quot;: dict(base=&quot;HuggingFaceTB/SmolLM2-135M&quot;,
+                         instruct=&quot;HuggingFaceTB/SmolLM2-135M-Instruct&quot;, load_in_4bit=False),
+    &quot;smollm3&quot;:      dict(base=&quot;HuggingFaceTB/SmolLM3-3B-Base&quot;,
+                         instruct=&quot;HuggingFaceTB/SmolLM3-3B&quot;, load_in_4bit=True),
+    # MiniCPM5-1B: a small (1B) on-device, tool-capable model. arch = LlamaForCausalLM, so Ollama
+    # imports its safetensors directly (no GGUF/llama.cpp needed). Unsloth fine-tunes it (OpenBMB&#x27;s
+    # own minicpm5-finetune-unsloth skill uses the same FastLanguageModel + target_modules we do).
+    &quot;minicpm5&quot;:     dict(base=&quot;openbmb/MiniCPM5-1B&quot;,
+                         instruct=&quot;openbmb/MiniCPM5-1B-sft&quot;, load_in_4bit=True),
+    # cheap QLoRA-path smoke test: the 135M loaded in 4-bit (verifies the SmolLM3 code path fast).
+    &quot;smollm2-135m-4bit&quot;: dict(base=&quot;HuggingFaceTB/SmolLM2-135M&quot;,
+                              instruct=&quot;HuggingFaceTB/SmolLM2-135M-Instruct&quot;, load_in_4bit=True),
+}
+MODEL_KEY = _os.environ.get(&quot;CASE_STUDY_MODEL&quot;, &quot;smollm2-135m&quot;).lower()
+
+# §13: Ollama name for the stock tool-capable model (override with --model).
+# Ollama&#x27;s library has no `smollm3`; pull the official GGUF from HF instead:
+#   ollama pull hf.co/ggml-org/SmolLM3-3B-GGUF:Q4_K_M
+SMOLLM3_OLLAMA = &quot;hf.co/ggml-org/SmolLM3-3B-GGUF:Q4_K_M&quot;
+
+# Resolved per active model (updated by set_model). OUTPUTS is model-scoped so the two models&#x27;
+# adapters/metrics never collide; DATA (corpus, seed Q&amp;A) is shared.
+BASE_MODEL = INSTRUCT_MODEL = LOAD_IN_4BIT = OUTPUTS = None  # set by _apply_model() below
+
+
+def _apply_model() -&gt; None:
+    global BASE_MODEL, INSTRUCT_MODEL, LOAD_IN_4BIT, OUTPUTS
+    m = MODELS[MODEL_KEY]
+    BASE_MODEL, INSTRUCT_MODEL, LOAD_IN_4BIT = m[&quot;base&quot;], m[&quot;instruct&quot;], m[&quot;load_in_4bit&quot;]
+    OUTPUTS = ROOT / &quot;outputs&quot; / MODEL_KEY
+    for _d in (DATA, CORPUS_DIR, SFT_DIR, OUTPUTS):
+        _d.mkdir(parents=True, exist_ok=True)
+
+
+def set_model(key: str) -&gt; None:
+    &quot;&quot;&quot;Switch the active model (e.g. &#x27;smollm2-135m&#x27; or &#x27;smollm3&#x27;) at runtime.&quot;&quot;&quot;
+    global MODEL_KEY
+    assert key in MODELS, f&quot;{key} not in {list(MODELS)}&quot;
+    MODEL_KEY = key
+    _apply_model()
+
+
+_apply_model()
+
+# ── Run mode: TRIAL (fast smoke test) vs FULL (the real run) ──────────────────
+# Top-level flag every script/notebook reads. TRIAL caps data volume + training steps so the
+# whole pipeline runs end-to-end in seconds (to validate syntax/shapes/plumbing); FULL does the
+# real thing. Override per-process with env CASE_STUDY_MODE=full, or call set_mode(&quot;full&quot;).
+import os as _os
+RUN_MODE = _os.environ.get(&quot;CASE_STUDY_MODE&quot;, &quot;trial&quot;).lower()
+
+
+def set_mode(mode: str) -&gt; None:
+    &quot;&quot;&quot;Set TRIAL/FULL at runtime (used by the notebooks&#x27; top-level flag cell).&quot;&quot;&quot;
+    global RUN_MODE
+    assert mode in (&quot;trial&quot;, &quot;full&quot;), mode
+    RUN_MODE = mode
+
+
+def is_trial() -&gt; bool:
+    return RUN_MODE == &quot;trial&quot;
+
+
+def limits() -&gt; dict:
+    &quot;&quot;&quot;Mode-dependent volumes/steps. One place to tune both regimes.&quot;&quot;&quot;
+    if is_trial():
+        return dict(cpt_char_cap=80_000, cpt_max_steps=8, sft_max_steps=8,
+                    sweep_sizes=[4, 8], eval_blocks=2, gen_samples=2)
+    return dict(cpt_char_cap=None, cpt_max_steps=-1, sft_max_steps=-1,
+                sweep_sizes=SFT_SWEEP_SIZES, eval_blocks=12, gen_samples=8)
+
+
+# ── Reproducibility ───────────────────────────────────────────────────────────
+SEED = 42
+
+def set_all_seeds(seed: int = SEED) -&gt; None:
+    &quot;&quot;&quot;Seed python / numpy / torch (+ transformers if available) for reproducible runs.&quot;&quot;&quot;
+    random.seed(seed)
+    os.environ[&quot;PYTHONHASHSEED&quot;] = str(seed)
+    try:
+        import numpy as np
+        np.random.seed(seed)
+    except ImportError:
+        pass
+    try:
+        import torch
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
+    try:
+        from transformers import set_seed as _hf_set_seed
+        _hf_set_seed(seed)
+    except ImportError:
+        pass
+
+
+def record_env(path: Path | None = None) -&gt; dict:
+    &quot;&quot;&quot;Capture library versions + device so every run is self-documenting.&quot;&quot;&quot;
+    info: dict[str, str] = {}
+    import platform
+    info[&quot;python&quot;] = platform.python_version()
+    for pkg in (&quot;torch&quot;, &quot;transformers&quot;, &quot;datasets&quot;, &quot;peft&quot;, &quot;trl&quot;, &quot;accelerate&quot;):
+        try:
+            import importlib.metadata as m
+            info[pkg] = m.version(pkg)
+        except Exception:
+            info[pkg] = &quot;—&quot;
+    try:
+        import torch
+        info[&quot;cuda&quot;] = torch.cuda.get_device_name(0) if torch.cuda.is_available() else &quot;cpu&quot;
+    except ImportError:
+        info[&quot;cuda&quot;] = &quot;n/a&quot;
+    if path:
+        import json
+        path.write_text(json.dumps(info, indent=2))
+    return info
+
+
+# ── Domain: computational &amp; quantum chemistry Wikipedia pages (CPT corpus) ────
+# Curated, neutral, factual. CC BY-SA — attribute in the chapter.
+# NOTE: titles below were verified against the live API (2026-05-30). Known redirects that
+# collapse onto another page were REMOVED so the corpus isn&#x27;t silently duplicated:
+#   &quot;Self-consistent field method&quot;→Hartree–Fock; &quot;Hohenberg–Kohn theorems&quot; &amp;
+#   &quot;Generalized gradient approximation&quot;→Density functional theory. Pages with no standalone
+#   article (&quot;Exchange–correlation functional&quot;, &quot;Population analysis&quot;, &quot;Psi4&quot;) were replaced.
+# 01_build_corpus.py ALSO dedups by resolved title + content hash as a safety net.
+WIKI_PAGES = [
+    # quantum chemistry foundations
+    &quot;Quantum chemistry&quot;, &quot;Schrödinger equation&quot;, &quot;Born–Oppenheimer approximation&quot;,
+    &quot;Hartree–Fock method&quot;, &quot;Slater determinant&quot;,
+    &quot;Molecular orbital&quot;, &quot;Linear combination of atomic orbitals&quot;, &quot;Basis set (chemistry)&quot;,
+    &quot;Gaussian orbital&quot;, &quot;Electron correlation&quot;, &quot;Configuration interaction&quot;,
+    &quot;Coupled cluster&quot;, &quot;Møller–Plesset perturbation theory&quot;, &quot;Multi-configurational self-consistent field&quot;,
+    &quot;Density matrix&quot;,
+    # density functional theory
+    &quot;Density functional theory&quot;, &quot;Kohn–Sham equations&quot;,
+    &quot;Local-density approximation&quot;, &quot;Hybrid functional&quot;,
+    # computational chemistry / methods &amp; properties
+    &quot;Computational chemistry&quot;, &quot;Molecular mechanics&quot;, &quot;Force field (chemistry)&quot;,
+    &quot;Molecular dynamics&quot;, &quot;Semi-empirical quantum chemistry method&quot;, &quot;Ab initio quantum chemistry methods&quot;,
+    &quot;Potential energy surface&quot;, &quot;Geometry optimization&quot;, &quot;Normal mode&quot;,
+    &quot;Mulliken population analysis&quot;, &quot;Partial charge&quot;, &quot;Natural bond orbital&quot;,
+    &quot;Pseudopotential&quot;, &quot;Plane wave&quot;, &quot;Tight binding&quot;, &quot;Quantum Monte Carlo&quot;,
+    # software packages
+    &quot;Gaussian (software)&quot;, &quot;NWChem&quot;, &quot;PSI (computational chemistry)&quot;, &quot;Q-Chem&quot;,
+    &quot;ORCA (quantum chemistry program)&quot;, &quot;Quantum ESPRESSO&quot;,
+]
+
+# ── Hyperparameters (model-agnostic — same for every model in MODELS, so a run is just a
+#    model-name swap). High rank + rsLoRA: rank-stabilized LoRA scales the adapter by alpha/sqrt(r)
+#    instead of alpha/r, which keeps high ranks well-conditioned (use_rslora=True). r=32 is &quot;high&quot;
+#    yet memory-safe for a 1–3B QLoRA on 12 GB. Embeddings: CPT targets embed_tokens+lm_head so the
+#    embedding layer adapts to the new-domain token distribution (trained at a smaller LR); SFT does
+#    NOT — it&#x27;s task/format tuning, and adapting tied embeddings complicates the merge→GGUF step. ──
+_LORA_TARGETS = [&quot;q_proj&quot;, &quot;k_proj&quot;, &quot;v_proj&quot;, &quot;o_proj&quot;, &quot;gate_proj&quot;, &quot;up_proj&quot;, &quot;down_proj&quot;]
+CPT = dict(max_seq_len=1024, lr=5e-5, epochs=1, batch_size=4, grad_accum=4,
+           embedding_learning_rate=5e-6,                 # smaller LR for embed_tokens/lm_head
+           lora_r=32, lora_alpha=32, lora_dropout=0.0, use_rslora=True,
+           target_modules=_LORA_TARGETS + [&quot;embed_tokens&quot;, &quot;lm_head&quot;])
+SFT = dict(max_seq_len=1024, lr=2e-4, epochs=3, batch_size=4, grad_accum=2,
+           lora_r=32, lora_alpha=32, lora_dropout=0.0, use_rslora=True,
+           target_modules=list(_LORA_TARGETS))
+
+# Optional LoRA-rank override (used by the rank sweep / quick experiments): CASE_STUDY_LORA_R=64
+_lr = _os.environ.get(&quot;CASE_STUDY_LORA_R&quot;)
+if _lr:
+    _r = int(_lr)
+    CPT[&quot;lora_r&quot;] = CPT[&quot;lora_alpha&quot;] = _r
+    SFT[&quot;lora_r&quot;] = SFT[&quot;lora_alpha&quot;] = _r
+# A few held-out questions printed at the end of every run for quick *visual* assessment.
+# Deliberately overlap the domain so you can eyeball whether CPT/SFT changed the answers.
+SAMPLE_QUESTIONS = [
+    &quot;What is the Hartree-Fock method?&quot;,
+    &quot;What does density functional theory compute?&quot;,
+    &quot;What is a basis set in quantum chemistry?&quot;,
+    &quot;What is electron correlation?&quot;,
+    &quot;What is coupled cluster theory?&quot;,
+    &quot;What is the Born-Oppenheimer approximation?&quot;,
+]
+
+# §4 catastrophic-forgetting probes: NON-chemistry text + instructions. If CPT on the domain
+# corpus damages general ability, general-text perplexity rises and these answers degrade.
+GENERAL_PAGES = [&quot;Coffee&quot;, &quot;Association football&quot;, &quot;Piano&quot;, &quot;Mount Everest&quot;]
+GENERAL_QUESTIONS = [
+    &quot;What is the capital of France?&quot;,
+    &quot;List three primary colors.&quot;,
+    &quot;Write one short sentence about a dog.&quot;,
+]
+
+# §6 centerpiece: SFT-set sizes for the base-vs-instruct sweep. Capped by how many pairs we
+# actually hand-authored (32) minus the held-out test set — which is itself the scarcity lesson.
+SFT_TEST_HOLDOUT = 8              # fixed held-out Q&amp;A for evaluating every sweep point
+SFT_SWEEP_SIZES = [4, 8, 16, 24]  # train-set sizes (FULL); TRIAL uses a subset via limits()
+REPLAY_FRACTION = 0.10            # general-data rehearsal to mitigate forgetting
+QUANT = &quot;Q4_K_M&quot;                  # GGUF quantization target
+
+# Memory profile: a 3B model in 4-bit on a 12GB GPU needs smaller batch + sequence + gradient
+# checkpointing (the 135M is comfortable at the defaults above). Applied at import for the run.sh
+# path (CASE_STUDY_MODEL set before import). GRAD_CKPT flags the manual-Trainer sections (§3-hf/§4).
+GRAD_CKPT = bool(LOAD_IN_4BIT)
+if LOAD_IN_4BIT:
+    CPT.update(batch_size=1, grad_accum=8, max_seq_len=512)
+    SFT.update(batch_size=1, grad_accum=4, max_seq_len=512)
+
+if __name__ == &quot;__main__&quot;:
+    import json
+    print(&quot;Env:&quot;, json.dumps(record_env(), indent=2))
+    print(f&quot;\n{len(WIKI_PAGES)} Wikipedia pages queued for the CPT corpus.&quot;)
+</pre>
+  </details>
+
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/utils.py</code> &middot; 151 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/utils.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">&quot;&quot;&quot;
+utils.py — shared helpers for the case study (importable normally; no digit prefix).
+
+generate_samples() prints the model&#x27;s answers to a few held-out questions for quick VISUAL
+assessment at the end of a run. Greedy decoding (do_sample=False) keeps it deterministic and
+reproducible. Used by §3 (CPT, completion-style) and reused by §5/§7 (SFT, chat-style).
+&quot;&quot;&quot;
+from __future__ import annotations
+
+import torch
+
+
+def load_causal_lm(name: str, *, training: bool = False, dtype=None):
+    &quot;&quot;&quot;Load a causal LM honoring the active model&#x27;s precision.
+
+    - config.LOAD_IN_4BIT (SmolLM3): QLoRA 4-bit via bitsandbytes (NF4 + bf16 compute, double-quant),
+      placed by device_map; if training, prepare_model_for_kbit_training. Requires the .venv env.
+    - otherwise (135M): bf16 on CUDA / fp32 on CPU, moved to the device.
+    Returns the model already on its device, so callers must NOT call .to(...) on a 4-bit model.
+    &quot;&quot;&quot;
+    import config
+    from transformers import AutoModelForCausalLM
+    cuda = torch.cuda.is_available()
+    if config.LOAD_IN_4BIT:
+        from transformers import BitsAndBytesConfig
+        qc = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type=&quot;nf4&quot;,
+                                bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True)
+        # keep non-quantized layers (norms, lm_head, embeddings) in bf16 so they match the bf16
+        # autocast trl uses — otherwise SFTTrainer hits &quot;expected BFloat16 but found Float&quot;.
+        model = AutoModelForCausalLM.from_pretrained(
+            name, quantization_config=qc, device_map=&quot;auto&quot;, dtype=torch.bfloat16)
+        if training:
+            from peft import prepare_model_for_kbit_training
+            model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+        return model
+    model = AutoModelForCausalLM.from_pretrained(
+        name, dtype=dtype or (torch.bfloat16 if cuda else torch.float32))
+    return model.to(&quot;cuda&quot;) if cuda else model
+
+
+def build_sft_model(model_name: str):
+    &quot;&quot;&quot;Return (peft_model, tokenizer) ready for SFTTrainer (pass WITHOUT peft_config).
+
+    - 4-bit (SmolLM3): use Unsloth&#x27;s FastLanguageModel — it&#x27;s purpose-built for QLoRA and handles all
+      the dtype/grad-checkpoint alignment that trips up a hand-rolled transformers+bnb+trl QLoRA
+      (the &#x27;expected BFloat16 but found Float&#x27; error). Requires the .venv env.
+    - bf16 (135M): standard transformers + PEFT, pre-wrapped.
+    &quot;&quot;&quot;
+    import config
+    cfg = config.SFT
+    if config.LOAD_IN_4BIT:
+        from unsloth import FastLanguageModel
+        model, tok = FastLanguageModel.from_pretrained(
+            model_name, max_seq_length=cfg[&quot;max_seq_len&quot;], dtype=None, load_in_4bit=True)
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
+        model = FastLanguageModel.get_peft_model(
+            model, r=cfg[&quot;lora_r&quot;], lora_alpha=cfg[&quot;lora_alpha&quot;], lora_dropout=cfg[&quot;lora_dropout&quot;],
+            target_modules=cfg[&quot;target_modules&quot;], use_rslora=cfg[&quot;use_rslora&quot;],
+            use_gradient_checkpointing=&quot;unsloth&quot;, random_state=config.SEED)
+        return model, tok
+    from transformers import AutoTokenizer
+    from peft import LoraConfig, get_peft_model
+    tok = AutoTokenizer.from_pretrained(model_name)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    model = get_peft_model(load_causal_lm(model_name), LoraConfig(
+        r=cfg[&quot;lora_r&quot;], lora_alpha=cfg[&quot;lora_alpha&quot;], lora_dropout=cfg[&quot;lora_dropout&quot;],
+        use_rslora=cfg[&quot;use_rslora&quot;], target_modules=cfg[&quot;target_modules&quot;], task_type=&quot;CAUSAL_LM&quot;))
+    return model, tok
+
+
+import math
+import re
+
+_STOP = {&quot;the&quot;, &quot;a&quot;, &quot;an&quot;, &quot;of&quot;, &quot;is&quot;, &quot;are&quot;, &quot;to&quot;, &quot;and&quot;, &quot;in&quot;, &quot;for&quot;, &quot;that&quot;, &quot;with&quot;,
+         &quot;as&quot;, &quot;by&quot;, &quot;it&quot;, &quot;on&quot;, &quot;or&quot;, &quot;be&quot;, &quot;this&quot;, &quot;from&quot;, &quot;which&quot;, &quot;its&quot;, &quot;into&quot;}
+
+
+def content_words(s: str) -&gt; set[str]:
+    return {w for w in re.findall(r&quot;[a-z]+&quot;, s.lower()) if len(w) &gt; 3 and w not in _STOP}
+
+
+def keyword_recall(gold: str, gen: str) -&gt; float:
+    &quot;&quot;&quot;Fraction of the gold answer&#x27;s content words that appear in the generation (format-robust).&quot;&quot;&quot;
+    g = content_words(gold)
+    return len(g &amp; content_words(gen)) / len(g) if g else 0.0
+
+
+@torch.no_grad()
+def completion_perplexity(model, tok, pairs: list[dict], device) -&gt; float:
+    &quot;&quot;&quot;Mean perplexity of the gold completions given their prompts (prompt tokens masked).
+
+    Mirrors the SFT objective (loss on answer tokens only); same formatting for every condition.
+    Shared by §6 and §7 (lives here to avoid a circular import between them).
+    &quot;&quot;&quot;
+    model.eval()
+    total_loss, total_tok = 0.0, 0
+    for p in pairs:
+        p_ids = tok(p[&quot;prompt&quot;], add_special_tokens=False)[&quot;input_ids&quot;]
+        c_ids = tok(&quot; &quot; + p[&quot;completion&quot;], add_special_tokens=False)[&quot;input_ids&quot;] + [tok.eos_token_id]
+        ids = torch.tensor([p_ids + c_ids], device=device)
+        labels = torch.tensor([[-100] * len(p_ids) + c_ids], device=device)
+        loss = model(ids, labels=labels).loss.item()
+        total_loss += loss * len(c_ids)
+        total_tok += len(c_ids)
+    return math.exp(total_loss / max(total_tok, 1))
+
+
+def generate_samples(model, tokenizer, questions: list[str] | None = None, *,
+                     max_new_tokens: int = 64, chat: bool = False, n: int | None = None,
+                     title: str = &quot;sample generations&quot;, quiet: bool = False) -&gt; list[dict]:
+    &quot;&quot;&quot;Generate (greedy) answers to `questions` and (unless quiet) print them. Returns the Q/A pairs.
+
+    chat=False: feed the question text and let the model continue (right for a base/CPT model).
+    chat=True : apply the tokenizer&#x27;s chat template (right for an instruct/SFT model).
+    quiet=True: don&#x27;t print (used when scoring the whole test set in §7).
+    &quot;&quot;&quot;
+    import config
+    if questions is None:
+        questions = config.SAMPLE_QUESTIONS
+    if n is not None:
+        questions = questions[:n]
+
+    model.eval()
+    device = next(model.parameters()).device
+    eos = tokenizer.eos_token_id
+    if not quiet:
+        print(f&quot;\n--- {title} (greedy; eyeball these) ---&quot;)
+    results = []
+    for q in questions:
+        if chat and getattr(tokenizer, &quot;chat_template&quot;, None):
+            enc = tokenizer.apply_chat_template(
+                [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: q}], add_generation_prompt=True,
+                return_tensors=&quot;pt&quot;, return_dict=True)
+        else:
+            enc = tokenizer(q, return_tensors=&quot;pt&quot;)
+        ids = enc[&quot;input_ids&quot;].to(device)
+        attn = enc.get(&quot;attention_mask&quot;)
+        attn = attn.to(device) if attn is not None else None
+        with torch.no_grad():
+            out = model.generate(ids, attention_mask=attn, max_new_tokens=max_new_tokens,
+                                 do_sample=False, pad_token_id=eos)
+        answer = tokenizer.decode(out[0][ids.shape[1]:], skip_special_tokens=True).strip()
+        results.append({&quot;question&quot;: q, &quot;answer&quot;: answer})
+        if not quiet:
+            print(f&quot;\nQ: {q}\nA: {answer}&quot;)
+    if not quiet:
+        print(&quot;&quot;)
+    return results
+</pre>
+  </details>
+
   <!-- STEP 1 — DATA -->
   <div class="card full" style="margin-top:16px;">
     <div class="card-title">Step 1 — Build the corpus (and survive the equations)</div>
@@ -3230,6 +3634,275 @@ UA = <span class="st">"chem-corpus/0.1 (educational; you@example.com)"</span>   
     </div>
   </div>
 
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/01_build_corpus.py</code> &middot; 262 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/01_build_corpus.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+01_build_corpus.py — build the CPT corpus from Wikipedia (computational/quantum chemistry).
+
+WHY THIS SCRIPT EXISTS, AND WHAT IT TEACHES
+-------------------------------------------
+This is the first running example and it makes research question #2 (SFT data availability)
+concrete: raw domain text is *abundant*. A few dozen Wikipedia pages give hundreds of KB of clean
+text in seconds, with no labelling. That is the fuel for **continued pretraining (CPT)**.
+
+Because CPT is plain next-token prediction over raw text, the training signal is the **full causal
+LM loss on every token** (see RESEARCH_NOTES §7). That is *why this corpus is a stream of raw text*
+(a `{&quot;text&quot;: ...}` dataset) and NOT prompt/completion pairs — there is no prompt to mask. Contrast
+with SFT (02/05/06), where the data is prompt→completion and loss is computed on the **completion
+only** (`completion_only_loss=True`). Keep that distinction in mind: the shape of the data here is
+dictated by the loss we intend to compute downstream.
+
+THE RECIPE (every setting is deliberate and documented — reproducibility is a hard requirement)
+-----------------------------------------------------------------------------------------------
+Source        : English Wikipedia via the MediaWiki API (action=query&amp;prop=extracts&amp;explaintext).
+                Licence CC BY-SA — attributed in manifest.json and the book chapter.
+User-Agent    : a descriptive UA string. Wikipedia returns HTTP 403 to bare/absent UAs; this is the
+                single most common reason a naive scraper &quot;works on my machine&quot; but fails for others.
+Politeness    : 0.3s sleep between network fetches.
+Cleaning      : (1) MATH handling (see below); (2) Unicode NFKC normalization; (3) drop boilerplate
+                tail sections (References / See also / External links / ...); (4) collapse whitespace.
+Min length    : pages with &lt; 200 chars after cleaning are treated as empty (disambiguation / wrong
+                title / redirect stub) and SKIPPED with a warning so you can fix the title.
+Deduplication : essential for CPT. Duplicated text wastes compute and *over-weights* whatever topic
+                is repeated, biasing the model and inflating reported corpus size (D4, arXiv:2308.12284).
+                Wikipedia redirects silently cause this (e.g. &quot;Generalized gradient approximation&quot; -&gt;
+                &quot;Density functional theory&quot;). We dedup on (a) resolved title and (b) exact content
+                hash, keeping the first occurrence and reporting the rest.
+Caching       : one plaintext file per *unique* page under data/corpus/ (skip-if-exists; --force refetch).
+Manifest      : manifest.json records UA, source/licence, timestamp, every setting above, and per-page
+                stats (resolved title, chars, words, #equations kept, content hash). Self-documenting.
+
+MATH / EQUATION HANDLING (the crucial, domain-specific part)
+------------------------------------------------------------
+Quantum-chemistry pages are equation-dense, and `explaintext` renders each equation TWICE:
+  1. a broken glyph-by-glyph Unicode dump (every symbol on its own short line: &quot;Ψ\n(\nx\n,\nt\n)&quot;), then
+  2. the clean LaTeX source inside a `{\displaystyle ... }` blob.
+Feeding (1) into CPT trains the model on noise. So we:
+  - extract the LaTeX from every `{\displaystyle ...}` / `{\textstyle ...}` blob (balanced-brace scan,
+    because LaTeX contains nested braces), normalize its internal whitespace, and re-insert it inline
+    as `$ ... $` — a clean, standard representation;
+  - delete the glyph-soup duplicate (runs of &gt;=3 consecutive lines that each hold &lt;=3 non-space chars;
+    normal prose never lays words out one-per-line, so this does not eat real text).
+
+TOKEN DECISION (documented so it is auditable): we add **NO new vocabulary tokens** for the math.
+LaTeX is ASCII (`\ { } ^ _` + letters) and the model&#x27;s existing BPE tokenizer already represents it.
+Adding special tokens you don&#x27;t need is discouraged (HF chat-templating docs: extra special tokens are
+&quot;often incorrect or duplicated, hurting performance&quot;) and would force a `resize_token_embeddings` step,
+hurting reproducibility. Instead, CPT lets the *existing* embeddings adapt to the heavier LaTeX/math
+distribution — which is exactly why the CPT LoRA target_modules include `embed_tokens` and `lm_head`
+(see config.CPT). New *control* tokens (e.g. &lt;THINKING&gt;) would be a different story: those need
+`tokenizer.add_special_tokens` + `model.resize_token_embeddings`, or Unsloth&#x27;s `add_new_tokens(...)`
+called BEFORE `get_peft_model()`.
+
+Run: python case_study/01_build_corpus.py            (add --force to refetch from the network)
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import hashlib
+import json
+import re
+import sys
+import time
+import unicodedata
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+
+UA = &quot;llm-kickstart-case-study/0.1 (educational; contact: deeptij2007@gmail.com)&quot;
+API = &quot;https://en.wikipedia.org/w/api.php&quot;
+MIN_CHARS = 200
+
+# Tail sections that add noise to a CPT corpus — drop them and everything after.
+_TAIL = re.compile(
+    r&quot;\n=+\s*(References|See also|External links|Further reading|Notes|Bibliography|Citations)\s*=+&quot;,
+    re.IGNORECASE,
+)
+# Secondary sweep: a run of &gt;=4 short/blank lines (&lt;=3 non-space chars each, blanks allowed)
+# catches any residual glyph soup not adjacent to a {\displaystyle} blob (e.g. trailing soup).
+_GLYPH_SOUP = re.compile(r&quot;(?m)(?:^[^\S\n]*\S{0,3}[^\S\n]*\n){4,}&quot;)
+
+
+def _strip_trailing_glyph_run(seg: str) -&gt; str:
+    &quot;&quot;&quot;Remove the trailing glyph-soup run from a segment that sits right before an equation.
+
+    Wikipedia renders inline math as one symbol per line (blank lines interspersed) immediately
+    before the {\\displaystyle} blob. We walk back over trailing lines that are blank or &lt;=3
+    non-space chars and drop them, stopping at the first real prose line (&gt;3 chars). This is
+    surgical: it only ever touches the soup adjacent to an equation, never prose elsewhere.
+    &quot;&quot;&quot;
+    lines = seg.split(&quot;\n&quot;)
+    j = len(lines)
+    while j &gt; 0 and len(lines[j - 1].strip()) &lt;= 3:
+        j -= 1
+    tail_removed = len(lines) - j
+    return &quot;\n&quot;.join(lines[:j]) + (&quot;\n&quot; if tail_removed else &quot;&quot;)
+
+
+# ── Math extraction ───────────────────────────────────────────────────────────
+def _extract_latex_blobs(text: str) -&gt; tuple[str, int]:
+    r&quot;&quot;&quot;Replace every {\displaystyle ...}/{\textstyle ...} blob with inline ` $ latex $ `, and
+    strip the glyph-soup duplicate that precedes it.
+
+    Uses a balanced-brace scan because LaTeX bodies contain nested {...}; a non-greedy regex
+    to the first &#x27;}&#x27; would truncate the equation. Returns (new_text, num_equations).
+    &quot;&quot;&quot;
+    out: list[str] = []
+    i = 0
+    n_eq = 0
+    markers = (&quot;{\\displaystyle&quot;, &quot;{\\textstyle&quot;)
+    while True:
+        # find the next blob start
+        nxt = min((p for p in (text.find(m, i) for m in markers) if p != -1), default=-1)
+        if nxt == -1:
+            out.append(text[i:])
+            break
+        out.append(_strip_trailing_glyph_run(text[i:nxt]))   # drop the rendered-glyph duplicate
+        # scan to the matching close brace
+        depth = 0
+        k = nxt
+        while k &lt; len(text):
+            c = text[k]
+            if c == &quot;{&quot;:
+                depth += 1
+            elif c == &quot;}&quot;:
+                depth -= 1
+                if depth == 0:
+                    break
+            k += 1
+        body = text[nxt:k + 1]
+        latex = body.split(None, 1)[1] if len(body.split(None, 1)) &gt; 1 else &quot;&quot;
+        latex = latex.rstrip(&quot;}&quot;).strip()
+        latex = re.sub(r&quot;\s+&quot;, &quot; &quot;, latex)
+        out.append(f&quot; $ {latex} $ &quot; if latex else &quot; &quot;)
+        n_eq += 1
+        i = k + 1
+    return &quot;&quot;.join(out), n_eq
+
+
+def clean(raw: str) -&gt; tuple[str, int]:
+    &quot;&quot;&quot;Full cleaning pipeline. Returns (clean_text, num_equations_kept).&quot;&quot;&quot;
+    text, n_eq = _extract_latex_blobs(raw)     # 1. keep LaTeX inline, strip adjacent glyph soup
+    text = _GLYPH_SOUP.sub(&quot;&quot;, text)            # 2. secondary sweep for any residual soup
+    text = unicodedata.normalize(&quot;NFKC&quot;, text)  # 3. Unicode normalization
+    text = _TAIL.split(text, maxsplit=1)[0]     # 4. drop boilerplate tail sections
+    text = re.sub(r&quot;[ \t]+&quot;, &quot; &quot;, text)          # 5. collapse whitespace
+    text = re.sub(r&quot;\n[ \t]*\n[ \t]*(\n[ \t]*)+&quot;, &quot;\n\n&quot;, text)
+    text = re.sub(r&quot;\n{3,}&quot;, &quot;\n\n&quot;, text)
+    return text.strip(), n_eq
+
+
+def slugify(title: str) -&gt; str:
+    return re.sub(r&quot;[^a-z0-9]+&quot;, &quot;_&quot;, title.lower()).strip(&quot;_&quot;)
+
+
+def fetch_plaintext(title: str) -&gt; tuple[str, str]:
+    params = dict(action=&quot;query&quot;, format=&quot;json&quot;, prop=&quot;extracts&quot;,
+                  explaintext=1, redirects=1, titles=title)
+    req = urllib.request.Request(f&quot;{API}?{urllib.parse.urlencode(params)}&quot;,
+                                 headers={&quot;User-Agent&quot;: UA})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.load(r)
+    page = next(iter(data[&quot;query&quot;][&quot;pages&quot;].values()))
+    return page.get(&quot;title&quot;, title), (page.get(&quot;extract&quot;, &quot;&quot;) or &quot;&quot;)
+
+
+def build_corpus(force: bool = False) -&gt; dict:
+    &quot;&quot;&quot;Build (or load from cache) the deduped corpus. Returns the manifest dict.
+
+    Callable from both the CLI (`main()`) and the notebook, so the logic lives in exactly one
+    place — script and notebook can never drift out of sync.
+    &quot;&quot;&quot;
+    config.set_all_seeds()
+    manifest = {
+        &quot;user_agent&quot;: UA, &quot;source&quot;: &quot;en.wikipedia.org&quot;, &quot;licence&quot;: &quot;CC BY-SA 4.0&quot;,
+        &quot;fetched_utc&quot;: datetime.now(timezone.utc).isoformat(),
+        &quot;settings&quot;: {&quot;min_chars&quot;: MIN_CHARS, &quot;math&quot;: &quot;displaystyle-&gt;$latex$ + glyph-soup removal&quot;,
+                     &quot;normalization&quot;: &quot;NFKC&quot;, &quot;dedup&quot;: &quot;resolved-title + content-hash&quot;,
+                     &quot;tail_sections_dropped&quot;: True, &quot;added_tokens&quot;: &quot;none (LaTeX uses existing BPE vocab)&quot;},
+        &quot;env&quot;: config.record_env(), &quot;pages&quot;: [],
+    }
+    by_hash: dict[str, str] = {}      # content hash -&gt; first file that had it
+    by_title: dict[str, str] = {}     # resolved title -&gt; first query
+    totals = dict(chars=0, words=0, equations=0)
+    empties, dupes = [], []
+
+    for title in config.WIKI_PAGES:
+        path = config.CORPUS_DIR / f&quot;{slugify(title)}.txt&quot;
+        if path.exists() and not force:
+            txt = path.read_text()
+            # each equation is &quot; $ latex $ &quot; -&gt; two &quot; $ &quot; delimiters, so halve to get the count
+            resolved, status, n_eq = title, &quot;cached&quot;, txt.count(&quot; $ &quot;) // 2
+        else:
+            try:
+                resolved, rawtext = fetch_plaintext(title)
+                txt, n_eq = clean(rawtext)
+            except Exception as e:
+                print(f&quot;  ✗ {title!r}: {type(e).__name__} {e}&quot;)
+                empties.append(title)
+                continue
+            if len(txt) &lt; MIN_CHARS:
+                print(f&quot;  ⚠ {title!r} -&gt; {resolved!r}: {len(txt)} chars &lt; {MIN_CHARS}, SKIPPED (fix title)&quot;)
+                empties.append(title)
+                time.sleep(0.3)
+                continue
+            status = &quot;fetched&quot;
+            time.sleep(0.3)
+
+        h = hashlib.sha256(txt.encode()).hexdigest()
+        if h in by_hash:
+            print(f&quot;  ⊘ {title!r} -&gt; {resolved!r}: duplicate content of {by_hash[h]!r} (redirect?), SKIPPED&quot;)
+            dupes.append((title, by_hash[h]))
+            if status == &quot;cached&quot;:
+                pass  # leave stale cache file; just don&#x27;t include in corpus
+            continue
+        if resolved in by_title:
+            print(f&quot;  ⊘ {title!r} resolves to {resolved!r}, already taken by {by_title[resolved]!r}, SKIPPED&quot;)
+            dupes.append((title, by_title[resolved]))
+            continue
+
+        if status == &quot;fetched&quot;:
+            path.write_text(txt)
+        by_hash[h], by_title[resolved] = title, title
+        words = len(txt.split())
+        totals[&quot;chars&quot;] += len(txt); totals[&quot;words&quot;] += words; totals[&quot;equations&quot;] += n_eq
+        manifest[&quot;pages&quot;].append(dict(query=title, resolved=resolved, file=path.name,
+                                      chars=len(txt), words=words, equations=n_eq,
+                                      sha256=h[:16], status=status))
+        print(f&quot;  ✓ {title!r:42} {len(txt):&gt;7} chars / {words:&gt;6} words / {n_eq:&gt;3} eqs [{status}]&quot;)
+
+    (config.CORPUS_DIR / &quot;manifest.json&quot;).write_text(json.dumps(manifest, indent=2))
+    ok = len(manifest[&quot;pages&quot;])
+    print(f&quot;\nCorpus: {ok} unique pages | {totals[&#x27;chars&#x27;]:,} chars | ~{totals[&#x27;words&#x27;]:,} words &quot;
+          f&quot;| ~{totals[&#x27;words&#x27;] * 4 // 3:,} tokens est. | {totals[&#x27;equations&#x27;]:,} equations kept&quot;)
+    print(f&quot;Saved to {config.CORPUS_DIR}  |  manifest.json written (records every setting above)&quot;)
+    if dupes:
+        print(f&quot;\n{len(dupes)} duplicate(s) skipped (redirects collapsing onto an existing page):&quot;)
+        for q, kept in dupes:
+            print(f&quot;  - {q!r} == {kept!r}&quot;)
+    if empties:
+        print(f&quot;\n{len(empties)} page(s) need a corrected title in config.WIKI_PAGES: {empties}&quot;)
+    print(&quot;\nThis is the abundant side of the data story. Next: 02_data_availability.py&quot;)
+    return manifest
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Build the CPT corpus from Wikipedia.&quot;)
+    ap.add_argument(&quot;--force&quot;, action=&quot;store_true&quot;, help=&quot;refetch from the network even if cached&quot;)
+    build_corpus(force=ap.parse_args().force)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
   <!-- STEP 2 — DATA AVAILABILITY -->
   <div class="card full" style="margin-top:16px;">
     <div class="card-title">Step 2 — The reality that shapes every later decision: instruction data is scarce</div>
@@ -3244,6 +3917,161 @@ UA = <span class="st">"chem-corpus/0.1 (educational; you@example.com)"</span>   
       <div class="warn"><strong>The asymmetry that decides everything:</strong> ~112,000 corpus tokens vs ~1,132 tokens of hand-written Q&amp;A — a <strong>~99× gap</strong>. This is the real reason "just fine-tune it" is harder than it sounds, and it's why Step&nbsp;7 (base vs instruct init) matters so much: with this little SFT data, your <em>starting point</em> dominates the outcome. Code: <code>scripts/02_data_availability.py</code>.</div>
     </div>
   </div>
+
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/02_data_availability.py</code> &middot; 148 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/02_data_availability.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+02_data_availability.py — make research question #2 concrete: SFT data is the bottleneck.
+
+THE POINT
+---------
+CPT and SFT need fundamentally different data, and they are NOT equally easy to get:
+  • CPT wants RAW TEXT — abundant. §1 scraped ~100k tokens of clean domain text in seconds, no labels.
+  • SFT wants INSTRUCTION PAIRS (prompt→completion) — scarce. Someone has to *author* correct answers.
+    Below is a hand-written seed set for our domain. Notice how few there are: writing accurate Q&amp;A is
+    slow expert work, which is exactly why small-data SFT is the realistic regime (and why §6 asks
+    whether to start from a base or an instruct model when data is tiny).
+
+This script quantifies the asymmetry and shows the two DATA SHAPES, which map directly to two LOSSES:
+  • corpus  -&gt; {&quot;text&quot;: ...}                 -&gt; CPT, FULL causal loss on all tokens
+  • SFT set -&gt; {&quot;prompt&quot;:..., &quot;completion&quot;:...} -&gt; SFT, loss on the COMPLETION only (prompt masked)
+(See RESEARCH_NOTES.md §7 and PITFALLS.md.)
+
+Run: python case_study/02_data_availability.py
+&quot;&quot;&quot;
+from __future__ import annotations
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+
+# ── The scarce side: a hand-authored seed of instruction pairs ────────────────
+# Neutral, factual computational/quantum-chemistry Q&amp;A. This is the *expensive* data: every answer
+# was written and checked by hand. ~30 pairs is already real effort — that is the lesson.
+SEED_QA: list[dict[str, str]] = [
+    {&quot;prompt&quot;: &quot;What does the Hartree–Fock method approximate?&quot;,
+     &quot;completion&quot;: &quot;It approximates the many-electron wavefunction as a single Slater determinant and treats electron–electron repulsion in a mean-field (averaged) way, so it omits instantaneous electron correlation.&quot;},
+    {&quot;prompt&quot;: &quot;What is a basis set in quantum chemistry?&quot;,
+     &quot;completion&quot;: &quot;A set of functions—often Gaussian-type orbitals—used to expand molecular orbitals as linear combinations. Larger basis sets are more flexible and accurate but more expensive.&quot;},
+    {&quot;prompt&quot;: &quot;What is the central idea of density functional theory?&quot;,
+     &quot;completion&quot;: &quot;DFT reformulates the electronic problem in terms of the electron density instead of the many-body wavefunction; the Hohenberg–Kohn theorems show the ground-state energy is a functional of that density.&quot;},
+    {&quot;prompt&quot;: &quot;What does the Born–Oppenheimer approximation assume?&quot;,
+     &quot;completion&quot;: &quot;That nuclei are much heavier and move much more slowly than electrons, so nuclear and electronic motion can be separated and the electrons solved in a fixed field of nuclei.&quot;},
+    {&quot;prompt&quot;: &quot;Define electron correlation.&quot;,
+     &quot;completion&quot;: &quot;The energy difference between the exact non-relativistic energy and the Hartree–Fock energy, arising from the correlated instantaneous motion of electrons that mean-field theory misses.&quot;},
+    {&quot;prompt&quot;: &quot;What is a Slater determinant?&quot;,
+     &quot;completion&quot;: &quot;An antisymmetrized product of one-electron spin-orbitals; it satisfies the Pauli principle because exchanging two electrons changes its sign.&quot;},
+    {&quot;prompt&quot;: &quot;What does the LCAO approximation do?&quot;,
+     &quot;completion&quot;: &quot;It constructs molecular orbitals as linear combinations of atomic orbitals.&quot;},
+    {&quot;prompt&quot;: &quot;What is coupled cluster theory?&quot;,
+     &quot;completion&quot;: &quot;A post-Hartree–Fock method that captures electron correlation with an exponential cluster operator acting on a reference determinant; CCSD(T) is often called the gold standard of quantum chemistry.&quot;},
+    {&quot;prompt&quot;: &quot;What role does the exchange–correlation functional play in DFT?&quot;,
+     &quot;completion&quot;: &quot;It approximates the unknown exchange and correlation energy as a functional of the density; its choice (LDA, GGA, hybrid) largely determines a DFT calculation&#x27;s accuracy.&quot;},
+    {&quot;prompt&quot;: &quot;What is a pseudopotential?&quot;,
+     &quot;completion&quot;: &quot;An effective potential that replaces core electrons so only valence electrons are treated explicitly, reducing cost and capturing core/relativistic effects.&quot;},
+    {&quot;prompt&quot;: &quot;What correction does MP2 add to Hartree–Fock?&quot;,
+     &quot;completion&quot;: &quot;Møller–Plesset second-order perturbation theory adds a perturbative estimate of electron correlation on top of the Hartree–Fock reference.&quot;},
+    {&quot;prompt&quot;: &quot;What is a potential energy surface?&quot;,
+     &quot;completion&quot;: &quot;The energy of a molecular system as a function of its nuclear coordinates; minima are stable structures and first-order saddle points are transition states.&quot;},
+    {&quot;prompt&quot;: &quot;What is geometry optimization?&quot;,
+     &quot;completion&quot;: &quot;Finding nuclear coordinates that make the energy stationary (zero forces) on the potential energy surface, typically a local minimum.&quot;},
+    {&quot;prompt&quot;: &quot;What are normal modes of a molecule?&quot;,
+     &quot;completion&quot;: &quot;The independent harmonic vibrations obtained by diagonalizing the mass-weighted Hessian; their frequencies underlie IR and Raman spectra.&quot;},
+    {&quot;prompt&quot;: &quot;What is molecular dynamics?&quot;,
+     &quot;completion&quot;: &quot;Simulating the time evolution of atoms by numerically integrating Newton&#x27;s equations of motion using forces from a force field or a quantum method.&quot;},
+    {&quot;prompt&quot;: &quot;What is a force field in molecular mechanics?&quot;,
+     &quot;completion&quot;: &quot;A parameterized classical potential—bonds, angles, torsions, electrostatics, van der Waals—used to compute energies and forces without solving the electronic structure.&quot;},
+    {&quot;prompt&quot;: &quot;What do the Kohn–Sham equations introduce?&quot;,
+     &quot;completion&quot;: &quot;A fictitious system of non-interacting electrons that reproduces the true density, turning DFT into solvable single-particle equations with an exchange–correlation potential.&quot;},
+    {&quot;prompt&quot;: &quot;What is a hybrid functional?&quot;,
+     &quot;completion&quot;: &quot;A DFT functional that mixes a fraction of exact Hartree–Fock exchange with (semi)local exchange–correlation, e.g. B3LYP or PBE0.&quot;},
+    {&quot;prompt&quot;: &quot;What is the local-density approximation?&quot;,
+     &quot;completion&quot;: &quot;An exchange–correlation approximation that uses the density at each point as if it were a uniform electron gas.&quot;},
+    {&quot;prompt&quot;: &quot;What is Mulliken population analysis?&quot;,
+     &quot;completion&quot;: &quot;A scheme that partitions electrons among atoms using basis-function overlap populations to estimate atomic charges; it is basis-set dependent.&quot;},
+    {&quot;prompt&quot;: &quot;What is a plane-wave basis set?&quot;,
+     &quot;completion&quot;: &quot;A basis of plane waves, used with periodic boundary conditions in solid-state calculations and controlled by a kinetic-energy cutoff.&quot;},
+    {&quot;prompt&quot;: &quot;What is configuration interaction?&quot;,
+     &quot;completion&quot;: &quot;A post-Hartree–Fock method that expands the wavefunction as a linear combination of Slater determinants (excitations from a reference) to recover correlation.&quot;},
+    {&quot;prompt&quot;: &quot;What is the self-consistent field procedure?&quot;,
+     &quot;completion&quot;: &quot;Iteratively solving the Hartree–Fock or Kohn–Sham equations until the orbitals and the field they generate stop changing between iterations.&quot;},
+    {&quot;prompt&quot;: &quot;How do ab initio and semi-empirical methods differ?&quot;,
+     &quot;completion&quot;: &quot;Ab initio methods solve the electronic structure from first principles, while semi-empirical methods approximate or parameterize integrals using experimental data to lower cost.&quot;},
+    {&quot;prompt&quot;: &quot;What is a Gaussian-type orbital?&quot;,
+     &quot;completion&quot;: &quot;A basis function with a Gaussian radial part (e^{-αr²}); products of Gaussians integrate easily, which is why they are standard in molecular quantum chemistry.&quot;},
+    {&quot;prompt&quot;: &quot;What is the tight-binding method?&quot;,
+     &quot;completion&quot;: &quot;An approximate electronic-structure approach that expands wavefunctions in a small atomic-orbital basis with parameterized hopping integrals.&quot;},
+    {&quot;prompt&quot;: &quot;What is the one-electron density matrix?&quot;,
+     &quot;completion&quot;: &quot;An operator encoding orbital occupations and the electronic state; it lets many properties be computed without explicit wavefunctions.&quot;},
+    {&quot;prompt&quot;: &quot;What is a partial charge?&quot;,
+     &quot;completion&quot;: &quot;An assigned, generally non-integer atomic charge that approximates how electrons are distributed among the atoms of a molecule.&quot;},
+    {&quot;prompt&quot;: &quot;What is MCSCF?&quot;,
+     &quot;completion&quot;: &quot;Multi-configurational self-consistent field: it optimizes both the orbitals and the coefficients of several determinants, important when static correlation is strong.&quot;},
+    {&quot;prompt&quot;: &quot;Name several computational chemistry software packages.&quot;,
+     &quot;completion&quot;: &quot;Common examples include Gaussian, NWChem, PSI4, Q-Chem, ORCA, and Quantum ESPRESSO.&quot;},
+    {&quot;prompt&quot;: &quot;Why is CCSD(T) called the gold standard?&quot;,
+     &quot;completion&quot;: &quot;Because for many single-reference molecules it gives near-chemical-accuracy energies, so other methods are often benchmarked against it—at a steep computational cost.&quot;},
+    {&quot;prompt&quot;: &quot;What problem does continued pretraining on domain text solve?&quot;,
+     &quot;completion&quot;: &quot;It exposes a general model to a specialized corpus so it absorbs domain vocabulary and patterns, improving downstream performance before any instruction tuning.&quot;},
+]
+
+
+def build_sft_seed() -&gt; Path:
+    &quot;&quot;&quot;Write the hand-authored seed Q&amp;A to JSONL (prompt-completion shape). Returns the path.&quot;&quot;&quot;
+    config.set_all_seeds()
+    out = config.SFT_DIR / &quot;seed_qa.jsonl&quot;
+    with out.open(&quot;w&quot;) as f:
+        for row in SEED_QA:
+            f.write(json.dumps(row) + &quot;\n&quot;)
+    return out
+
+
+def _est_tokens(words: int) -&gt; int:
+    return words * 4 // 3   # rough words-&gt;tokens estimate (keeps §2 offline/fast)
+
+
+def analyze() -&gt; dict:
+    &quot;&quot;&quot;Quantify the abundant (corpus) vs scarce (SFT) sides and return the stats.&quot;&quot;&quot;
+    seed_path = build_sft_seed()
+
+    # abundant side: read §1&#x27;s manifest
+    man = json.loads((config.CORPUS_DIR / &quot;manifest.json&quot;).read_text())
+    corpus_words = sum(p[&quot;words&quot;] for p in man[&quot;pages&quot;])
+    corpus_tokens = _est_tokens(corpus_words)
+
+    # scarce side
+    sft_words = sum(len((r[&quot;prompt&quot;] + &quot; &quot; + r[&quot;completion&quot;]).split()) for r in SEED_QA)
+    sft_tokens = _est_tokens(sft_words)
+
+    ratio = corpus_tokens / max(sft_tokens, 1)
+    stats = dict(corpus_pages=len(man[&quot;pages&quot;]), corpus_words=corpus_words, corpus_tokens=corpus_tokens,
+                 sft_pairs=len(SEED_QA), sft_words=sft_words, sft_tokens=sft_tokens, ratio=ratio,
+                 seed_path=str(seed_path))
+
+    print(&quot;=== Data availability: abundant CPT text vs scarce SFT pairs ===\n&quot;)
+    print(f&quot;  CPT corpus  (raw text, shape {{&#x27;text&#x27;: ...}})      : &quot;
+          f&quot;{stats[&#x27;corpus_pages&#x27;]:&gt;4} pages | ~{corpus_tokens:&gt;7,} tokens  -&gt; FULL causal loss&quot;)
+    print(f&quot;  SFT seed    (prompt/completion pairs)             : &quot;
+          f&quot;{stats[&#x27;sft_pairs&#x27;]:&gt;4} pairs | ~{sft_tokens:&gt;7,} tokens  -&gt; COMPLETION-only loss&quot;)
+    print(f&quot;\n  Asymmetry: the raw corpus has ~{ratio:.0f}× more tokens than the hand-built SFT set,&quot;)
+    print(f&quot;  and the corpus took *seconds* to collect while every Q&amp;A answer was written by hand.&quot;)
+    print(f&quot;\n  Seed SFT written to {seed_path}&quot;)
+    print(&quot;\n  Shapes drive losses:&quot;)
+    print(&quot;    corpus -&gt; {&#x27;text&#x27;: ...}                  -&gt; predict every token (CPT)&quot;)
+    print(&quot;    sft    -&gt; {&#x27;prompt&#x27;:..., &#x27;completion&#x27;:...} -&gt; predict the completion only (SFT)&quot;)
+    print(&quot;\n  This scarcity is why §6 asks: with so few SFT pairs, start from BASE or INSTRUCT?&quot;)
+    return stats
+
+
+if __name__ == &quot;__main__&quot;:
+    analyze()
+</pre>
+  </details>
 
   <!-- STEP 3 — CHAT TEMPLATES -->
   <div class="card full" style="margin-top:16px; border:1px solid #38bdf8;">
@@ -3303,6 +4131,333 @@ lab = dataset[<span class="nb">0</span>][<span class="st">"labels"</span>]
     </div>
   </div>
 
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/03_cpt.py</code> &middot; 320 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/03_cpt.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+03_cpt.py — Continued PreTraining (CPT) of SmolLM2-135M on the chemistry corpus.
+
+WHAT THIS DEMONSTRATES
+----------------------
+CPT = plain next-token prediction over raw domain text. The training signal is the **FULL causal
+LM loss on every token** (no prompt to mask) — this script prints the unmasked-token fraction so you
+can SEE it is ~100% (contrast with SFT in §5, which masks the prompt). We then measure **held-out
+perplexity before vs after** CPT to prove the model actually absorbed the domain (lower = better).
+
+DESIGN CONTRACT (per project rules)
+-----------------------------------
+- TRIAL vs FULL: top-level flag via config (env CASE_STUDY_MODE / config.set_mode). TRIAL caps the
+  corpus + training steps so the whole thing runs in seconds to validate plumbing; FULL is the real run.
+- Self-sufficient: if the corpus is missing it builds it (calls §1). Downloads SmolLM2-135M on first use.
+- Idempotent: writes the adapter + metrics to outputs/cpt_base_&lt;mode&gt;/; re-running loads &amp; reports
+  instead of retraining (unless --force). Seeds are set, so a FULL retrain reproduces the numbers.
+- Reproducible: records env + all settings into metrics.json.
+
+LoRA targets include embed_tokens + lm_head (so embeddings adapt to the math-heavy distribution),
+trained with a SMALLER embedding_learning_rate than the rest (see PITFALLS.md / config.CPT).
+
+TWO BACKENDS (run the SAME CPT both ways and compare — see §8 for the head-to-head):
+  • backend=&quot;hf&quot;      — AutoModelForCausalLM + PEFT + Trainer. Runs in `.venv-rl` (trl 1.x, no unsloth).
+  • backend=&quot;unsloth&quot; — FastLanguageModel + UnslothTrainer. Runs in `.venv` (unsloth + trl 0.24).
+    Unsloth must run in its own env because it pins trl/xformers (the classic two-venv split).
+
+PACKING (the &quot;little thing&quot; worth documenting) — three strategies for filling sequences:
+  1. NO packing: pad every example to max_len → wastes compute on padding. We don&#x27;t do this.
+  2. CONCATENATION packing (HF backend, manual): glue all docs together with an EOS between them and
+     cut into fixed `block_size` chunks. Efficient and standard for CPT. Caveat: two documents can land
+     in one block, so the model *can* attend across the EOS boundary (no per-document attention mask).
+     The EOS token still signals &quot;document boundary,&quot; which is usually enough for CPT.
+  3. BEST-FIT / masked packing (Unsloth/TRL `packing=True`): packs without truncating mid-document and
+     (with flash-attn varlen / reset position-ids) prevents cross-document attention. Cleaner; what the
+     Unsloth backend uses. See &quot;Fewer Truncations Improve Language Modeling&quot; (arXiv:2404.10830).
+
+GOTCHA — tied embeddings: SmolLM2 sets `tie_word_embeddings=True`, so `embed_tokens` and `lm_head` are
+the same weights. Putting BOTH in `target_modules` adapts the tied weight (PEFT warns about merge/convert
+implications). PEFT auto-sets `save_embedding_layers=True` so the adapter stores the embedding delta —
+important for the GGUF export in Part B.
+
+Run:  python case_study/03_cpt.py                              # TRIAL, HF backend (default, fast)
+      python case_study/03_cpt.py --backend unsloth            # (run with .venv/bin/python)
+      CASE_STUDY_MODE=full python case_study/03_cpt.py          # the real run
+      python case_study/03_cpt.py --force                      # retrain even if cached
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import importlib.util
+import json
+import math
+import sys
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import utils   # noqa: E402
+
+
+def _load_sibling(fname: str, mod_name: str):
+    &quot;&quot;&quot;Import a digit-prefixed sibling script (e.g. 01_build_corpus.py) as a module.&quot;&quot;&quot;
+    spec = importlib.util.spec_from_file_location(mod_name, Path(__file__).resolve().parent / fname)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# ── Data: load corpus, split held-out, pack into fixed-length causal-LM blocks ─
+def load_corpus_texts() -&gt; list[str]:
+    &quot;&quot;&quot;Return the list of cleaned page texts, building the corpus first if needed (self-sufficient).&quot;&quot;&quot;
+    manifest = config.CORPUS_DIR / &quot;manifest.json&quot;
+    if not manifest.exists():
+        print(&quot;Corpus missing — building it first (§1)...&quot;)
+        _load_sibling(&quot;01_build_corpus.py&quot;, &quot;corpus_builder&quot;).build_corpus()
+    man = json.loads(manifest.read_text())
+    texts = [(config.CORPUS_DIR / p[&quot;file&quot;]).read_text() for p in man[&quot;pages&quot;]]
+    cap = config.limits()[&quot;cpt_char_cap&quot;]
+    if cap:  # TRIAL: use a small slice so the run is fast
+        texts, total = [], 0
+        for p in man[&quot;pages&quot;]:
+            t = (config.CORPUS_DIR / p[&quot;file&quot;]).read_text()
+            texts.append(t[:cap - total]); total += len(texts[-1])
+            if total &gt;= cap:
+                break
+    return texts
+
+
+def pack_blocks(tokenizer, texts: list[str], block_size: int) -&gt; list[list[int]]:
+    &quot;&quot;&quot;Concatenate documents (EOS-separated) and chunk into fixed-length blocks (standard CPT packing).&quot;&quot;&quot;
+    eos = tokenizer.eos_token_id
+    ids: list[int] = []
+    for t in texts:
+        ids.extend(tokenizer(t, add_special_tokens=False)[&quot;input_ids&quot;] + [eos])
+    n = (len(ids) // block_size) * block_size
+    return [ids[i:i + block_size] for i in range(0, n, block_size)]
+
+
+@torch.no_grad()
+def perplexity(model, blocks: list[list[int]], device) -&gt; float:
+    &quot;&quot;&quot;Mean per-token perplexity over held-out blocks (full-sequence causal loss).&quot;&quot;&quot;
+    model.eval()
+    losses, ntok = 0.0, 0
+    for b in blocks:
+        ids = torch.tensor([b], device=device)
+        out = model(ids, labels=ids)
+        losses += out.loss.item() * (len(b) - 1)
+        ntok += len(b) - 1
+    return math.exp(losses / max(ntok, 1))
+
+
+def run_cpt(backend: str = &quot;hf&quot;, force: bool = False) -&gt; dict:
+    &quot;&quot;&quot;Dispatch to the chosen CPT backend. Both produce a comparable held-out-perplexity result.&quot;&quot;&quot;
+    return (_cpt_unsloth if backend == &quot;unsloth&quot; else _cpt_hf)(force=force)
+
+
+def _out_dir(backend: str) -&gt; Path:
+    suffix = &quot;&quot; if backend == &quot;hf&quot; else f&quot;_{backend}&quot;
+    return config.OUTPUTS / f&quot;cpt_base_{config.RUN_MODE}{suffix}&quot;
+
+
+def _cached(out_dir: Path, force: bool, label: str) -&gt; dict | None:
+    mp = out_dir / &quot;metrics.json&quot;
+    if mp.exists() and not force:
+        m = json.loads(mp.read_text())
+        print(f&quot;[cached] {label} CPT ({config.RUN_MODE}) done: ppl {m[&#x27;ppl_before&#x27;]:.2f} -&gt; &quot;
+              f&quot;{m[&#x27;ppl_after&#x27;]:.2f} ({m[&#x27;ppl_delta_pct&#x27;]:+.1f}%). Use --force to retrain.&quot;)
+        return m
+    return None
+
+
+def _cpt_hf(force: bool = False) -&gt; dict:
+    from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+    from peft import LoraConfig, get_peft_model
+    from datasets import Dataset
+
+    config.set_all_seeds()
+    mode = config.RUN_MODE
+    lim = config.limits()
+    out_dir = _out_dir(&quot;hf&quot;)
+    metrics_path = out_dir / &quot;metrics.json&quot;
+
+    cached = _cached(out_dir, force, &quot;HF&quot;)
+    if cached is not None:
+        return cached
+
+    device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+    print(f&quot;=== §3 CPT [backend=hf, manual concatenation packing] | mode={mode} | device={device} ===&quot;)
+    tok = AutoTokenizer.from_pretrained(config.BASE_MODEL)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+
+    texts = load_corpus_texts()
+    block = config.CPT[&quot;max_seq_len&quot;]
+    # Pack ALL text into fixed-length blocks first, THEN split blocks into train / held-out.
+    # (Splitting whole documents first can starve one side when the corpus slice is small.)
+    all_blocks = pack_blocks(tok, texts, block)
+    n_held = min(lim[&quot;eval_blocks&quot;], max(1, len(all_blocks) // 5))
+    held_blocks, train_blocks = all_blocks[-n_held:], all_blocks[:-n_held]
+    if not train_blocks:
+        raise RuntimeError(f&quot;only {len(all_blocks)} block(s) packed — raise cpt_char_cap for this mode&quot;)
+    print(f&quot;  packed: {len(train_blocks)} train blocks, {len(held_blocks)} held-out blocks &quot;
+          f&quot;(block_size={block})&quot;)
+
+    # Full causal loss =&gt; labels == input_ids =&gt; 0% masked. Prove it.
+    ds = Dataset.from_dict({&quot;input_ids&quot;: train_blocks,
+                            &quot;labels&quot;: [b[:] for b in train_blocks],
+                            &quot;attention_mask&quot;: [[1] * len(b) for b in train_blocks]})
+    sample_labels = ds[0][&quot;labels&quot;]
+    unmasked = sum(1 for x in sample_labels if x != -100) / len(sample_labels)
+    print(f&quot;  unmasked-token fraction = {unmasked*100:.0f}%  -&gt; FULL causal loss (CPT), nothing masked&quot;)
+
+    model = utils.load_causal_lm(config.BASE_MODEL, training=True)   # 4-bit QLoRA if active model needs it
+    ppl_before = perplexity(model, held_blocks, device)
+    print(f&quot;  held-out perplexity BEFORE CPT: {ppl_before:.2f}&quot;)
+
+    lora = LoraConfig(r=config.CPT[&quot;lora_r&quot;], lora_alpha=config.CPT[&quot;lora_alpha&quot;],
+                      lora_dropout=config.CPT[&quot;lora_dropout&quot;], use_rslora=config.CPT[&quot;use_rslora&quot;],
+                      target_modules=config.CPT[&quot;target_modules&quot;], task_type=&quot;CAUSAL_LM&quot;)
+    model = get_peft_model(model, lora)
+    model.print_trainable_parameters()
+
+    # Separate, smaller LR for embedding/lm_head LoRA params (PITFALLS.md trick).
+    emb = [p for n, p in model.named_parameters()
+           if p.requires_grad and (&quot;embed_tokens&quot; in n or &quot;lm_head&quot; in n)]
+    rest = [p for n, p in model.named_parameters()
+            if p.requires_grad and not (&quot;embed_tokens&quot; in n or &quot;lm_head&quot; in n)]
+    opt = torch.optim.AdamW([{&quot;params&quot;: rest, &quot;lr&quot;: config.CPT[&quot;lr&quot;]},
+                             {&quot;params&quot;: emb, &quot;lr&quot;: config.CPT[&quot;embedding_learning_rate&quot;]}],
+                            weight_decay=0.0)
+
+    targs = TrainingArguments(
+        output_dir=str(out_dir / &quot;checkpoints&quot;),
+        per_device_train_batch_size=config.CPT[&quot;batch_size&quot;],
+        gradient_accumulation_steps=config.CPT[&quot;grad_accum&quot;],
+        num_train_epochs=config.CPT[&quot;epochs&quot;] if lim[&quot;cpt_max_steps&quot;] &lt; 0 else 1,
+        max_steps=lim[&quot;cpt_max_steps&quot;], learning_rate=config.CPT[&quot;lr&quot;],
+        gradient_checkpointing=config.GRAD_CKPT,
+        gradient_checkpointing_kwargs={&quot;use_reentrant&quot;: False} if config.GRAD_CKPT else None,
+        bf16=(device == &quot;cuda&quot;), logging_steps=2, save_strategy=&quot;no&quot;,
+        report_to=[], seed=config.SEED,
+    )
+    Trainer(model=model, args=targs, train_dataset=ds, optimizers=(opt, None)).train()
+
+    ppl_after = perplexity(model, held_blocks, device)
+    delta = 100 * (ppl_after - ppl_before) / ppl_before
+    print(f&quot;  held-out perplexity AFTER CPT:  {ppl_after:.2f}  ({delta:+.1f}%)&quot;)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    model.save_pretrained(out_dir / &quot;adapter&quot;)
+    tok.save_pretrained(out_dir / &quot;adapter&quot;)
+    m = dict(backend=&quot;hf&quot;, packing=&quot;manual-concatenation&quot;, mode=mode, model=config.BASE_MODEL,
+             ppl_before=ppl_before, ppl_after=ppl_after, ppl_delta_pct=delta,
+             train_blocks=len(train_blocks), held_blocks=len(held_blocks), block_size=block,
+             unmasked_fraction=unmasked, max_steps=lim[&quot;cpt_max_steps&quot;], lr=config.CPT[&quot;lr&quot;],
+             embedding_lr=config.CPT[&quot;embedding_learning_rate&quot;], env=config.record_env())
+    metrics_path.write_text(json.dumps(m, indent=2))
+    print(f&quot;\n  adapter + metrics saved to {out_dir}&quot;)
+    print(f&quot;  RESULT: CPT moved held-out perplexity {ppl_before:.2f} -&gt; {ppl_after:.2f} ({delta:+.1f}%)&quot;)
+    print(&quot;  (lower = the model fits domain text better). Next: §4 base-vs-instruct + forgetting.&quot;)
+    # Quick visual assessment: a CPT&#x27;d base model isn&#x27;t instruction-tuned, so we let it CONTINUE
+    # the question text (chat=False). Eyeball whether the continuations sound domain-fluent.
+    utils.generate_samples(model, tok, n=lim[&quot;gen_samples&quot;], chat=False,
+                           title=f&quot;§3 CPT continuations (backend=hf, mode={mode})&quot;)
+    return m
+
+
+def _cpt_unsloth(force: bool = False) -&gt; dict:
+    &quot;&quot;&quot;CPT via Unsloth (run with .venv/bin/python). Uses UnslothTrainer + packing + embedding_learning_rate.&quot;&quot;&quot;
+    try:
+        from unsloth import FastLanguageModel, UnslothTrainer, UnslothTrainingArguments, is_bfloat16_supported
+        from transformers import AutoTokenizer
+        from datasets import Dataset
+    except ImportError as e:
+        print(f&quot;[skip] Unsloth backend needs the .venv env (unsloth + trl 0.24): {e}&quot;)
+        print(&quot;       run:  ./.venv/bin/python case_study/03_cpt.py --backend unsloth&quot;)
+        return {}
+
+    config.set_all_seeds()
+    mode, lim = config.RUN_MODE, config.limits()
+    out_dir = _out_dir(&quot;unsloth&quot;)
+    cached = _cached(out_dir, force, &quot;Unsloth&quot;)
+    if cached is not None:
+        return cached
+
+    print(f&quot;=== §3 CPT [backend=unsloth, packing=True] | mode={mode} ===&quot;)
+    block = config.CPT[&quot;max_seq_len&quot;]
+    model, tok = FastLanguageModel.from_pretrained(
+        model_name=config.BASE_MODEL, max_seq_length=block, dtype=None,
+        load_in_4bit=config.LOAD_IN_4BIT)   # QLoRA for SmolLM3
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+
+    texts = load_corpus_texts()
+    # Held-out blocks for an apples-to-apples perplexity comparison with the HF backend.
+    all_blocks = pack_blocks(tok, texts, block)
+    n_held = min(lim[&quot;eval_blocks&quot;], max(1, len(all_blocks) // 5))
+    held_blocks = all_blocks[-n_held:]
+    device = next(model.parameters()).device
+    ppl_before = perplexity(model, held_blocks, device)
+    print(f&quot;  held-out perplexity BEFORE CPT: {ppl_before:.2f}&quot;)
+
+    # Unsloth feeds raw text + does best-fit packing internally.
+    train_texts = texts[:-1] if len(texts) &gt; 1 else texts
+    ds = Dataset.from_dict({&quot;text&quot;: train_texts})
+    model = FastLanguageModel.get_peft_model(
+        model, r=config.CPT[&quot;lora_r&quot;], lora_alpha=config.CPT[&quot;lora_alpha&quot;],
+        lora_dropout=config.CPT[&quot;lora_dropout&quot;], target_modules=config.CPT[&quot;target_modules&quot;],
+        use_rslora=config.CPT[&quot;use_rslora&quot;],
+        use_gradient_checkpointing=&quot;unsloth&quot;, random_state=config.SEED)
+
+    args = UnslothTrainingArguments(
+        output_dir=str(out_dir / &quot;checkpoints&quot;),
+        per_device_train_batch_size=config.CPT[&quot;batch_size&quot;],
+        gradient_accumulation_steps=config.CPT[&quot;grad_accum&quot;],
+        num_train_epochs=config.CPT[&quot;epochs&quot;] if lim[&quot;cpt_max_steps&quot;] &lt; 0 else 1,
+        max_steps=lim[&quot;cpt_max_steps&quot;],
+        learning_rate=config.CPT[&quot;lr&quot;],
+        embedding_learning_rate=config.CPT[&quot;embedding_learning_rate&quot;],   # Unsloth-native smaller LR
+        bf16=is_bfloat16_supported(), logging_steps=2, save_strategy=&quot;no&quot;, report_to=[], seed=config.SEED)
+    trainer = UnslothTrainer(model=model, tokenizer=tok, train_dataset=ds,
+                             dataset_text_field=&quot;text&quot;, max_seq_length=block,
+                             packing=True, args=args)
+    trainer.train()
+
+    ppl_after = perplexity(model, held_blocks, device)
+    delta = 100 * (ppl_after - ppl_before) / ppl_before
+    print(f&quot;  held-out perplexity AFTER CPT:  {ppl_after:.2f}  ({delta:+.1f}%)&quot;)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    model.save_pretrained(str(out_dir / &quot;adapter&quot;))
+    tok.save_pretrained(str(out_dir / &quot;adapter&quot;))
+    m = dict(backend=&quot;unsloth&quot;, packing=&quot;best-fit (packing=True)&quot;, mode=mode, model=config.BASE_MODEL,
+             ppl_before=ppl_before, ppl_after=ppl_after, ppl_delta_pct=delta,
+             held_blocks=len(held_blocks), block_size=block, max_steps=lim[&quot;cpt_max_steps&quot;],
+             lr=config.CPT[&quot;lr&quot;], embedding_lr=config.CPT[&quot;embedding_learning_rate&quot;], env=config.record_env())
+    (out_dir / &quot;metrics.json&quot;).write_text(json.dumps(m, indent=2))
+    print(f&quot;\n  adapter + metrics saved to {out_dir}&quot;)
+    print(f&quot;  RESULT (unsloth): ppl {ppl_before:.2f} -&gt; {ppl_after:.2f} ({delta:+.1f}%)&quot;)
+    utils.generate_samples(model, tok, n=lim[&quot;gen_samples&quot;], chat=False,
+                           title=f&quot;§3 CPT continuations (backend=unsloth, mode={mode})&quot;)
+    return m
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Continued pretraining of SmolLM2-135M on the chem corpus.&quot;)
+    ap.add_argument(&quot;--backend&quot;, choices=[&quot;hf&quot;, &quot;unsloth&quot;], default=&quot;hf&quot;, help=&quot;training backend&quot;)
+    ap.add_argument(&quot;--force&quot;, action=&quot;store_true&quot;, help=&quot;retrain even if a cached adapter exists&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;], help=&quot;override TRIAL/FULL&quot;)
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run_cpt(backend=args.backend, force=args.force)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
   <!-- STEP 5 — SFT -->
   <div class="card full" style="margin-top:16px; border:1px solid #34d399;">
     <div class="card-title">Step 5 — SFT: teach the task (loss on the answer only)</div>
@@ -3326,6 +4481,144 @@ labels = <span class="fn">next</span>(<span class="fn">iter</span>(trainer.<span
     </div>
   </div>
 
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/05_sft.py</code> &middot; 131 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/05_sft.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+05_sft.py — Supervised fine-tuning (SFT) on the small Q&amp;A set, with COMPLETION-ONLY loss.
+
+THE CONTRAST WITH §3
+--------------------
+§3 (CPT) used FULL causal loss — every token contributed (unmasked fraction ~100%). SFT is different:
+the data is prompt→completion, and we compute loss on the **completion only** (the prompt is masked).
+This script PRINTS the unmasked-token fraction so you can SEE it is well under 100% — that is the
+prompt being masked (TRL `completion_only_loss=True`, the default for prompt-completion data). If you
+forget this, the model learns to generate questions too and &quot;echoes the prompt back&quot; (see PITFALLS.md).
+
+CONTRACT: TRIAL/FULL flag, self-sufficient (builds the seed Q&amp;A if missing, downloads the model),
+idempotent (caches outputs/sft_&lt;init&gt;_&lt;mode&gt;/), reproducible. Prints sample answers for visual check.
+
+Run:  python case_study/05_sft.py                       # TRIAL, init=instruct
+      python case_study/05_sft.py --init base            # SFT the base model instead
+      CASE_STUDY_MODE=full python case_study/05_sft.py
+&quot;&quot;&quot;
+from __future__ import annotations
+# Import unsloth FIRST (before torch/transformers/trl) so its QLoRA patches apply cleanly and the
+# dataset fingerprinting doesn&#x27;t choke on patched globals. No-op in .venv-rl (unsloth not installed).
+try:
+    import unsloth  # noqa: F401,E402
+except Exception:
+    pass
+import argparse
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import utils   # noqa: E402
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+def load_seed(n: int | None = None) -&gt; list[dict]:
+    &quot;&quot;&quot;Return the prompt-completion Q&amp;A, building it (via §2) if the JSONL is missing.&quot;&quot;&quot;
+    path = config.SFT_DIR / &quot;seed_qa.jsonl&quot;
+    if not path.exists():
+        _sib(&quot;02_data_availability.py&quot;, &quot;da_for_05&quot;).build_sft_seed()
+    rows = [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+    return rows[:n] if n else rows
+
+
+def run_sft(init: str = &quot;instruct&quot;, n_examples: int | None = None, force: bool = False,
+            base_adapter: str | None = None, tag_extra: str = &quot;&quot;) -&gt; dict:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from trl import SFTConfig, SFTTrainer
+    from peft import LoraConfig
+
+    config.set_all_seeds()
+    lim = config.limits()
+    model_name = config.INSTRUCT_MODEL if init == &quot;instruct&quot; else config.BASE_MODEL
+    n = n_examples if n_examples is not None else (10 if config.is_trial() else None)
+    tag = f&quot;sft_{init}{tag_extra}_{config.RUN_MODE}&quot;
+    out_dir = config.OUTPUTS / tag
+
+    if (out_dir / &quot;metrics.json&quot;).exists() and not force:
+        m = json.loads((out_dir / &quot;metrics.json&quot;).read_text())
+        print(f&quot;[cached] {tag}: unmasked={m[&#x27;unmasked_fraction&#x27;]*100:.0f}%, {m[&#x27;n_examples&#x27;]} ex. --force to rerun.&quot;)
+        return m
+
+    device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+    print(f&quot;=== §5 SFT [init={init}, completion-only loss] | mode={config.RUN_MODE} | device={device} ===&quot;)
+    sft_model, tok = utils.build_sft_model(model_name)   # bf16 (135M) or 4-bit QLoRA via Unsloth (SmolLM3)
+
+    rows = load_seed(n)
+    from datasets import Dataset
+    ds = Dataset.from_list(rows)   # prompt-completion shape -&gt; completion_only_loss applies
+    print(f&quot;  {len(rows)} prompt-completion pairs (loss on the COMPLETION only)&quot;)
+
+    args = SFTConfig(
+        output_dir=str(out_dir / &quot;ckpt&quot;),
+        per_device_train_batch_size=config.SFT[&quot;batch_size&quot;],
+        gradient_accumulation_steps=config.SFT[&quot;grad_accum&quot;],
+        num_train_epochs=config.SFT[&quot;epochs&quot;], max_steps=lim[&quot;sft_max_steps&quot;],
+        learning_rate=config.SFT[&quot;lr&quot;], max_length=config.SFT[&quot;max_seq_len&quot;],
+        completion_only_loss=True, packing=False, dataset_num_proc=1,    # mask the prompt; no packing keeps masking clean
+        bf16=(device == &quot;cuda&quot;), logging_steps=5, save_strategy=&quot;no&quot;, report_to=[], seed=config.SEED)
+    trainer = SFTTrainer(model=sft_model, args=args, train_dataset=ds, processing_class=tok)
+
+    # PROVE the masking: pull one collated batch and count non -100 labels. Completion-only loss
+    # masks the prompt tokens (-100), so the fraction is well under 100% (cf. ~100% for CPT in §3).
+    batch = next(iter(trainer.get_train_dataloader()))
+    labels = batch[&quot;labels&quot;]
+    unmasked = (labels != -100).float().mean().item()
+    print(f&quot;  unmasked-token fraction = {unmasked*100:.0f}%  -&gt; prompt is MASKED (completion-only loss)&quot;)
+
+    trainer.train()
+    model = trainer.model if config.LOAD_IN_4BIT else trainer.model.to(device)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    trainer.save_model(str(out_dir / &quot;adapter&quot;))
+    tok.save_pretrained(str(out_dir / &quot;adapter&quot;))
+    # Visual check: feed the plain question (matches the prompt-completion training format).
+    utils.generate_samples(model, tok, n=lim[&quot;gen_samples&quot;], chat=False,
+                           title=f&quot;§5 SFT answers (init={init})&quot;)
+    m = dict(tag=tag, init=init, model=model_name, n_examples=len(rows),
+             unmasked_fraction=unmasked, completion_only_loss=True, max_steps=lim[&quot;sft_max_steps&quot;],
+             lr=config.SFT[&quot;lr&quot;], env=config.record_env())
+    (out_dir / &quot;metrics.json&quot;).write_text(json.dumps(m, indent=2))
+    print(f&quot;\n  adapter + metrics saved to {out_dir}&quot;)
+    print(f&quot;  Unmasked {unmasked*100:.0f}% (vs ~100% for CPT in §3) = the completion-only mask is working.&quot;)
+    print(&quot;  Next: §6 base-vs-instruct sweep over SFT-set size (the centerpiece experiment).&quot;)
+    return m
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;SFT with completion-only loss on the seed Q&amp;A.&quot;)
+    ap.add_argument(&quot;--init&quot;, choices=[&quot;instruct&quot;, &quot;base&quot;], default=&quot;instruct&quot;)
+    ap.add_argument(&quot;--n&quot;, type=int, help=&quot;number of Q&amp;A examples (default: 10 trial / all full)&quot;)
+    ap.add_argument(&quot;--force&quot;, action=&quot;store_true&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run_sft(init=args.init, n_examples=args.n, force=args.force)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
   <!-- STEP 6 — BASE→CPT→SFT direction of improvement (CENTERPIECE) -->
   <div class="card full" style="margin-top:16px; border:2px solid #34d399;">
     <div class="card-title">Step 6 ★ — Base → CPT → SFT: the direction of improvement, measured</div>
@@ -3348,6 +4641,280 @@ labels = <span class="fn">next</span>(<span class="fn">iter</span>(trainer.<span
     </div>
   </div>
 
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/14_compare_cpt_vs_sft.py</code> &middot; 138 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/14_compare_cpt_vs_sft.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+14_compare_cpt_vs_sft.py — CPT-only vs SFT, side by side (visual + numerical). The money shot.
+
+This makes the difference between the two training phases concrete on the SAME prompts:
+
+  • &quot;after CPT only&quot;  = base model + the §3 CPT adapter. CPT is plain next-token prediction over raw
+    domain text with **FULL causal loss on every token** (no prompt masking). Result: the model is
+    domain-fluent but NOT instruction-tuned — asked a question, it CONTINUES like an article.
+  • &quot;after SFT&quot;       = instruct model + the §5 SFT adapter. SFT trains on prompt→completion pairs with
+    loss on the **COMPLETION only** (the prompt is masked). Result: the model ANSWERS the question.
+
+WHERE THE LOSS DIFFERENCE IS SET (the thing to point at in the book):
+  • CPT  (§3): labels == input_ids, nothing masked  -&gt; unmasked fraction ~100%   (full causal loss)
+  • SFT  (§5/§6): TRL `SFTConfig(completion_only_loss=True)` -&gt; prompt tokens become -100 (~30-80% unmasked)
+Run settings come straight from config.CPT / config.SFT (printed below): CPT = 1 epoch, LR 5e-5,
+embedding_learning_rate 5e-6, targets incl. embed_tokens+lm_head; SFT = 3 epochs, LR 2e-4.
+
+CONTRACT: inference-only over the adapters trained earlier (run §3 + §5 first, or the full pipeline).
+Graceful skip if an adapter is missing. Writes outputs/&lt;model&gt;/compare.json for the chapter.
+
+Run:  python case_study/14_compare_cpt_vs_sft.py            # (use ../.venv/bin/python for SmolLM3)
+&quot;&quot;&quot;
+from __future__ import annotations
+try:
+    import unsloth  # noqa: F401  (import first for the 4-bit path)
+except Exception:
+    pass
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import utils   # noqa: E402
+
+_CPT = importlib.util.spec_from_file_location(&quot;cpt14&quot;, Path(__file__).resolve().parent / &quot;03_cpt.py&quot;)
+_CPTM = importlib.util.module_from_spec(_CPT); _CPT.loader.exec_module(_CPTM)
+_S5 = importlib.util.spec_from_file_location(&quot;s5_14&quot;, Path(__file__).resolve().parent / &quot;05_sft.py&quot;)
+_S5M = importlib.util.module_from_spec(_S5); _S5.loader.exec_module(_S5M)
+
+SELECT = config.SAMPLE_QUESTIONS[:3]   # the prompts we show side by side
+
+
+def _load(model_name: str, adapter: str | None):
+    &quot;&quot;&quot;Load model (+ optional LoRA adapter) for inference, 4-bit via Unsloth or bf16 via HF.&quot;&quot;&quot;
+    if config.LOAD_IN_4BIT:
+        from unsloth import FastLanguageModel
+        from peft import PeftModel
+        model, tok = FastLanguageModel.from_pretrained(
+            model_name, max_seq_length=config.CPT[&quot;max_seq_len&quot;], dtype=None, load_in_4bit=True)
+        if adapter:
+            model = PeftModel.from_pretrained(model, adapter)
+        FastLanguageModel.for_inference(model)
+        return model, tok
+    from transformers import AutoTokenizer
+    from peft import PeftModel
+    tok = AutoTokenizer.from_pretrained(model_name)
+    model = utils.load_causal_lm(model_name)
+    if adapter:
+        model = PeftModel.from_pretrained(model, adapter)
+    return model, tok
+
+
+def _adapter(subdir: str) -&gt; str | None:
+    p = config.OUTPUTS / subdir / &quot;adapter&quot;
+    return str(p) if (p / &quot;adapter_config.json&quot;).exists() else None
+
+
+def run() -&gt; dict:
+    config.set_all_seeds()
+    mode = config.RUN_MODE
+    cpt_ad = _adapter(f&quot;cpt_base_{mode}_unsloth&quot;) or _adapter(f&quot;cpt_base_{mode}&quot;)
+    sft_ad = _adapter(f&quot;sft_instruct_{mode}&quot;)
+    print(f&quot;=== §14 CPT-only vs SFT — side by side | model={config.MODEL_KEY} mode={mode} ===&quot;)
+    print(f&quot;  CPT settings: {config.CPT[&#x27;epochs&#x27;]} epoch, lr={config.CPT[&#x27;lr&#x27;]}, &quot;
+          f&quot;embed_lr={config.CPT[&#x27;embedding_learning_rate&#x27;]}, FULL causal loss (no mask)&quot;)
+    print(f&quot;  SFT settings: {config.SFT[&#x27;epochs&#x27;]} epochs, lr={config.SFT[&#x27;lr&#x27;]}, &quot;
+          f&quot;completion_only_loss=True (prompt masked)&quot;)
+    if not cpt_ad or not sft_ad:
+        print(f&quot;  [skip] need both adapters — CPT:{bool(cpt_ad)} SFT:{bool(sft_ad)}. Run §3 and §5 first.&quot;)
+        return {&quot;skipped&quot;: True}
+
+    # held-out domain blocks for perplexity (built per tokenizer at use time)
+    texts = _CPTM.load_corpus_texts()
+    test = _S5M.load_seed()[-config.SFT_TEST_HOLDOUT:]
+    out = {&quot;mode&quot;: mode, &quot;model&quot;: config.MODEL_KEY, &quot;stages&quot;: {}, &quot;generations&quot;: {}}
+
+    stages = [
+        (&quot;base&quot;,          config.BASE_MODEL,     None,   False),
+        (&quot;base+CPT&quot;,      config.BASE_MODEL,     cpt_ad, False),
+        (&quot;instruct&quot;,      config.INSTRUCT_MODEL, None,   True),
+        (&quot;instruct+SFT&quot;,  config.INSTRUCT_MODEL, sft_ad, True),
+    ]
+    for tag, name, adapter, is_instruct in stages:
+        model, tok = _load(name, adapter)
+        dev = next(model.parameters()).device
+        blocks = _CPTM.pack_blocks(tok, texts, config.CPT[&quot;max_seq_len&quot;])[-config.limits()[&quot;eval_blocks&quot;]:]
+        ppl = _CPTM.perplexity(model, blocks, dev)
+        comp = utils.completion_perplexity(model, tok, test, dev)
+        gens = utils.generate_samples(model, tok, SELECT, chat=False, quiet=True, max_new_tokens=70)
+        # recall is scored on the TEST prompts (must generate those, not the SELECT display prompts)
+        test_gens = utils.generate_samples(model, tok, [p[&quot;prompt&quot;] for p in test],
+                                           chat=False, quiet=True, max_new_tokens=70)
+        recall = sum(utils.keyword_recall(t[&quot;completion&quot;], g[&quot;answer&quot;])
+                     for t, g in zip(test, test_gens)) / len(test)
+        out[&quot;stages&quot;][tag] = dict(domain_ppl=ppl, completion_ppl=comp, keyword_recall=recall)
+        out[&quot;generations&quot;][tag] = gens
+        print(f&quot;  {tag:14} domain ppl {ppl:7.2f} | completion ppl {comp:8.2f} | recall {recall*100:4.0f}%&quot;)
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    # ── visual side-by-side: CPT-only (continuation) vs SFT (answer) ──
+    print(&quot;\n=== VISUAL: same prompt, after CPT-only vs after SFT ===&quot;)
+    for i, q in enumerate(SELECT):
+        print(f&quot;\nQ: {q}&quot;)
+        print(f&quot;  [after CPT only] {out[&#x27;generations&#x27;][&#x27;base+CPT&#x27;][i][&#x27;answer&#x27;][:200]!r}&quot;)
+        print(f&quot;  [after SFT]      {out[&#x27;generations&#x27;][&#x27;instruct+SFT&#x27;][i][&#x27;answer&#x27;][:200]!r}&quot;)
+    print(&quot;\n  CPT-only continues/expands the text (domain LM); SFT answers the question (instruction-tuned).&quot;)
+    print(&quot;  Numerically: CPT lowers DOMAIN perplexity; SFT lowers COMPLETION perplexity + raises recall.&quot;)
+
+    (config.OUTPUTS / &quot;compare.json&quot;).write_text(json.dumps(out, indent=2))
+    print(f&quot;\n  saved -&gt; {config.OUTPUTS/&#x27;compare.json&#x27;}&quot;)
+    return out
+
+
+if __name__ == &quot;__main__&quot;:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    a = ap.parse_args()
+    if a.mode:
+        config.set_mode(a.mode)
+    run()
+</pre>
+  </details>
+
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/07_eval.py</code> &middot; 124 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/07_eval.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+07_eval.py — a consolidated EVALUATION scorecard, run before vs after SFT.
+
+How do you know fine-tuning worked? On a 135M model you measure *relative* effects, never claim SOTA.
+This section bundles the metrics used across the case study into one scorecard and runs it on the
+baseline instruct model vs the SFT&#x27;d instruct model (from §5), so the improvement is visible.
+
+METRICS (all measured, none asserted):
+  • domain perplexity        — held-out chemistry text (lower = fits the domain better)
+  • completion perplexity    — held-out Q&amp;A answers given their prompts (lower = predicts answers better)
+  • keyword recall (rubric)  — fraction of gold-answer content words the generation reproduces (higher better)
+  • sample generations       — a few answers to eyeball
+
+CONTRACT: TRIAL/FULL, self-sufficient (trains the §5 adapter if missing), idempotent
+(caches outputs/eval_&lt;mode&gt;.json), reproducible.
+
+Run:  python case_study/07_eval.py            # TRIAL
+      CASE_STUDY_MODE=full python case_study/07_eval.py
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import importlib.util
+import json
+import re
+import sys
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import utils   # noqa: E402
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+_CPT = _sib(&quot;03_cpt.py&quot;, &quot;cpt_for_07&quot;)    # load_corpus_texts, pack_blocks, perplexity
+_S5 = _sib(&quot;05_sft.py&quot;, &quot;s5_for_07&quot;)      # load_seed, run_sft
+# completion_perplexity + keyword_recall live in utils (shared with §6; avoids an import cycle)
+keyword_recall = utils.keyword_recall
+
+
+def scorecard(model, tok, test, domain_blocks, device, *, label: str) -&gt; dict:
+    dom_ppl = _CPT.perplexity(model, domain_blocks, device)
+    comp_ppl = utils.completion_perplexity(model, tok, test, device)
+    gens = utils.generate_samples(model, tok, [p[&quot;prompt&quot;] for p in test], chat=False, quiet=True)
+    recall = sum(keyword_recall(t[&quot;completion&quot;], g[&quot;answer&quot;]) for t, g in zip(test, gens)) / len(test)
+    print(f&quot;  [{label}] domain ppl {dom_ppl:.2f} | completion ppl {comp_ppl:.2f} | keyword recall {recall*100:.0f}%&quot;)
+    return dict(domain_ppl=dom_ppl, completion_ppl=comp_ppl, keyword_recall=recall)
+
+
+def run(force: bool = False) -&gt; dict:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from peft import PeftModel
+
+    config.set_all_seeds()
+    lim = config.limits()
+    out = config.OUTPUTS / f&quot;eval_{config.RUN_MODE}.json&quot;
+    if out.exists() and not force:
+        m = json.loads(out.read_text())
+        print(f&quot;[cached] §7 eval ({config.RUN_MODE}) — use --force to rerun.&quot;)
+        print(json.dumps(m[&quot;scorecards&quot;], indent=2))
+        return m
+
+    device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+    rows = _S5.load_seed()
+    test = rows[-config.SFT_TEST_HOLDOUT:]
+    tok = AutoTokenizer.from_pretrained(config.INSTRUCT_MODEL)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    domain_blocks = _CPT.pack_blocks(tok, _CPT.load_corpus_texts(), config.CPT[&quot;max_seq_len&quot;])[-lim[&quot;eval_blocks&quot;]:]
+
+    print(f&quot;=== §7 eval | mode={config.RUN_MODE} | device={device} | {len(test)} test pairs ===&quot;)
+    # before: untrained instruct baseline
+    base = utils.load_causal_lm(config.INSTRUCT_MODEL)
+    before = scorecard(base, tok, test, domain_blocks, device, label=&quot;instruct (no SFT)&quot;)
+    del base
+    if device == &quot;cuda&quot;:
+        torch.cuda.empty_cache()
+
+    # after: SFT&#x27;d instruct (train via §5 if the adapter is missing — self-sufficient)
+    adapter = config.OUTPUTS / f&quot;sft_instruct_{config.RUN_MODE}&quot; / &quot;adapter&quot;
+    if not adapter.exists():
+        print(&quot;  (no SFT adapter yet — training it via §5)&quot;)
+        _S5.run_sft(init=&quot;instruct&quot;)
+    m2 = PeftModel.from_pretrained(utils.load_causal_lm(config.INSTRUCT_MODEL), str(adapter))
+    if not config.LOAD_IN_4BIT and device == &quot;cuda&quot;:
+        m2 = m2.to(device)
+    after = scorecard(m2, tok, test, domain_blocks, device, label=&quot;instruct + SFT&quot;)
+
+    print(&quot;\n=== before vs after SFT ===&quot;)
+    print(f&quot;  {&#x27;metric&#x27;:18} | {&#x27;before&#x27;:&gt;8} | {&#x27;after&#x27;:&gt;8}&quot;)
+    print(f&quot;  {&#x27;-&#x27;*18}-+-{&#x27;-&#x27;*8}-+-{&#x27;-&#x27;*8}&quot;)
+    for k, lo_better in [(&quot;domain_ppl&quot;, True), (&quot;completion_ppl&quot;, True), (&quot;keyword_recall&quot;, False)]:
+        print(f&quot;  {k:18} | {before[k]:&gt;8.2f} | {after[k]:&gt;8.2f}&quot;)
+    utils.generate_samples(m2, tok, [p[&quot;prompt&quot;] for p in test], n=lim[&quot;gen_samples&quot;], chat=False,
+                           title=&quot;§7 SFT&#x27;d model — sample held-out answers&quot;)
+    print(&quot;  (TRIAL barely trains, so before≈after is expected; FULL shows real movement.)&quot;)
+
+    m = dict(mode=config.RUN_MODE, test_size=len(test),
+             scorecards={&quot;before&quot;: before, &quot;after&quot;: after}, env=config.record_env())
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(m, indent=2))
+    print(f&quot;\n  metrics saved to {out}. Next: §8 Unsloth-vs-HF, then Part B (edge deployment).&quot;)
+    return m
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Consolidated eval scorecard, before vs after SFT.&quot;)
+    ap.add_argument(&quot;--force&quot;, action=&quot;store_true&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run(force=args.force)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
   <!-- STEP 7 — BASE vs INSTRUCT -->
   <div class="card full" style="margin-top:16px;">
     <div class="card-title">Step 7 — With little data, start from the <em>instruct</em> model (and don't trust perplexity)</div>
@@ -3368,6 +4935,160 @@ labels = <span class="fn">next</span>(<span class="fn">iter</span>(trainer.<span
       <div class="good"><strong>Two lessons for the price of one:</strong> with scarce data, <strong>instruct-init wins and scales with data while base-init falls apart</strong> — and <strong>pick the metric that matches the task</strong>, or perplexity will quietly lie to you. Code: <code>scripts/06_base_vs_instruct_sweep.py</code>.</div>
     </div>
   </div>
+
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/06_base_vs_instruct_sweep.py</code> &middot; 147 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/06_base_vs_instruct_sweep.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+06_base_vs_instruct_sweep.py — THE CENTERPIECE experiment (research question #3).
+
+CLAIM UNDER TEST (from the unsloth guide&#x27;s &quot;Recipe E&quot;):
+    With a SMALL SFT set, initialize from the INSTRUCT model, not the base model.
+RATIONALE: the instruct model already follows instructions, so a handful of examples is enough to
+steer it; the base model must learn the answer format from scratch, which needs much more data.
+
+EXPERIMENT: hold out a fixed test set of Q&amp;A; then for each init ∈ {base, instruct} and each training
+size N, SFT (completion-only loss) and measure **held-out completion perplexity** (lower = the model
+predicts the gold answers better). Plot perplexity vs N for both inits. Expectation: the instruct line
+sits lower, especially at small N, and the gap narrows as N grows.
+
+HONESTY NOTE: we only hand-authored 32 Q&amp;A pairs (§2), so N is capped (test holdout + small train pool).
+That cap IS the data-scarcity lesson — getting more high-quality instruction pairs is the bottleneck.
+
+CONTRACT: TRIAL/FULL flag, self-sufficient, idempotent (caches outputs/sweep_&lt;mode&gt;.json), reproducible.
+
+Run:  python case_study/06_base_vs_instruct_sweep.py            # TRIAL
+      CASE_STUDY_MODE=full python case_study/06_base_vs_instruct_sweep.py
+&quot;&quot;&quot;
+from __future__ import annotations
+# Import unsloth FIRST (before torch/transformers/trl) for clean QLoRA patching + dataset pickling.
+# No-op in .venv-rl (unsloth not installed).
+try:
+    import unsloth  # noqa: F401,E402
+except Exception:
+    pass
+import argparse
+import importlib.util
+import json
+import math
+import sys
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import utils   # noqa: E402
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+_S5 = _sib(&quot;05_sft.py&quot;, &quot;s5_for_06&quot;)   # load_seed
+completion_perplexity = utils.completion_perplexity   # shared (lives in utils to avoid import cycle)
+
+
+def sft_train(model_name: str, train_rows: list[dict], device, lim):
+    &quot;&quot;&quot;SFT a fresh model on train_rows (completion-only loss). Returns (model, tok).&quot;&quot;&quot;
+    from trl import SFTConfig, SFTTrainer
+    from datasets import Dataset
+
+    sft_model, tok = utils.build_sft_model(model_name)   # bf16 (135M) or 4-bit QLoRA via Unsloth
+    args = SFTConfig(
+        output_dir=&quot;/tmp/sweep_ckpt&quot;, per_device_train_batch_size=config.SFT[&quot;batch_size&quot;],
+        gradient_accumulation_steps=config.SFT[&quot;grad_accum&quot;], num_train_epochs=config.SFT[&quot;epochs&quot;],
+        max_steps=lim[&quot;sft_max_steps&quot;], learning_rate=config.SFT[&quot;lr&quot;],
+        max_length=config.SFT[&quot;max_seq_len&quot;], completion_only_loss=True, packing=False, dataset_num_proc=1,
+        bf16=(device == &quot;cuda&quot;), logging_steps=50, save_strategy=&quot;no&quot;, report_to=[], seed=config.SEED)
+    trainer = SFTTrainer(model=sft_model, args=args,
+                         train_dataset=Dataset.from_list(train_rows), processing_class=tok)
+    trainer.train()
+    model = trainer.model
+    return (model if config.LOAD_IN_4BIT else model.to(device)), tok
+
+
+def run(force: bool = False) -&gt; dict:
+    config.set_all_seeds()
+    lim = config.limits()
+    out = config.OUTPUTS / f&quot;sweep_{config.RUN_MODE}.json&quot;
+    if out.exists() and not force:
+        m = json.loads(out.read_text())
+        print(f&quot;[cached] §6 sweep ({config.RUN_MODE}) — use --force to rerun.&quot;)
+        _print_table(m[&quot;results&quot;], m.get(&quot;recall&quot;, {&quot;base&quot;: {}, &quot;instruct&quot;: {}}), m[&quot;sizes&quot;])
+        return m
+
+    device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+    rows = _S5.load_seed()
+    test = rows[-config.SFT_TEST_HOLDOUT:]
+    pool = rows[:-config.SFT_TEST_HOLDOUT]
+    sizes = [n for n in lim[&quot;sweep_sizes&quot;] if n &lt;= len(pool)]
+    print(f&quot;=== §6 base-vs-instruct sweep | mode={config.RUN_MODE} | device={device} ===&quot;)
+    print(f&quot;  test set: {len(test)} held-out pairs | train pool: {len(pool)} | sizes: {sizes}\n&quot;)
+
+    import utils
+    results = {&quot;base&quot;: {}, &quot;instruct&quot;: {}}        # completion perplexity (format-sensitive)
+    recall = {&quot;base&quot;: {}, &quot;instruct&quot;: {}}         # keyword recall on generations (format-robust)
+    for init in (&quot;base&quot;, &quot;instruct&quot;):
+        model_name = config.BASE_MODEL if init == &quot;base&quot; else config.INSTRUCT_MODEL
+        for n in sizes:
+            model, tok = sft_train(model_name, pool[:n], device, lim)
+            ppl = completion_perplexity(model, tok, test, device)
+            gens = utils.generate_samples(model, tok, [p[&quot;prompt&quot;] for p in test],
+                                          chat=False, quiet=True, max_new_tokens=64)
+            rec = sum(utils.keyword_recall(t[&quot;completion&quot;], g[&quot;answer&quot;])
+                      for t, g in zip(test, gens)) / len(test)
+            results[init][str(n)] = ppl
+            recall[init][str(n)] = rec
+            print(f&quot;  init={init:8} N={n:&gt;3} -&gt; completion ppl {ppl:.2f} | keyword recall {rec*100:.0f}%&quot;)
+            del model
+            if device == &quot;cuda&quot;:
+                torch.cuda.empty_cache()
+
+    print()
+    _print_table(results, recall, sizes)
+    m = dict(mode=config.RUN_MODE, sizes=sizes, test_size=len(test), results=results,
+             recall=recall, env=config.record_env())
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(m, indent=2))
+    print(f&quot;\n  metrics saved to {out}. Next: §7 eval, then §8 Unsloth-vs-HF.&quot;)
+    return m
+
+
+def _print_table(results: dict, recall: dict, sizes: list) -&gt; None:
+    print(&quot;  Two metrics per N — completion perplexity (lower=better) and keyword recall (higher=better):&quot;)
+    print(f&quot;    {&#x27;N&#x27;:&gt;4} | {&#x27;base ppl&#x27;:&gt;8} {&#x27;inst ppl&#x27;:&gt;8} | {&#x27;base rec&#x27;:&gt;8} {&#x27;inst rec&#x27;:&gt;8} | winner(recall)&quot;)
+    print(f&quot;    {&#x27;-&#x27;*4}-+-{&#x27;-&#x27;*17}-+-{&#x27;-&#x27;*17}-+--------------&quot;)
+    for n in sizes:
+        b, i = results[&quot;base&quot;].get(str(n)), results[&quot;instruct&quot;].get(str(n))
+        br, ir = recall[&quot;base&quot;].get(str(n)), recall[&quot;instruct&quot;].get(str(n))
+        if b is None or i is None:
+            continue
+        win = &quot;instruct&quot; if (ir or 0) &gt; (br or 0) else &quot;base&quot;
+        print(f&quot;    {n:&gt;4} | {b:&gt;8.2f} {i:&gt;8.2f} | {br*100:&gt;7.0f}% {ir*100:&gt;7.0f}% | {win}&quot;)
+    print(&quot;\n  Note: completion perplexity is format-sensitive (the chat-tuned instruct model is penalized&quot;)
+    print(&quot;  on plain prompt-completion text), so KEYWORD RECALL on generations is the fairer signal.&quot;)
+    print(&quot;  Hypothesis: instruct-init reaches usable answers (higher recall) with fewer examples.&quot;)
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Base-vs-instruct SFT sweep over training-set size.&quot;)
+    ap.add_argument(&quot;--force&quot;, action=&quot;store_true&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run(force=args.force)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
 
   <!-- STEP 8 — LORA RANK (with the surprise) -->
   <div class="card full" style="margin-top:16px; border:1px solid #f59e0b;">
@@ -3391,6 +5112,119 @@ labels = <span class="fn">next</span>(<span class="fn">iter</span>(trainer.<span
       <div class="warn"><strong>The lesson I got for free by measuring instead of assuming:</strong> on a tiny SFT set (32 pairs), <strong>higher rank actively hurts</strong> — it overfits. The sweet spot was <strong>r=8 for SmolLM3 and r=16 for MiniCPM5</strong>; by r=128 quality had fallen off a cliff (and cost ~16× the params and ~2× the VRAM). My default of r=32 was <em>past</em> the knee for both. Match adapter capacity to <em>data</em> size, not model size — and always sweep before you trust a default (including mine). Code: <code>scripts/16_lora_rank_sweep.py</code>; runner: <code>overnight.sh</code>.</div>
     </div>
   </div>
+
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/16_lora_rank_sweep.py</code> &middot; 106 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/16_lora_rank_sweep.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+16_lora_rank_sweep.py — sweep LoRA rank (with rsLoRA) and measure QUALITY vs COST.
+
+Holds everything fixed (model, SFT data, completion-only loss, rsLoRA on) and varies only the LoRA
+rank r (alpha tracks r). For each rank it SFTs the instruct model and records:
+  • completion perplexity on held-out Q&amp;A  (lower = better)
+  • keyword recall on held-out generations  (higher = better)
+  • trainable params, peak VRAM, wall time   (the cost side)
+So you can see whether a higher rank actually buys quality, and what it costs. rsLoRA keeps high
+ranks well-conditioned (scales the adapter by alpha/sqrt(r) instead of alpha/r).
+
+Self-contained; reuses §6&#x27;s trainer + utils metrics. Mutates config.SFT[&#x27;lora_r&#x27;/&#x27;lora_alpha&#x27;] in
+process per rank (build_sft_model reads them at call time). TRIAL caps the rank list + steps.
+
+Run:  ../.venv/bin/python case_study/scripts/16_lora_rank_sweep.py            # SmolLM3 (4-bit)
+      CASE_STUDY_MODEL=minicpm5 ../.venv/bin/python case_study/scripts/16_lora_rank_sweep.py
+&quot;&quot;&quot;
+from __future__ import annotations
+try:
+    import unsloth  # noqa: F401  (import first for the 4-bit path)
+except Exception:
+    pass
+import importlib.util
+import json
+import sys
+import time
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import utils   # noqa: E402
+
+
+def _sib(fname, name):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+_S5 = _sib(&quot;05_sft.py&quot;, &quot;s5_for_16&quot;)   # load_seed
+_S6 = _sib(&quot;06_base_vs_instruct_sweep.py&quot;, &quot;s6_for_16&quot;)   # sft_train (reads config.SFT at call time)
+
+RANKS = [8, 32] if config.is_trial() else [8, 16, 32, 64, 128]
+
+
+def run() -&gt; dict:
+    config.set_all_seeds()
+    device = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+    lim = config.limits()
+    rows = _S5.load_seed()
+    test = rows[-config.SFT_TEST_HOLDOUT:]
+    pool = rows[:-config.SFT_TEST_HOLDOUT]
+    print(f&quot;=== §16 LoRA-rank sweep | model={config.MODEL_KEY} mode={config.RUN_MODE} | &quot;
+          f&quot;rsLoRA=True | ranks={RANKS} ===&quot;)
+    print(f&quot;  fixed: instruct model, {len(pool)} SFT pairs, completion-only loss; vary r (alpha=r)\n&quot;)
+
+    results = []
+    for r in RANKS:
+        config.SFT[&quot;lora_r&quot;] = config.SFT[&quot;lora_alpha&quot;] = r    # in-process override (rsLoRA stays on)
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+        t0 = time.perf_counter()
+        model, tok = _S6.sft_train(config.INSTRUCT_MODEL, pool, device, lim)
+        dt = time.perf_counter() - t0
+        vram = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0.0
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        comp = utils.completion_perplexity(model, tok, test, device)
+        gens = utils.generate_samples(model, tok, [p[&quot;prompt&quot;] for p in test],
+                                      chat=False, quiet=True, max_new_tokens=64)
+        recall = sum(utils.keyword_recall(t[&quot;completion&quot;], g[&quot;answer&quot;])
+                     for t, g in zip(test, gens)) / len(test)
+        row = dict(rank=r, completion_ppl=comp, recall=recall, trainable=trainable,
+                   vram_gb=vram, seconds=dt)
+        results.append(row)
+        print(f&quot;  r={r:&gt;4} | completion ppl {comp:8.2f} | recall {recall*100:4.0f}% | &quot;
+              f&quot;trainable {trainable/1e6:6.1f}M | VRAM {vram:5.2f}GB | {dt:6.1f}s&quot;)
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    print(&quot;\n  rank | completion ppl | recall | trainable | VRAM | time&quot;)
+    print(&quot;  -----+----------------+--------+-----------+------+------&quot;)
+    for x in results:
+        print(f&quot;  {x[&#x27;rank&#x27;]:&gt;4} | {x[&#x27;completion_ppl&#x27;]:&gt;14.2f} | {x[&#x27;recall&#x27;]*100:&gt;5.0f}% | &quot;
+              f&quot;{x[&#x27;trainable&#x27;]/1e6:&gt;8.1f}M | {x[&#x27;vram_gb&#x27;]:&gt;4.2f} | {x[&#x27;seconds&#x27;]:&gt;5.0f}s&quot;)
+    best = min(results, key=lambda x: x[&quot;completion_ppl&quot;])
+    print(f&quot;\n  Lowest completion ppl at r={best[&#x27;rank&#x27;]} ({best[&#x27;completion_ppl&#x27;]:.2f}). &quot;
+          &quot;Watch for diminishing returns: higher r costs params/VRAM/time for often-small quality gains.&quot;)
+
+    out = {&quot;model&quot;: config.MODEL_KEY, &quot;mode&quot;: config.RUN_MODE, &quot;use_rslora&quot;: True, &quot;results&quot;: results}
+    (config.OUTPUTS / f&quot;lora_sweep_{config.RUN_MODE}.json&quot;).write_text(json.dumps(out, indent=2))
+    print(f&quot;  saved -&gt; {config.OUTPUTS / f&#x27;lora_sweep_{config.RUN_MODE}.json&#x27;}&quot;)
+    return out
+
+
+if __name__ == &quot;__main__&quot;:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    a = ap.parse_args()
+    if a.mode:
+        config.set_mode(a.mode)
+    run()
+</pre>
+  </details>
 
   <!-- STEP 9 — DEPLOY FOR REAL -->
   <div class="card full" style="margin-top:16px; border:2px solid #60a5fa;">
@@ -3441,6 +5275,294 @@ curl localhost:11434/api/generate -d <span class="st">'{
     </div>
   </div>
 
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/09_merge_and_gguf.py</code> &middot; 146 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/09_merge_and_gguf.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+09_merge_and_gguf.py — Part B step 1: merge the LoRA adapter, then export to GGUF.
+
+WHY: a small model&#x27;s payoff is on-device inference, and the on-device runtimes (llama.cpp, Ollama,
+LM Studio) consume GGUF. The pipeline is: merge LoRA into the base → export F16 GGUF → quantize
+(Q4_K_M). convert_hf_to_gguf.py does NOT accept PEFT adapters, so the merge MUST come first.
+
+WHAT RUNS HERE vs WHAT NEEDS TOOLING
+------------------------------------
+- MERGE: always runs (PEFT merge_and_unload → a standalone safetensors model). We merge the §5 SFT
+  adapter (it doesn&#x27;t touch embeddings, so the merge is clean; a CPT adapter that adapts tied
+  embed_tokens/lm_head needs more care — see PITFALLS / §3 gotcha).
+- GGUF: needs llama.cpp. If `convert_hf_to_gguf.py` + `llama-quantize` are found (LLAMA_CPP env var or
+  PATH), we run them; otherwise we print the exact recipe and emit a Modelfile so §10/Ollama can import
+  the merged model directly (Ollama converts Llama-arch safetensors itself).
+
+CONTRACT: TRIAL/FULL, self-sufficient (trains the §5 adapter if missing), idempotent, reproducible.
+
+Run:  python case_study/09_merge_and_gguf.py
+      LLAMA_CPP=/path/to/llama.cpp python case_study/09_merge_and_gguf.py   # to actually emit GGUF
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import importlib.util
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+def _dir_size_mb(p: Path) -&gt; float:
+    return sum(f.stat().st_size for f in p.rglob(&quot;*&quot;) if f.is_file()) / 1e6
+
+
+def merge_adapter() -&gt; Path:
+    &quot;&quot;&quot;Merge the §5 SFT adapter into the base instruct model → standalone safetensors model.&quot;&quot;&quot;
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from peft import PeftModel
+
+    merged = config.OUTPUTS / f&quot;merged_{config.RUN_MODE}&quot;
+    if (merged / &quot;config.json&quot;).exists():
+        print(f&quot;  [cached] merged model at {merged} ({_dir_size_mb(merged):.0f} MB)&quot;)
+        return merged
+
+    adapter = config.OUTPUTS / f&quot;sft_instruct_{config.RUN_MODE}&quot; / &quot;adapter&quot;
+    if not adapter.exists():
+        print(&quot;  (no SFT adapter — training it via §5)&quot;)
+        _sib(&quot;05_sft.py&quot;, &quot;s5_for_09&quot;).run_sft(init=&quot;instruct&quot;)
+
+    print(f&quot;  merging {adapter} into {config.INSTRUCT_MODEL} ...&quot;)
+    tok = AutoTokenizer.from_pretrained(config.INSTRUCT_MODEL)
+    base = AutoModelForCausalLM.from_pretrained(config.INSTRUCT_MODEL, dtype=torch.float16)
+    model = PeftModel.from_pretrained(base, str(adapter)).merge_and_unload()
+    merged.mkdir(parents=True, exist_ok=True)
+    model.save_pretrained(merged, safe_serialization=True)
+    tok.save_pretrained(merged)
+    print(f&quot;  merged model saved to {merged} ({_dir_size_mb(merged):.0f} MB)&quot;)
+    return merged
+
+
+def write_modelfile(merged: Path, gguf: Path | None) -&gt; Path:
+    &quot;&quot;&quot;Emit an Ollama Modelfile for §10 (uses the GGUF if present, else the merged dir directly).&quot;&quot;&quot;
+    src = f&quot;./{gguf.name}&quot; if gguf else &quot;.&quot;
+    mf = merged / &quot;Modelfile&quot;
+    mf.write_text(
+        f&quot;FROM {src}\n&quot;
+        &#x27;PARAMETER temperature 0.3\n&#x27;
+        &#x27;PARAMETER num_ctx 2048\n&#x27;
+        &#x27;PARAMETER stop &quot;&lt;|im_end|&gt;&quot;\n&#x27;
+        &#x27;SYSTEM &quot;You are a concise assistant for computational and quantum chemistry.&quot;\n&#x27;)
+    return mf
+
+
+def to_gguf(merged: Path) -&gt; Path | None:
+    &quot;&quot;&quot;Convert→quantize with llama.cpp if available; otherwise print the recipe and skip.&quot;&quot;&quot;
+    llama = os.environ.get(&quot;LLAMA_CPP&quot;)
+    convert = None
+    if llama and (Path(llama) / &quot;convert_hf_to_gguf.py&quot;).exists():
+        convert = Path(llama) / &quot;convert_hf_to_gguf.py&quot;
+    elif shutil.which(&quot;convert_hf_to_gguf.py&quot;):
+        convert = Path(shutil.which(&quot;convert_hf_to_gguf.py&quot;))
+    quantize = shutil.which(&quot;llama-quantize&quot;) or (Path(llama) / &quot;llama-quantize&quot; if llama else None)
+
+    f16 = merged / &quot;model-f16.gguf&quot;
+    quant = merged / f&quot;model-{config.QUANT.lower()}.gguf&quot;
+    if convert:
+        # Convert to F16 GGUF (no build needed). The small Q4_K_M (&lt;2GB) is produced by Ollama&#x27;s
+        # `create -q q4_K_M` in §10 (no compiled llama-quantize required). If a built llama-quantize
+        # IS present we make the Q4_K_M here directly.
+        if not f16.exists():
+            print(f&quot;  converting merged model -&gt; F16 GGUF via {convert} (no build needed) ...&quot;)
+            subprocess.run([sys.executable, str(convert), str(merged), &quot;--outfile&quot;, str(f16),
+                            &quot;--outtype&quot;, &quot;f16&quot;], check=True)
+        print(f&quot;  F16 GGUF: {f16} ({f16.stat().st_size/1e6:.0f} MB)&quot;)
+        if quantize and Path(str(quantize)).exists():
+            print(f&quot;  quantizing -&gt; {config.QUANT} (&lt;2GB) ...&quot;)
+            subprocess.run([str(quantize), str(f16), str(quant), config.QUANT], check=True)
+            print(f&quot;  {config.QUANT} GGUF: {quant} ({quant.stat().st_size/1e6:.0f} MB)&quot;)
+            return quant
+        print(f&quot;  (Ollama will quantize F16 -&gt; {config.QUANT} at import in §10, ~&lt;2GB)&quot;)
+        return f16
+
+    print(&quot;\n  [skip GGUF] llama.cpp convert script not found. SmolLM3 can&#x27;t be imported as safetensors&quot;)
+    print(&quot;  by Ollama (unsupported arch), so for SmolLM3 you NEED a GGUF. One-time setup (no build):&quot;)
+    print(&quot;    git clone https://github.com/ggml-org/llama.cpp ~/llama.cpp&quot;)
+    print(&quot;    ../.venv/bin/pip install -r ~/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt&quot;)
+    print(&quot;  then re-run with:  LLAMA_CPP=~/llama.cpp bash case_study/run.sh smollm3 09 10 11 12 13&quot;)
+    print(&quot;  (the 135M is LlamaForCausalLM, which Ollama imports directly — no GGUF needed there.)&quot;)
+    return None
+
+
+def run() -&gt; dict:
+    config.set_all_seeds()
+    print(f&quot;=== §9 merge + GGUF | mode={config.RUN_MODE} ===&quot;)
+    merged = merge_adapter()
+    gguf = to_gguf(merged)
+    mf = write_modelfile(merged, gguf)
+    print(f&quot;\n  Modelfile written: {mf}&quot;)
+    print(&quot;  Next: §10 deploy with Ollama (uses the GGUF if present, else imports the merged model).&quot;)
+    return {&quot;merged&quot;: str(merged), &quot;gguf&quot;: str(gguf) if gguf else None, &quot;modelfile&quot;: str(mf)}
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Merge LoRA adapter and export to GGUF.&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/10_ollama_deploy.py</code> &middot; 130 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/10_ollama_deploy.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+10_ollama_deploy.py — Part B step 2: deploy the fine-tuned model with Ollama and query it.
+
+Ollama is the easy on-device runtime: a Modelfile points at weights, `ollama create` imports/quantizes
+them, and a local REST API (port 11434, OpenAI-compatible at /v1/chat/completions) serves the model.
+Ollama can import Llama-architecture **safetensors** directly, so it works on the §9 merged model even
+without a GGUF (it&#x27;ll use the GGUF if §9 produced one — the Modelfile&#x27;s FROM handles both).
+
+This also measures **local tokens/sec** (eval_count / eval_duration from the API) — the metric that
+matters at the edge. (§11 documents how the same number is taken on a Raspberry Pi.)
+
+CONTRACT: self-sufficient (merges via §9 if needed), idempotent (skips create if the model exists),
+gracefully skips if the `ollama` binary/server isn&#x27;t available.
+
+Run:  python case_study/10_ollama_deploy.py
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import importlib.util
+import json
+import shutil
+import subprocess
+import sys
+import time
+import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+
+OLLAMA_URL = &quot;http://localhost:11434&quot;
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+def _server_up() -&gt; bool:
+    try:
+        urllib.request.urlopen(f&quot;{OLLAMA_URL}/api/tags&quot;, timeout=3)
+        return True
+    except Exception:
+        return False
+
+
+def _generate(model: str, prompt: str) -&gt; dict:
+    &quot;&quot;&quot;Call Ollama /api/generate; return text + tokens/sec measured from the server&#x27;s timings.&quot;&quot;&quot;
+    body = json.dumps({&quot;model&quot;: model, &quot;prompt&quot;: prompt, &quot;stream&quot;: False,
+                       &quot;options&quot;: {&quot;temperature&quot;: 0.3, &quot;num_predict&quot;: 64}}).encode()
+    req = urllib.request.Request(f&quot;{OLLAMA_URL}/api/generate&quot;, data=body,
+                                 headers={&quot;Content-Type&quot;: &quot;application/json&quot;})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        d = json.load(r)
+    toks = d.get(&quot;eval_count&quot;, 0)
+    secs = d.get(&quot;eval_duration&quot;, 0) / 1e9
+    # tok/s is only meaningful with enough generated tokens; guard the degenerate (trial) case.
+    tps = toks / secs if (secs &gt; 0 and toks &gt;= 8) else None
+    return {&quot;text&quot;: d.get(&quot;response&quot;, &quot;&quot;).strip(), &quot;tok_per_s&quot;: tps, &quot;tokens&quot;: toks}
+
+
+def run() -&gt; dict:
+    config.set_all_seeds()
+    print(f&quot;=== §10 Ollama deploy | mode={config.RUN_MODE} ===&quot;)
+    if not shutil.which(&quot;ollama&quot;):
+        print(&quot;  [skip] no `ollama` binary. Install from https://ollama.com, then re-run.&quot;)
+        return {&quot;skipped&quot;: &quot;no ollama&quot;}
+    if not _server_up():
+        print(&quot;  [skip] Ollama server not reachable on :11434. Start it with `ollama serve` and re-run.&quot;)
+        return {&quot;skipped&quot;: &quot;server down&quot;}
+
+    merged = config.OUTPUTS / f&quot;merged_{config.RUN_MODE}&quot;
+    if not (merged / &quot;Modelfile&quot;).exists():
+        print(&quot;  (merged model/Modelfile missing — building via §9)&quot;)
+        _sib(&quot;09_merge_and_gguf.py&quot;, &quot;s9_for_10&quot;).run()
+
+    name = f&quot;chem-sft-{config.MODEL_KEY}-{config.RUN_MODE}&quot;
+    # Quantize to Q4_K_M on import for any 4-bit model — works whether the source is an F16 GGUF
+    # (SmolLM3) or merged safetensors (MiniCPM5, Llama-arch → Ollama imports it directly). &lt;2 GB.
+    quant_flag = [&quot;-q&quot;, &quot;q4_K_M&quot;] if config.LOAD_IN_4BIT else []
+    existing = subprocess.run([&quot;ollama&quot;, &quot;list&quot;], capture_output=True, text=True).stdout
+    if name in existing:
+        print(f&quot;  [cached] model &#x27;{name}&#x27; already imported.&quot;)
+    else:
+        how = &quot;quantizing F16-&gt;Q4_K_M&quot; if quant_flag else &quot;importing&quot;
+        print(f&quot;  {how} &#x27;{name}&#x27; via `ollama create`...&quot;)
+        r = subprocess.run([&quot;ollama&quot;, &quot;create&quot;, name, *quant_flag, &quot;-f&quot;, &quot;Modelfile&quot;], cwd=str(merged),
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f&quot;  [skip] ollama create failed:\n{r.stderr[-800:]}&quot;)
+            print(&quot;  (SmolLM3 safetensors aren&#x27;t importable by Ollama — produce a GGUF in §9 first.)&quot;)
+            return {&quot;skipped&quot;: &quot;create failed&quot;}
+        print(f&quot;  imported &#x27;{name}&#x27;.&quot;)
+
+    print(&quot;\n--- querying the deployed model (local Ollama API) ---&quot;)
+    results, tps = [], []
+    for q in config.SAMPLE_QUESTIONS[: config.limits()[&quot;gen_samples&quot;]]:
+        out = _generate(name, q)
+        if out[&quot;tok_per_s&quot;] is not None:
+            tps.append(out[&quot;tok_per_s&quot;])
+        results.append({&quot;q&quot;: q, **out})
+        rate = f&quot;{out[&#x27;tok_per_s&#x27;]:.1f} tok/s&quot; if out[&quot;tok_per_s&quot;] is not None else &quot;tok/s N/A&quot;
+        print(f&quot;\nQ: {q}\nA: {out[&#x27;text&#x27;] or &#x27;(empty)&#x27;}\n   ({rate}, {out[&#x27;tokens&#x27;]} tokens)&quot;)
+    avg = sum(tps) / len(tps) if tps else None
+    if avg is not None:
+        print(f&quot;\n  avg local inference: {avg:.1f} tok/s on this machine ({config.record_env()[&#x27;cuda&#x27;]})&quot;)
+    else:
+        print(&quot;\n  [tok/s N/A] the deployed model produced too few tokens to time — expected in TRIAL&quot;)
+        print(&quot;  (the SFT&#x27;d 135M is barely trained and emits EOS early). Re-run after a FULL fine-tune.&quot;)
+    print(&quot;  The DEPLOYMENT itself worked: Ollama imported the model and served it over its API.&quot;)
+    print(&quot;  Next: §11 edge benchmark (same tok/s number, taken on a Raspberry Pi-class device).&quot;)
+    out_path = config.OUTPUTS / f&quot;ollama_{config.RUN_MODE}.json&quot;
+    out_path.write_text(json.dumps({&quot;model&quot;: name, &quot;avg_tok_per_s&quot;: avg, &quot;deployed&quot;: True,
+                                    &quot;results&quot;: results}, indent=2))
+    return {&quot;model&quot;: name, &quot;avg_tok_per_s&quot;: avg, &quot;deployed&quot;: True}
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Deploy the fine-tuned model with Ollama and query it.&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
   <!-- STEP 10 — SIZE vs CAPABILITY -->
   <div class="card full" style="margin-top:16px;">
     <div class="card-title">Step 10 — What fine-tuning can't buy you: size vs capability</div>
@@ -3455,6 +5577,444 @@ curl localhost:11434/api/generate -d <span class="st">'{
       <div class="tip">This is the real takeaway of the whole case study: at 1B you get a fluent, on-format domain assistant that runs in 0.7&nbsp;GB — fantastic for drafting and recall, but it still hallucinates, so keep a human (or a retrieval/verification layer) in the loop. That trade-off, made with eyes open, is exactly why MiniCPM5-1B is the interesting size: small enough for the edge, big enough to be useful, honest enough to need supervision. Code: <code>scripts/12_harness.py</code>, <code>scripts/13_toolcall.py</code>, <code>scripts/15_equation_probe.py</code>.</div>
     </div>
   </div>
+
+  
+  <div style="margin-top:14px; font-size:.8em; color:#34d399; font-weight:700; letter-spacing:.04em; text-transform:uppercase;">↓ The complete script(s) for the step above</div>
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/12_harness.py</code> &middot; 120 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/12_harness.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+12_harness.py — Part B step 4: run the model through a HARNESS (agent loop + eval harness).
+
+Two senses of &quot;harness&quot;:
+  (A) AGENT harness — drive the deployed model in a minimal tool-use loop: offer it a tool, parse a
+      tool call from its reply, execute it, feed the result back. Small models are WEAK at this, so we
+      report honestly whether the 135M managed it — the point is the harness mechanics, not a win.
+  (B) EVAL harness — EleutherAI&#x27;s lm-evaluation-harness (`lm-eval`) is the standard for benchmarking.
+      It isn&#x27;t installed here, so we print the exact command to evaluate this model and skip gracefully.
+
+CONTRACT: self-sufficient (deploys via §10 if needed), graceful skips, reproducible.
+
+Run:  python case_study/12_harness.py
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import importlib.util
+import json
+import re
+import shutil
+import sys
+import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+
+OLLAMA_URL = &quot;http://localhost:11434&quot;
+
+
+def _sib(fname: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / fname)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
+# ── (A) Minimal agent harness ─────────────────────────────────────────────────
+def _tool_multiply(a: float, b: float) -&gt; float:
+    return a * b
+
+
+def _chat(name: str, prompt: str, n_predict: int = 80) -&gt; str:
+    body = json.dumps({&quot;model&quot;: name, &quot;prompt&quot;: prompt, &quot;stream&quot;: False,
+                       &quot;options&quot;: {&quot;num_predict&quot;: n_predict, &quot;temperature&quot;: 0.0}}).encode()
+    req = urllib.request.Request(f&quot;{OLLAMA_URL}/api/generate&quot;, data=body,
+                                 headers={&quot;Content-Type&quot;: &quot;application/json&quot;})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return json.load(r).get(&quot;response&quot;, &quot;&quot;)
+
+
+def agent_demo(name: str) -&gt; dict:
+    &quot;&quot;&quot;One-step tool-use loop: the model is told to emit MULTIPLY(a,b); we execute and feed back.&quot;&quot;&quot;
+    question = &quot;What is 23 times 19? Use the tool.&quot;
+    sys_prompt = (
+        &quot;You can call one tool by writing exactly MULTIPLY(a, b). &quot;
+        f&quot;User: {question}\nAssistant:&quot;)
+    reply = _chat(name, sys_prompt)
+    call = re.search(r&quot;MULTIPLY\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)&quot;, reply)
+    print(f&quot;\n  [agent] model reply: {reply.strip()[:160]!r}&quot;)
+    if call:
+        a, b = float(call.group(1)), float(call.group(2))
+        result = _tool_multiply(a, b)
+        final = _chat(name, sys_prompt + reply + f&quot;\nTOOL_RESULT={result}\nAssistant:&quot;)
+        ok = str(int(result)) in final or str(result) in final
+        print(f&quot;  [agent] parsed MULTIPLY({a},{b}) -&gt; tool returned {result}; model final: {final.strip()[:120]!r}&quot;)
+        print(f&quot;  [agent] tool-use {&#x27;succeeded&#x27; if call else &#x27;attempted&#x27;}; correct answer surfaced: {ok}&quot;)
+        return {&quot;tool_called&quot;: True, &quot;result&quot;: result, &quot;answer_correct&quot;: bool(ok)}
+    print(&quot;  [agent] model did NOT emit a valid tool call — expected for a 135M model. The harness&quot;)
+    print(&quot;          mechanics (offer tool -&gt; parse -&gt; execute -&gt; feed back) are what this demonstrates.&quot;)
+    return {&quot;tool_called&quot;: False}
+
+
+# ── (B) lm-evaluation-harness recipe ──────────────────────────────────────────
+def eval_harness_recipe() -&gt; dict:
+    if importlib.util.find_spec(&quot;lm_eval&quot;) is None:
+        merged = config.OUTPUTS / f&quot;merged_{config.RUN_MODE}&quot;
+        print(&quot;\n  [skip lm-eval] not installed. To benchmark this model with the standard harness:&quot;)
+        print(&quot;    pip install lm-eval&quot;)
+        print(f&quot;    lm_eval --model hf --model_args pretrained={merged} \\&quot;)
+        print(&quot;            --tasks hellaswag,arc_easy --device cuda:0 --batch_size 8&quot;)
+        print(&quot;    (always pass an explicit tokenizer for GGUF models; reconstructing it can hang).&quot;)
+        return {&quot;lm_eval&quot;: &quot;not installed (recipe printed)&quot;}
+    print(&quot;  lm-eval is installed — run the command above to produce a benchmark scorecard.&quot;)
+    return {&quot;lm_eval&quot;: &quot;installed&quot;}
+
+
+def run() -&gt; dict:
+    config.set_all_seeds()
+    print(f&quot;=== §12 harness (agent + eval) | mode={config.RUN_MODE} ===&quot;)
+    out = {&quot;agent&quot;: None, &quot;eval&quot;: None}
+    if not shutil.which(&quot;ollama&quot;):
+        print(&quot;  [skip agent] no `ollama` — see §10.&quot;)
+    else:
+        name = f&quot;chem-sft-{config.MODEL_KEY}-{config.RUN_MODE}&quot;
+        try:
+            urllib.request.urlopen(f&quot;{OLLAMA_URL}/api/tags&quot;, timeout=3)
+            tags = json.loads(urllib.request.urlopen(f&quot;{OLLAMA_URL}/api/tags&quot;, timeout=3).read())
+            if not any(mm[&quot;name&quot;].startswith(name) for mm in tags.get(&quot;models&quot;, [])):
+                _sib(&quot;10_ollama_deploy.py&quot;, &quot;s10_for_12&quot;).run()
+            out[&quot;agent&quot;] = agent_demo(name)
+        except Exception as e:
+            print(f&quot;  [skip agent] Ollama not reachable: {type(e).__name__}&quot;)
+    out[&quot;eval&quot;] = eval_harness_recipe()
+    print(&quot;\n  Part B complete: train -&gt; merge -&gt; GGUF/Ollama -&gt; edge benchmark -&gt; harness.&quot;)
+    (config.OUTPUTS / f&quot;harness_{config.RUN_MODE}.json&quot;).write_text(json.dumps(out, indent=2))
+    return out
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Agent loop + lm-evaluation-harness recipe.&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/13_smollm3_toolcall.py</code> &middot; 169 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/13_smollm3_toolcall.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+13_smollm3_toolcall.py — can OUR fine-tuned model do tool-calling? (size vs capability)
+
+§12 showed our fine-tuned SmolLM2-135M cannot emit a valid tool call — too small. The interesting
+question is whether the SAME recipe on a bigger model (our fine-tuned SmolLM3-3B) CAN. This tests
+**our own deployed fine-tunes** through Ollama&#x27;s native function-calling API (`/api/chat` + `tools`):
+  • chem-sft-smollm3-&lt;mode&gt;      — our QLoRA-fine-tuned SmolLM3-3B   (expected: tool-calls)
+  • chem-sft-smollm2-135m-&lt;mode&gt; — our fine-tuned 135M               (expected: cannot)
+Lesson: tool-use is an emergent, scale-dependent capability — fine-tuning teaches a task/format, it
+does not add a capability the base model never had. Pick model SIZE for the job.
+
+OPTIONAL CONTROL (`--stock`): also pull stock SmolLM3 and test it, to confirm our domain fine-tuning
+did not *break* tool-calling. Off by default — the point is our models, no extra download needed.
+
+CONTRACT: graceful — uses whatever fine-tuned models are already deployed (via the §10 step of each
+pipeline); skips cleanly if Ollama/model unavailable.
+
+Run:  python case_study/13_smollm3_toolcall.py
+      python case_study/13_smollm3_toolcall.py --stock     # also test stock SmolLM3 as a control
+&quot;&quot;&quot;
+from __future__ import annotations
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+
+OLLAMA_URL = &quot;http://localhost:11434&quot;
+
+TOOLS = [{
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+        &quot;name&quot;: &quot;multiply&quot;,
+        &quot;description&quot;: &quot;Multiply two numbers and return the product.&quot;,
+        &quot;parameters&quot;: {&quot;type&quot;: &quot;object&quot;,
+                       &quot;properties&quot;: {&quot;a&quot;: {&quot;type&quot;: &quot;number&quot;}, &quot;b&quot;: {&quot;type&quot;: &quot;number&quot;}},
+                       &quot;required&quot;: [&quot;a&quot;, &quot;b&quot;]},
+    },
+}]
+
+
+def _server_up() -&gt; bool:
+    try:
+        urllib.request.urlopen(f&quot;{OLLAMA_URL}/api/tags&quot;, timeout=3); return True
+    except Exception:
+        return False
+
+
+def _deployed() -&gt; set[str]:
+    try:
+        tags = json.loads(urllib.request.urlopen(f&quot;{OLLAMA_URL}/api/tags&quot;, timeout=5).read())
+        return {m[&quot;name&quot;] for m in tags.get(&quot;models&quot;, [])}
+    except Exception:
+        return set()
+
+
+def _has(name: str, deployed: set[str]) -&gt; bool:
+    return any(d.startswith(name) for d in deployed)
+
+
+def _chat(model: str, messages: list, tools=None) -&gt; dict:
+    payload = {&quot;model&quot;: model, &quot;messages&quot;: messages, &quot;stream&quot;: False}
+    if tools:
+        payload[&quot;tools&quot;] = tools
+    req = urllib.request.Request(f&quot;{OLLAMA_URL}/api/chat&quot;, data=json.dumps(payload).encode(),
+                                 headers={&quot;Content-Type&quot;: &quot;application/json&quot;})
+    with urllib.request.urlopen(req, timeout=300) as r:
+        return json.load(r)
+
+
+def _prompt_probe(model: str) -&gt; dict:
+    &quot;&quot;&quot;Capability fallback when the native tools API is unavailable: can the model just compute it?
+
+    Uses /api/generate (no tools, no chat-template requirement). 23×19=437. A capable model answers
+    correctly; a too-small model does not. This separates CAPABILITY from tool-API plumbing.
+    &quot;&quot;&quot;
+    # SmolLM3 is a reasoning model — give it room to work, then look for the answer anywhere.
+    body = json.dumps({&quot;model&quot;: model,
+                       &quot;prompt&quot;: &quot;What is 23 multiplied by 19? Show your work, then give the number.&quot;,
+                       &quot;stream&quot;: False, &quot;options&quot;: {&quot;temperature&quot;: 0.0, &quot;num_predict&quot;: 200}}).encode()
+    req = urllib.request.Request(f&quot;{OLLAMA_URL}/api/generate&quot;, data=body,
+                                 headers={&quot;Content-Type&quot;: &quot;application/json&quot;})
+    txt = json.load(urllib.request.urlopen(req, timeout=120)).get(&quot;response&quot;, &quot;&quot;)
+    ok = &quot;437&quot; in txt
+    print(f&quot;  [{model}] prompt-probe (23×19): {txt.strip()[:80]!r} -&gt; correct={ok}&quot;)
+    return {&quot;model&quot;: model, &quot;tool_called&quot;: False, &quot;native_tools&quot;: &quot;unsupported&quot;,
+            &quot;prompt_probe_correct&quot;: ok}
+
+
+def tool_call_test(model: str) -&gt; dict:
+    &quot;&quot;&quot;Try native tool-calling; if the GGUF template doesn&#x27;t advertise tools, fall back to a probe.&quot;&quot;&quot;
+    messages = [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;What is 23 times 19? Use the multiply tool.&quot;}]
+    try:
+        resp = _chat(model, messages, tools=TOOLS)
+    except Exception as e:
+        # Ollama returns 400 &quot;does not support tools&quot; when the GGUF&#x27;s chat template isn&#x27;t tool-aware
+        # (common for a freshly-converted fine-tune). That&#x27;s a plumbing limit, not a capability one —
+        # so probe capability directly.
+        print(f&quot;  [{model}] native tools API unavailable ({type(e).__name__}) — prompt-probe instead:&quot;)
+        return _prompt_probe(model)
+    msg = resp.get(&quot;message&quot;, {})
+    calls = msg.get(&quot;tool_calls&quot;) or []
+    if not calls:
+        print(f&quot;  [{model}] NO tool_call. reply: {msg.get(&#x27;content&#x27;,&#x27;&#x27;)[:140]!r}&quot;)
+        return {&quot;model&quot;: model, &quot;tool_called&quot;: False}
+    args = calls[0][&quot;function&quot;].get(&quot;arguments&quot;, {})
+    a, b = float(args.get(&quot;a&quot;)), float(args.get(&quot;b&quot;))
+    product = a * b
+    messages += [msg, {&quot;role&quot;: &quot;tool&quot;, &quot;content&quot;: str(product)}]
+    final = _chat(model, messages).get(&quot;message&quot;, {}).get(&quot;content&quot;, &quot;&quot;).strip()
+    ok = str(int(product)) in final or str(product) in final
+    print(f&quot;  [{model}] tool_call multiply({a},{b})={product}; final: {final[:120]!r} (correct={ok})&quot;)
+    return {&quot;model&quot;: model, &quot;tool_called&quot;: True, &quot;product&quot;: product, &quot;answer_correct&quot;: bool(ok)}
+
+
+def run(include_stock: bool = False) -&gt; dict:
+    config.set_all_seeds()
+    mode = config.RUN_MODE
+    print(&quot;=== §13 tool-calling: does OUR fine-tuned model do it? (size vs capability) ===&quot;)
+    if not shutil.which(&quot;ollama&quot;) or not _server_up():
+        print(&quot;  [skip] Ollama not available — deploy our models via the §10 step first (see §10).&quot;)
+        return {&quot;skipped&quot;: &quot;no ollama&quot;}
+
+    deployed = _deployed()
+    out = {}
+    # our fine-tuned models (deployed by each pipeline&#x27;s §10), big first
+    for key in (&quot;smollm3&quot;, &quot;smollm2-135m&quot;):
+        name = f&quot;chem-sft-{key}-{mode}&quot;
+        if _has(name, deployed):
+            print(f&quot;\n  &gt;&gt;&gt; our fine-tuned {key}:&quot;)
+            out[key] = tool_call_test(name)
+        else:
+            print(f&quot;\n  [not deployed] {name} — run `run.sh {key}` (it deploys via §10) to include it.&quot;)
+
+    if include_stock:
+        m = config.SMOLLM3_OLLAMA
+        if not _has(m, deployed):
+            print(f&quot;\n  pulling stock control &#x27;{m}&#x27;...&quot;)
+            if subprocess.run([&quot;ollama&quot;, &quot;pull&quot;, m]).returncode != 0:
+                print(&quot;  [skip stock] pull failed.&quot;)
+                m = None
+        if m:
+            print(&quot;\n  &gt;&gt;&gt; stock SmolLM3 (control — did our fine-tuning break tools?):&quot;)
+            out[&quot;stock_smollm3&quot;] = tool_call_test(m)
+
+    print(&quot;\n  TAKEAWAY: tool-use is emergent/scale-dependent. If our 3B tool-calls and our 135M does not,&quot;)
+    print(&quot;  that gap is about MODEL SIZE, not fine-tuning — the recipe is identical for both.&quot;)
+    (config.OUTPUTS / &quot;toolcall.json&quot;).write_text(json.dumps(out, indent=2))
+    return out
+
+
+def main() -&gt; None:
+    ap = argparse.ArgumentParser(description=&quot;Tool-calling test on our fine-tuned models (Ollama tools API).&quot;)
+    ap.add_argument(&quot;--stock&quot;, action=&quot;store_true&quot;, help=&quot;also test stock SmolLM3 as a control&quot;)
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    args = ap.parse_args()
+    if args.mode:
+        config.set_mode(args.mode)
+    run(include_stock=args.stock)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre>
+  </details>
+
+  <details style="margin:10px 0 0; border:1px solid #14532d; border-radius:8px; background:#071109;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#34d399; font-weight:600; font-size:.88em; list-style:none;">📄 Full runnable code &mdash; <code>case_study/scripts/15_equation_probe.py</code> &middot; 132 lines (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from case_study/scripts/15_equation_probe.py @ 74d31ff — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:540px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">r&quot;&quot;&quot;
+15_equation_probe.py — did feeding LaTeX into CPT teach the model to REPRODUCE domain equations?
+
+The corpus (§1) preserved ~1,150 equations as inline `$LaTeX$`, and CPT (§3) trained the embeddings
+(`embed_tokens`+`lm_head` are in the LoRA targets) on that math-heavy stream. This probe closes the
+loop: we ask the model to WRITE canonical chemistry/physics equations in LaTeX and score how many of
+the characteristic LaTeX tokens appear — comparing the plain base model vs the CPT&#x27;d model.
+
+It is fully self-contained (our own models, via Unsloth/PEFT — no external API). Honest expectation:
+a strong base (SmolLM3) may already know textbook equations, so CPT&#x27;s gain can be small; a weaker base
+(135M) should improve more. Either way the number is measured, not asserted.
+
+Run:  ../.venv/bin/python case_study/15_equation_probe.py        # SmolLM3 (4-bit)
+      python case_study/15_equation_probe.py                     # 135M (bf16)
+&quot;&quot;&quot;
+from __future__ import annotations
+try:
+    import unsloth  # noqa: F401  (import first for the 4-bit path)
+except Exception:
+    pass
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import utils   # noqa: E402
+
+# Canonical equations + the LaTeX tokens that characterize a correct rendering (case-insensitive).
+EQUATION_PROBES = [
+    dict(name=&quot;time-dependent Schrödinger equation&quot;,
+         prompt=&quot;The time-dependent Schrödinger equation, in LaTeX, is:&quot;,
+         keys=[r&quot;\hbar&quot;, r&quot;\partial&quot;, r&quot;\psi&quot;, &quot;=&quot;]),
+    dict(name=&quot;time-independent Schrödinger equation&quot;,
+         prompt=&quot;The time-independent Schrödinger equation, in LaTeX, is:&quot;,
+         keys=[r&quot;\hat&quot;, &quot;h&quot;, r&quot;\psi&quot;, &quot;e&quot;, &quot;=&quot;]),
+    dict(name=&quot;kinetic energy operator&quot;,
+         prompt=&quot;The quantum kinetic energy operator, in LaTeX, is:&quot;,
+         keys=[r&quot;\hbar&quot;, r&quot;\nabla&quot;, &quot;2&quot;, &quot;m&quot;]),
+    dict(name=&quot;DFT total energy functional&quot;,
+         prompt=&quot;In density functional theory the total energy as a functional of the density, in LaTeX, is:&quot;,
+         keys=[r&quot;\rho&quot;, &quot;e&quot;, &quot;[&quot;]),
+]
+
+
+def _load(model_name: str, adapter: str | None):
+    if config.LOAD_IN_4BIT:
+        from unsloth import FastLanguageModel
+        from peft import PeftModel
+        model, tok = FastLanguageModel.from_pretrained(
+            model_name, max_seq_length=config.CPT[&quot;max_seq_len&quot;], dtype=None, load_in_4bit=True)
+        if adapter:
+            model = PeftModel.from_pretrained(model, adapter)
+        FastLanguageModel.for_inference(model)
+        return model, tok
+    from transformers import AutoTokenizer
+    from peft import PeftModel
+    tok = AutoTokenizer.from_pretrained(model_name)
+    model = utils.load_causal_lm(model_name)
+    if adapter:
+        model = PeftModel.from_pretrained(model, adapter)
+    return model, tok
+
+
+def _adapter(subdir: str) -&gt; str | None:
+    p = config.OUTPUTS / subdir / &quot;adapter&quot;
+    return str(p) if (p / &quot;adapter_config.json&quot;).exists() else None
+
+
+def _score(text: str, keys: list[str]) -&gt; float:
+    t = text.lower()
+    return sum(1 for k in keys if k.lower() in t) / len(keys)
+
+
+def probe(model, tok, label: str) -&gt; dict:
+    gens = utils.generate_samples(model, tok, [e[&quot;prompt&quot;] for e in EQUATION_PROBES],
+                                  chat=False, quiet=True, max_new_tokens=80)
+    scores, shown = [], []
+    for e, g in zip(EQUATION_PROBES, gens):
+        s = _score(g[&quot;answer&quot;], e[&quot;keys&quot;])
+        scores.append(s)
+        shown.append({&quot;eq&quot;: e[&quot;name&quot;], &quot;score&quot;: s, &quot;gen&quot;: g[&quot;answer&quot;][:140]})
+    avg = sum(scores) / len(scores)
+    print(f&quot;  [{label}] LaTeX-token reproduction: {avg*100:.0f}%&quot;)
+    for sh in shown:
+        print(f&quot;      {sh[&#x27;eq&#x27;]:38} {sh[&#x27;score&#x27;]*100:3.0f}%  {sh[&#x27;gen&#x27;]!r}&quot;)
+    return {&quot;label&quot;: label, &quot;avg&quot;: avg, &quot;detail&quot;: shown}
+
+
+def run() -&gt; dict:
+    config.set_all_seeds()
+    mode = config.RUN_MODE
+    cpt_ad = _adapter(f&quot;cpt_base_{mode}_unsloth&quot;) or _adapter(f&quot;cpt_base_{mode}&quot;)
+    print(f&quot;=== §15 equation reproduction | model={config.MODEL_KEY} mode={mode} ===&quot;)
+    print(&quot;  Did CPT on the LaTeX-rich corpus (with embeddings retrained) teach equation generation?&quot;)
+    out = {&quot;mode&quot;: mode, &quot;model&quot;: config.MODEL_KEY, &quot;stages&quot;: {}}
+
+    m, t = _load(config.BASE_MODEL, None)
+    out[&quot;stages&quot;][&quot;base&quot;] = probe(m, t, &quot;base&quot;)
+    del m
+    torch.cuda.is_available() and torch.cuda.empty_cache()
+
+    if cpt_ad:
+        m, t = _load(config.BASE_MODEL, cpt_ad)
+        out[&quot;stages&quot;][&quot;base+CPT&quot;] = probe(m, t, &quot;base+CPT&quot;)
+        del m
+        torch.cuda.is_available() and torch.cuda.empty_cache()
+        b, c = out[&quot;stages&quot;][&quot;base&quot;][&quot;avg&quot;], out[&quot;stages&quot;][&quot;base+CPT&quot;][&quot;avg&quot;]
+        delta = (c - b) * 100
+        print(f&quot;\n  RESULT: base {b*100:.0f}% -&gt; base+CPT {c*100:.0f}%  ({delta:+.0f} pts)&quot;)
+        print(&quot;  (CPT on a strong base may move this little — it already knows textbook equations;&quot;)
+        print(&quot;   a weaker base should gain more. The corpus + retrained embeddings are what enable it.)&quot;)
+    else:
+        print(&quot;  [no CPT adapter] run §3 first to compare base vs base+CPT.&quot;)
+
+    (config.OUTPUTS / &quot;equation_probe.json&quot;).write_text(json.dumps(out, indent=2))
+    print(f&quot;\n  saved -&gt; {config.OUTPUTS/&#x27;equation_probe.json&#x27;}&quot;)
+    return out
+
+
+if __name__ == &quot;__main__&quot;:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument(&quot;--mode&quot;, choices=[&quot;trial&quot;, &quot;full&quot;])
+    a = ap.parse_args()
+    if a.mode:
+        config.set_mode(a.mode)
+    run()
+</pre>
+  </details>
 
   <!-- METRICS -->
   <div class="card full" style="margin-top:16px;">
