@@ -292,6 +292,7 @@
   <div style="font-size:0.72em; font-weight:800; letter-spacing:0.28em; color:rgba(255,255,255,0.72); text-transform:uppercase;">Part I</div>
   <div style="font-size:1.7em; font-weight:800; color:#fff; margin:4px 0 6px; line-height:1.15;">Foundations</div>
   <div style="font-size:0.95em; color:rgba(255,255,255,0.9); line-height:1.5; max-width:60ch;">The libraries every fine-tune is built on</div>
+  <div style="margin-top:10px; font-size:0.78em; color:rgba(255,255,255,0.7);">↩ You've seen the whole map. Now meet the four libraries every later chapter leans on — tensors, datasets, models, adapters.</div>
 </div>
 
 <div class="chapter c-pytorch" id="pytorch">
@@ -1033,6 +1034,7 @@ out = trainer.<span class="fn">predict</span>(test_ds)      <span class="cm"># o
   <div style="font-size:0.72em; font-weight:800; letter-spacing:0.28em; color:rgba(255,255,255,0.72); text-transform:uppercase;">Part II</div>
   <div style="font-size:1.7em; font-weight:800; color:#fff; margin:4px 0 6px; line-height:1.15;">Preparing Data</div>
   <div style="font-size:0.95em; color:rgba(255,255,255,0.9); line-height:1.5; max-width:60ch;">You cannot train on data you have not shaped</div>
+  <div style="margin-top:10px; font-size:0.78em; color:rgba(255,255,255,0.7);">↩ Tools in hand. Before any training runs, your data has to be in a shape TRL recognizes — that single choice decides CPT vs SFT.</div>
 </div>
 
 <div class="chapter" id="owndata" style="background:#0d1117; border-top:2px solid #7c3aed;">
@@ -1216,6 +1218,7 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
   <div style="font-size:0.72em; font-weight:800; letter-spacing:0.28em; color:rgba(255,255,255,0.72); text-transform:uppercase;">Part III</div>
   <div style="font-size:1.7em; font-weight:800; color:#fff; margin:4px 0 6px; line-height:1.15;">Training — Teaching the Model</div>
   <div style="font-size:0.95em; color:rgba(255,255,255,0.9); line-height:1.5; max-width:60ch;">CPT teaches the domain, SFT teaches the format, alignment teaches the taste</div>
+  <div style="margin-top:10px; font-size:0.78em; color:rgba(255,255,255,0.7);">↩ Data ready. Now the actual teaching — and the loss-masking that quietly decides whether it worked.</div>
 </div>
 
 <div class="chapter c-lora" id="lora">
@@ -2305,6 +2308,7 @@ trainer.<span class="fn">train</span>()
   <div style="font-size:0.72em; font-weight:800; letter-spacing:0.28em; color:rgba(255,255,255,0.72); text-transform:uppercase;">Part IV</div>
   <div style="font-size:1.7em; font-weight:800; color:#fff; margin:4px 0 6px; line-height:1.15;">Proving It Works</div>
   <div style="font-size:0.95em; color:rgba(255,255,255,0.9); line-height:1.5; max-width:60ch;">A fine-tune you did not measure is a fine-tune you did not finish</div>
+  <div style="margin-top:10px; font-size:0.78em; color:rgba(255,255,255,0.7);">↩ The model is trained. Before you trust it, prove it improved — and check it didn't forget what it already knew.</div>
 </div>
 
 <div class="chapter" id="evaluation" style="background:#020617; border-top:2px solid #0d9488;">
@@ -2714,6 +2718,7 @@ gen_after  = <span class="fn">perplexity</span>(model1, tok, general_text)
   <div style="font-size:0.72em; font-weight:800; letter-spacing:0.28em; color:rgba(255,255,255,0.72); text-transform:uppercase;">Part V</div>
   <div style="font-size:1.7em; font-weight:800; color:#fff; margin:4px 0 6px; line-height:1.15;">Shipping It</div>
   <div style="font-size:0.95em; color:rgba(255,255,255,0.9); line-height:1.5; max-width:60ch;">Merge, shrink, and deploy — from one clean model to the edge</div>
+  <div style="margin-top:10px; font-size:0.78em; color:rgba(255,255,255,0.7);">↩ Verified and trustworthy. Now fold the adapter in, shrink it with quantization, and get it running somewhere real.</div>
 </div>
 
 <div class="chapter" id="merging" style="background:#0a1622; border-top:2px solid #0891b2;">
@@ -3141,6 +3146,7 @@ pt = bedrock.<span class="fn">create_provisioned_model_throughput</span>(
   <div style="font-size:0.72em; font-weight:800; letter-spacing:0.28em; color:rgba(255,255,255,0.72); text-transform:uppercase;">Part VI</div>
   <div style="font-size:1.7em; font-weight:800; color:#fff; margin:4px 0 6px; line-height:1.15;">Putting It All Together</div>
   <div style="font-size:0.95em; color:rgba(255,255,255,0.9); line-height:1.5; max-width:60ch;">The full build, an exercise to do yourself, and the runnable code</div>
+  <div style="margin-top:10px; font-size:0.78em; color:rgba(255,255,255,0.7);">↩ You can now run the whole pipeline. Watch it done once end-to-end on a real chemistry model, then do it yourself.</div>
 </div>
 
 <div class="chapter" id="casestudy" style="background:#08140d; border-top:2px solid #34d399;">
