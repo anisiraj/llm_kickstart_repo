@@ -1051,8 +1051,47 @@ out = trainer.<span class="fn">predict</span>(test_ds)      <span class="cm"># o
 
   <p class="chapter-intro">This is the chapter that quietly decides whether your fine-tune works. Get the data shape right and the trainer does the correct thing automatically; get it subtly wrong and training looks healthy while the model learns the wrong thing. So before any <code>load_dataset()</code> call, we'll build up — from zero — the three ideas everything else rests on: <strong>the tokenizer</strong>, <strong>the chat template</strong>, and <strong>how those two create the loss mask</strong>. Every sequence and number below was produced by running the real <code>SmolLM2-135M-Instruct</code> tokenizer, not sketched.</p>
 
+  <!-- ON-RAMP 0: the 10-second self-check -->
+  <div class="card full" style="margin-top:8px; border:2px solid #22c55e;">
+    <div class="card-title" style="background:#14532d; color:#bbf7d0;">⚡ Do this first: inspect YOUR data in 10 seconds</div>
+    <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
+      Before reading the theory, run this on your own model + one example. It prints the exact string the model will train on and what fraction of tokens are actually graded — the single most useful check in this whole chapter. Paste, change two lines, run:
+<pre><span class="cm"># === Paste your model + ONE example. Prints the templated string + the loss mask. ===</span>
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer
+
+MODEL      = <span class="st">"HuggingFaceTB/SmolLM2-135M-Instruct"</span>     <span class="cm"># ← your model</span>
+prompt     = [{<span class="st">"role"</span>:<span class="st">"user"</span>,      <span class="st">"content"</span>:<span class="st">"What is HVAC?"</span>}]                       <span class="cm"># ← your question</span>
+completion = [{<span class="st">"role"</span>:<span class="st">"assistant"</span>, <span class="st">"content"</span>:<span class="st">"Heating, Ventilation, and Air Conditioning."</span>}]  <span class="cm"># ← your answer</span>
+
+tok = AutoTokenizer.<span class="fn">from_pretrained</span>(MODEL)
+<span class="fn">print</span>(<span class="st">"has chat_template:"</span>, tok.chat_template <span class="kw">is not</span> <span class="kw">None</span>)   <span class="cm"># None ⇒ base model, no template</span>
+
+<span class="cm"># the exact string the model trains on (full turn)</span>
+full_text = tok.<span class="fn">apply_chat_template</span>(prompt + completion, tokenize=<span class="kw">False</span>)
+<span class="fn">print</span>(full_text)
+
+<span class="cm"># reproduce completion_only_loss: mask the prompt span to -100, keep the answer live</span>
+p_ids = tok(tok.<span class="fn">apply_chat_template</span>(prompt, tokenize=<span class="kw">False</span>, add_generation_prompt=<span class="kw">True</span>),
+            add_special_tokens=<span class="kw">False</span>).input_ids
+f_ids = tok(full_text, add_special_tokens=<span class="kw">False</span>).input_ids
+labels = [-<span class="nb">100</span>]*<span class="fn">len</span>(p_ids) + f_ids[<span class="fn">len</span>(p_ids):]
+learned = <span class="fn">sum</span>(l != -<span class="nb">100</span> <span class="kw">for</span> l <span class="kw">in</span> labels)
+<span class="fn">print</span>(<span class="fn">f"</span>masked: {<span class="fn">len</span>(p_ids)}  learned: {learned}  unmasked: {learned/<span class="fn">len</span>(f_ids):.0%}<span class="fn">"</span>)
+<span class="fn">print</span>(<span class="st">"LEARNED:"</span>, <span class="fn">repr</span>(tok.<span class="fn">decode</span>([i <span class="kw">for</span> i,l <span class="kw">in</span> <span class="fn">zip</span>(f_ids,labels) <span class="kw">if</span> l != -<span class="nb">100</span>])))
+
+<span class="cm"># ─────────── ACTUAL OUTPUT on SmolLM2-135M-Instruct (run just now) ───────────</span>
+<span class="cm"># has chat_template: True</span>
+<span class="cm"># &lt;|im_start|&gt;system … &lt;|im_end|&gt;</span>
+<span class="cm"># &lt;|im_start|&gt;user\nWhat is HVAC?&lt;|im_end|&gt;</span>
+<span class="cm"># &lt;|im_start|&gt;assistant\nHeating, Ventilation, and Air Conditioning.&lt;|im_end|&gt;</span>
+<span class="cm"># masked: 34  learned: 12  unmasked: 26%</span>
+<span class="cm"># LEARNED: 'Heating, Ventilation, and Air Conditioning.&lt;|im_end|&gt;\n'</span></pre>
+      <div class="good"><strong>Read the last two lines.</strong> <code>LEARNED</code> should be <em>only your answer</em> (plus the stop token). The <code>unmasked%</code> should land roughly 20–70% for completion-only. <strong>100%</strong> = the prompt wasn't masked (you're teaching it to generate questions). <strong>0%</strong> = nothing is being learned (template/marker mismatch). If those two lines look right, your data is wired correctly — the rest of this chapter explains <em>why</em>.</div>
+    </div>
+  </div>
+
   <!-- ON-RAMP 1: tokenizer + chat template from zero -->
-  <div class="card full" style="margin-top:8px; border:1px solid #7c3aed;">
+  <div class="card full" style="margin-top:14px; border:1px solid #7c3aed;">
     <div class="card-title" style="background:#3b0764; color:#e9d5ff;">① First principles: a model only ever sees a flat list of token IDs</div>
     <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
       A language model cannot read your Python dict <code>{"role": "user", "content": "What is HVAC?"}</code>. It can't even read text. It reads <strong>integers</strong> — token IDs. Two objects bridge the gap, and they're worth naming precisely because the rest of the chapter is just consequences of them:
