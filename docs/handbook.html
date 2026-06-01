@@ -2256,6 +2256,53 @@ text = tok.<span class="fn">apply_chat_template</span>(msgs, tokenize=<span clas
     </div>
   </div>
 
+  <div class="card full" style="border-color:#0d9488; margin-top:16px;">
+    <div class="card-title" style="background:#134e4a; color:#99f6e4;">🩺 The label health-check — the one diagnostic that catches the silent killers</div>
+    <div class="card-body">
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75; margin-bottom:10px;">Before you spend a GPU-hour, look at <em>one</em> collated example and count how many label positions are actually graded (not <code>-100</code>). This single number diagnoses the two most common "training looked fine but the model is broken" failures.</div>
+<pre><span class="cm"># Inspect the FIRST real training example the trainer will see</span>
+example = trainer.train_dataset[<span class="nb">0</span>]
+non_masked = <span class="fn">sum</span>(<span class="nb">1</span> <span class="kw">for</span> l <span class="kw">in</span> example[<span class="st">"labels"</span>] <span class="kw">if</span> l != -<span class="nb">100</span>)
+total      = <span class="fn">len</span>(example[<span class="st">"labels"</span>])
+<span class="fn">print</span>(<span class="fn">f"</span>unmasked: {non_masked}/{total} ({<span class="nb">100</span>*non_masked/total:.1f}%)<span class="fn">"</span>)
+
+<span class="cm"># Healthy ranges (rule of thumb):</span>
+<span class="cm">#   completion_only_loss=True  → ~30–70% unmasked   (prompt is -100)</span>
+<span class="cm">#   assistant_only_loss=True   → ~20–60% unmasked   (user/system are -100)</span>
+<span class="cm">#   neither (CPT / text)       → ~100% unmasked      (everything graded)</span>
+<span class="cm">#   ── 0% unmasked → STOP. You will train on nothing (loss looks fine, model learns zip).</span></pre>
+      <div class="warn" style="margin-top:8px;"><strong>What 0% means, by mode:</strong> with <code>assistant_only_loss=True</code>, your template is missing the <code>{% generation %}</code> markers (the silent all-zero mask from the chapter above — measured on SmolLM2). With the manual <code>DataCollatorForCompletionOnlyLM</code> path, your <code>response_template</code> string doesn't byte-match what the tokenizer produced. Either way the fix is upstream of training, and this one line catches it in seconds. (This is the same check the 🧪 Case Study runs at Steps 4–5.)</div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.82em; margin-top:10px;">
+        <tr style="border-bottom:2px solid #475569;"><th style="text-align:left; padding:6px 8px;">Symptom</th><th style="text-align:left; padding:6px 8px;">Cause → fix</th></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;">Loss flatlines / <code>ZeroDivisionError: All labels are -100</code></td><td style="padding:6px 8px;">0% unmasked — template/marker mismatch. Run the check above; fix the columns or template before retraining.</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;">Model <strong>echoes the prompt back</strong> at inference</td><td style="padding:6px 8px;">~100% unmasked on a "SFT" run — you forgot completion-only loss, so it learned to generate the question too. Use prompt+completion + <code>completion_only_loss=True</code>.</td></tr>
+        <tr><td style="padding:6px 8px;">Loss drops but generation is <strong>gibberish</strong></td><td style="padding:6px 8px;">Trained a base model with a chat template but never added the template's special tokens → model sees <code>&lt;|im_start|&gt;</code> as noise. Use <code>SFTConfig(chat_template_path=…)</code>, which adds tokens + resizes embeddings for you.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card full" style="border-color:#38bdf8; margin-top:16px;">
+    <div class="card-title" style="background:#0c4a6e; color:#bae6fd;">🎤 Inference must mirror training — the mismatch that fakes a "broken model"</div>
+    <div class="card-body">
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.75; margin-bottom:10px;">A huge share of "my fine-tune doesn't work" reports are <em>not</em> training bugs — they're <strong>formatting mismatches at inference</strong>. You trained on the chat template; you must generate with the <em>same</em> template, this time asking the model to start the assistant turn:</div>
+<pre><span class="cm"># Reload base + your adapter (or the merged model)</span>
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoModelForCausalLM, AutoTokenizer
+tok   = AutoTokenizer.<span class="fn">from_pretrained</span>(<span class="st">"out-sft"</span>)
+model = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(<span class="st">"out-sft"</span>).<span class="fn">eval</span>().<span class="fn">to</span>(<span class="st">"cuda"</span>)
+
+messages = [{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"What is the Hartree-Fock method?"</span>}]
+inputs = tok.<span class="fn">apply_chat_template</span>(
+    messages, return_tensors=<span class="st">"pt"</span>,
+    add_generation_prompt=<span class="kw">True</span>,        <span class="cm"># ← INFERENCE: append "&lt;|im_start|&gt;assistant\n" so it starts its turn</span>
+).<span class="fn">to</span>(<span class="st">"cuda"</span>)
+
+out = model.<span class="fn">generate</span>(inputs, max_new_tokens=<span class="nb">128</span>, do_sample=<span class="kw">True</span>, temperature=<span class="nb">0.7</span>)
+<span class="cm"># Decode ONLY the new tokens — slice off the prompt you fed in:</span>
+<span class="fn">print</span>(tok.<span class="fn">decode</span>(out[<span class="nb">0</span>][inputs.shape[<span class="nb">1</span>]:], skip_special_tokens=<span class="kw">True</span>))</pre>
+      <div class="tip" style="margin-top:8px;">The three lines that bite people: <strong>(1)</strong> <code>add_generation_prompt=True</code> — training used <code>False</code> (full turn); inference uses <code>True</code> (open turn). Get this backwards and the model has nothing to continue from. <strong>(2)</strong> <code>out[0][inputs.shape[1]:]</code> — slice off the prompt or you'll "decode" your own question back. <strong>(3)</strong> a <em>base</em> model has no template — feed raw text and let it continue; only instruct/SFT models take the chat path. On Unsloth, call <code>FastLanguageModel.for_inference(model)</code> first for its faster generation path.</div>
+    </div>
+  </div>
+
   <div class="card full" style="border-color:#4f46e5; margin-top:16px;">
     <div class="card-title" style="background:#312e81; color:#c7d2fe;">🎛️ Training parameters that actually move the needle — defaults read from installed <code>trl 0.24.0</code></div>
     <div class="card-body">
@@ -3150,6 +3197,811 @@ gen_after  = <span class="fn">perplexity</span>(model1, tok, general_text)
     &nbsp;·&nbsp; <a href="https://arxiv.org/abs/2106.09685" target="_blank" style="color:#38bdf8;">LoRA paper</a>
   </div>
 </div>
+  <details style="margin:10px 0 0; border:1px solid #0c4a6e; border-radius:8px; background:#06121f;">
+    <summary style="cursor:pointer; padding:10px 14px; color:#38bdf8; font-weight:600; font-size:.88em;">📄 Full runnable code &mdash; <code>scripts/14_adapter_save_load.py</code> &middot; 800 lines &middot; the complete HVAC/Energy domain-adapter study (click to expand)</summary>
+    <div style="font-size:.72em; color:#475569; padding:6px 14px 0;"># verbatim from scripts/14_adapter_save_load.py @ db4272f — re-sync if the script changes · run with the repo .venv</div>
+    <pre style="margin:8px 0 0; padding:0 14px 12px; max-height:560px; overflow:auto; white-space:pre; border-radius:0 0 8px 8px;">&quot;&quot;&quot;
+14_adapter_save_load.py
+-----------------------
+Save, reload, merge, and swap LoRA adapters — the deployment pattern
+that makes fine-tuning practical.
+
+One base model (~500 MB) + many adapters (~5 MB each) = many specialized
+models without duplicating weights. Adapters live on the HuggingFace Hub
+just like full models.
+
+Run with: python scripts/14_adapter_save_load.py
+
+References:
+  - PEFT docs: https://huggingface.co/docs/peft
+  - PEFT quicktour: https://huggingface.co/docs/peft/quicktour
+  - Real public adapter: https://huggingface.co/ybelkada/opt-350m-lora
+  - LoRA paper: https://arxiv.org/abs/2106.09685
+&quot;&quot;&quot;
+
+import os
+import tempfile
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import LoraConfig, get_peft_model, PeftModel, TaskType
+from datasets import Dataset
+
+DEVICE = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART A: Train a Small LoRA Adapter
+# ═══════════════════════════════════════════════════════════════════════════════
+# We fine-tune GPT-2 with LoRA on a tiny dataset to create an adapter.
+# The point isn&#x27;t the quality — it&#x27;s seeing what gets saved.
+
+print(&quot;=&quot; * 72)
+print(&quot;PART A: Train a LoRA adapter on GPT-2&quot;)
+print(&quot;=&quot; * 72)
+
+model_name = &quot;openai-community/gpt2&quot;
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.pad_token = tokenizer.eos_token
+
+base_model = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+
+# Count base model parameters
+base_params = sum(p.numel() for p in base_model.parameters())
+print(f&quot;\nBase model parameters: {base_params:,}&quot;)
+
+# Apply LoRA — targeting attention projections (GPT-2 uses c_attn, c_proj)
+lora_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    r=8,                        # rank — lower = smaller adapter
+    lora_alpha=16,              # scaling factor
+    lora_dropout=0.05,
+    target_modules=[&quot;c_attn&quot;],  # GPT-2&#x27;s fused QKV attention
+)
+
+model = get_peft_model(base_model, lora_config)
+model.print_trainable_parameters()
+# Expected: ~0.2-0.5% of base model — that&#x27;s the whole point of LoRA
+
+# Quick training on a toy dataset (3 steps, just to get non-random weights)
+texts = [
+    &quot;The HVAC system detected a fault in zone 3 and switched to backup mode.&quot;,
+    &quot;Compressor discharge temperature exceeded threshold, initiating cooldown.&quot;,
+    &quot;Building management system reports optimal energy efficiency at 92%.&quot;,
+    &quot;Chiller plant sequencing adjusted for overnight low-occupancy profile.&quot;,
+]
+encodings = tokenizer(texts, truncation=True, padding=True, max_length=64,
+                      return_tensors=&quot;pt&quot;).to(DEVICE)
+
+model.train()
+optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4)
+for step in range(3):
+    outputs = model(**encodings, labels=encodings[&quot;input_ids&quot;])
+    outputs.loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+    print(f&quot;  Step {step + 1}/3  loss={outputs.loss.item():.4f}&quot;)
+
+print(&quot;\nAdapter trained (toy example — 3 steps on 4 sentences).&quot;)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART B: Save Adapter Locally
+# ═══════════════════════════════════════════════════════════════════════════════
+# save_pretrained() saves ONLY the adapter, not the base model.
+# This is the key insight: adapters are tiny.
+
+print(&quot;\n&quot; + &quot;=&quot; * 72)
+print(&quot;PART B: Save adapter locally — what actually gets written&quot;)
+print(&quot;=&quot; * 72)
+
+save_dir = tempfile.mkdtemp(prefix=&quot;lora_adapter_&quot;)
+model.save_pretrained(save_dir)
+tokenizer.save_pretrained(save_dir)  # good practice: keep tokenizer with adapter
+
+print(f&quot;\nSaved to: {save_dir}&quot;)
+print(&quot;\nFiles created:&quot;)
+for f in sorted(os.listdir(save_dir)):
+    size = os.path.getsize(os.path.join(save_dir, f))
+    if size &gt; 1024 * 1024:
+        print(f&quot;  {f:40s} {size / 1024 / 1024:.1f} MB&quot;)
+    elif size &gt; 1024:
+        print(f&quot;  {f:40s} {size / 1024:.1f} KB&quot;)
+    else:
+        print(f&quot;  {f:40s} {size} bytes&quot;)
+
+# Show the adapter config
+import json
+with open(os.path.join(save_dir, &quot;adapter_config.json&quot;)) as f:
+    config = json.load(f)
+print(f&quot;\nadapter_config.json contents:&quot;)
+for key in [&quot;base_model_name_or_path&quot;, &quot;r&quot;, &quot;lora_alpha&quot;, &quot;target_modules&quot;,
+            &quot;task_type&quot;, &quot;peft_type&quot;]:
+    if key in config:
+        print(f&quot;  {key}: {config[key]}&quot;)
+
+# Size comparison
+adapter_size = os.path.getsize(
+    os.path.join(save_dir, &quot;adapter_model.safetensors&quot;)
+)
+# Base model size (approximate from parameter count * 4 bytes for fp32)
+base_size_approx = base_params * 4
+print(f&quot;\n┌─────────────────────────────────────┐&quot;)
+print(f&quot;│  Base model:  ~{base_size_approx / 1024 / 1024:.0f} MB (all params)    │&quot;)
+print(f&quot;│  Adapter:      {adapter_size / 1024 / 1024:.1f} MB              │&quot;)
+print(f&quot;│  Ratio:        {adapter_size / base_size_approx * 100:.2f}%               │&quot;)
+print(f&quot;│                                     │&quot;)
+print(f&quot;│  10 adapters = 10 specialized models │&quot;)
+print(f&quot;│  for the cost of 1 base + ~50 MB    │&quot;)
+print(f&quot;└─────────────────────────────────────┘&quot;)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART C: Reload Adapter onto a Fresh Base Model
+# ═══════════════════════════════════════════════════════════════════════════════
+# In production: load base model once, then load the adapter you need.
+# PeftModel.from_pretrained() — NOT get_peft_model() (that&#x27;s for training).
+
+print(&quot;\n&quot; + &quot;=&quot; * 72)
+print(&quot;PART C: Reload adapter onto a fresh base model&quot;)
+print(&quot;=&quot; * 72)
+
+# Simulate fresh start: load base model from scratch
+fresh_base = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+
+# Load the adapter we just saved
+reloaded = PeftModel.from_pretrained(
+    fresh_base,
+    save_dir,
+    is_trainable=False,  # inference mode — freeze adapter
+)
+reloaded.eval()
+
+# Verify it works
+prompt = &quot;The building management system&quot;
+inputs = tokenizer(prompt, return_tensors=&quot;pt&quot;).to(DEVICE)
+with torch.no_grad():
+    output = reloaded.generate(**inputs, max_new_tokens=30, do_sample=False)
+print(f&quot;\nPrompt: {prompt}&quot;)
+print(f&quot;Output: {tokenizer.decode(output[0], skip_special_tokens=True)}&quot;)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART D: Merge Adapter into Base Model
+# ═══════════════════════════════════════════════════════════════════════════════
+# merge_and_unload() bakes the LoRA weights into the base weights.
+# Result: a plain transformers model — no PEFT dependency needed at inference.
+# Trade-off: you lose the ability to swap adapters.
+
+print(&quot;\n&quot; + &quot;=&quot; * 72)
+print(&quot;PART D: Merge adapter into base model&quot;)
+print(&quot;=&quot; * 72)
+
+print(&quot;\nBefore merge:&quot;)
+print(f&quot;  Model type: {type(reloaded).__name__}&quot;)
+print(f&quot;  Has adapter: True&quot;)
+
+merged_model = reloaded.merge_and_unload()
+
+print(f&quot;\nAfter merge:&quot;)
+print(f&quot;  Model type: {type(merged_model).__name__}&quot;)
+print(f&quot;  Has adapter: False (LoRA weights baked into base)&quot;)
+
+# Same generation, same result — but no PEFT wrapper
+with torch.no_grad():
+    output_merged = merged_model.generate(**inputs, max_new_tokens=30,
+                                          do_sample=False)
+print(f&quot;\nSame prompt after merge: &quot;
+      f&quot;{tokenizer.decode(output_merged[0], skip_special_tokens=True)}&quot;)
+
+# Save the merged model — this is a full model, not an adapter
+merged_dir = tempfile.mkdtemp(prefix=&quot;merged_model_&quot;)
+merged_model.save_pretrained(merged_dir)
+merged_size = sum(
+    os.path.getsize(os.path.join(merged_dir, f))
+    for f in os.listdir(merged_dir) if f.endswith((&quot;.safetensors&quot;, &quot;.bin&quot;))
+)
+print(f&quot;\nMerged model size: {merged_size / 1024 / 1024:.1f} MB &quot;
+      f&quot;(same as base — adapter is baked in)&quot;)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART E: Load a Real Adapter from the HuggingFace Hub
+# ═══════════════════════════════════════════════════════════════════════════════
+# Public adapters on the Hub work exactly like full models.
+# Example: ybelkada/opt-350m-lora — a LoRA adapter for OPT-350M.
+#
+# The adapter_config.json on the Hub stores the base model name,
+# so PEFT knows which model the adapter was trained on.
+#
+# Real-world use: teams push adapters to a private Hub org.
+# Deployment pulls base model once, then swaps adapters per request.
+
+print(&quot;\n&quot; + &quot;=&quot; * 72)
+print(&quot;PART E: Load a public adapter from the HuggingFace Hub&quot;)
+print(&quot;=&quot; * 72)
+
+hub_adapter = &quot;ybelkada/opt-350m-lora&quot;
+hub_base = &quot;facebook/opt-350m&quot;
+
+print(f&quot;\nLoading base model: {hub_base}&quot;)
+print(f&quot;Loading adapter:    {hub_adapter}&quot;)
+print(f&quot;(This downloads ~700 MB base + ~6 MB adapter on first run)\n&quot;)
+
+try:
+    opt_tokenizer = AutoTokenizer.from_pretrained(hub_base)
+    opt_base = AutoModelForCausalLM.from_pretrained(hub_base).to(DEVICE)
+    opt_with_adapter = PeftModel.from_pretrained(opt_base, hub_adapter)
+    opt_with_adapter.eval()
+
+    prompt = &quot;The future of AI is&quot;
+    inputs = opt_tokenizer(prompt, return_tensors=&quot;pt&quot;).to(DEVICE)
+    with torch.no_grad():
+        output = opt_with_adapter.generate(**inputs, max_new_tokens=30,
+                                           do_sample=False)
+    print(f&quot;Prompt: {prompt}&quot;)
+    print(f&quot;Output: {opt_tokenizer.decode(output[0], skip_special_tokens=True)}&quot;)
+    print(f&quot;\nAdapter loaded from Hub — same pattern as loading from disk.&quot;)
+
+    # Show adapter info
+    print(f&quot;\nAdapter details:&quot;)
+    for name in opt_with_adapter.peft_config:
+        cfg = opt_with_adapter.peft_config[name]
+        print(f&quot;  Name: {name}&quot;)
+        print(f&quot;  Type: {cfg.peft_type}&quot;)
+        print(f&quot;  Rank: {cfg.r}&quot;)
+        print(f&quot;  Target modules: {cfg.target_modules}&quot;)
+
+    del opt_base, opt_with_adapter  # free memory
+    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+except Exception as e:
+    print(f&quot;Hub download skipped (offline or network issue): {e}&quot;)
+    print(&quot;This is expected in air-gapped environments.&quot;)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART F: Domain Specialization — Proof by Perplexity and Generation
+# ═══════════════════════════════════════════════════════════════════════════════
+# The real test: train two adapters on distinct domains, then measure
+# whether each adapter actually becomes a specialist.
+#
+# We use enough data and steps for the adapters to genuinely shift the
+# distribution — not a 3-step toy, but a real (small) fine-tuning run.
+
+print(&quot;\n&quot; + &quot;=&quot; * 72)
+print(&quot;PART F: Domain specialization — do adapters actually learn?&quot;)
+print(&quot;=&quot; * 72)
+
+import math
+
+# Two distinct domain corpora — HVAC/building systems vs energy/sustainability
+hvac_corpus = [
+    &quot;The chiller plant COP dropped below 3.0 during peak load hours.&quot;,
+    &quot;BACnet integration requires proper MSTP addressing on the trunk.&quot;,
+    &quot;The AHU supply air temperature setpoint should track outdoor air enthalpy.&quot;,
+    &quot;VRF systems in zones 4-6 reported refrigerant pressure faults.&quot;,
+    &quot;Compressor discharge temperature exceeded safety threshold at 210F.&quot;,
+    &quot;The building automation system scheduled unoccupied setback at 10pm.&quot;,
+    &quot;Condenser water temperature reset saved 12% on chiller energy consumption.&quot;,
+    &quot;Damper actuator on AHU-3 failed closed, causing high static pressure alarm.&quot;,
+    &quot;Cooling tower fan staging follows wet-bulb temperature differential.&quot;,
+    &quot;VAV box minimum airflow setpoints must comply with ASHRAE 62.1 ventilation.&quot;,
+    &quot;The economizer lockout temperature is set to 55F for this climate zone.&quot;,
+    &quot;Chilled water supply temperature reset from 42F to 48F during low load.&quot;,
+    &quot;The DDC controller lost communication with the supervisory network.&quot;,
+    &quot;Return air CO2 levels exceeded 1000ppm triggering demand ventilation.&quot;,
+    &quot;Heating hot water loop differential pressure setpoint is 8 PSI.&quot;,
+] * 8  # 120 samples
+
+energy_corpus = [
+    &quot;Solar photovoltaic generation peaked at 340 kW during midday hours.&quot;,
+    &quot;Battery storage discharged 500 kWh during the evening demand peak.&quot;,
+    &quot;The campus achieved a 15% reduction in carbon intensity year over year.&quot;,
+    &quot;Demand response event triggered load curtailment across three buildings.&quot;,
+    &quot;Real-time energy pricing averaged $0.12/kWh during off-peak hours.&quot;,
+    &quot;Wind turbine capacity factor reached 38% during the autumn quarter.&quot;,
+    &quot;Electric vehicle charging stations consumed 2.1 MWh overnight.&quot;,
+    &quot;Grid interconnection agreement limits export to 500 kW at the meter.&quot;,
+    &quot;Thermal energy storage shifted 200 ton-hours from peak to off-peak.&quot;,
+    &quot;Power factor correction capacitors improved the facility PF to 0.97.&quot;,
+    &quot;Microgrid islanding test successfully maintained critical loads for 4 hours.&quot;,
+    &quot;Renewable energy certificates covered 60% of annual electricity consumption.&quot;,
+    &quot;Smart meter data showed 25% baseload reduction after retrofit completion.&quot;,
+    &quot;Combined heat and power system operates at 82% total thermal efficiency.&quot;,
+    &quot;Electricity procurement strategy shifted to 70% fixed-price contracts.&quot;,
+] * 8  # 120 samples
+
+# --- Train HVAC adapter (100 steps for stronger domain signal) ---
+TRAIN_STEPS = 100
+print(f&quot;\nTraining HVAC adapter ({TRAIN_STEPS} steps)...&quot;)
+base_hvac = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+lora_cfg = LoraConfig(task_type=TaskType.CAUSAL_LM, r=8, lora_alpha=16,
+                      lora_dropout=0.05, target_modules=[&quot;c_attn&quot;])
+model_hvac = get_peft_model(base_hvac, lora_cfg, adapter_name=&quot;hvac&quot;)
+model_hvac.train()
+
+# Tokenize and train in batches
+hvac_enc = tokenizer(hvac_corpus, truncation=True, padding=True, max_length=80,
+                     return_tensors=&quot;pt&quot;).to(DEVICE)
+optimizer_h = torch.optim.AdamW(model_hvac.parameters(), lr=3e-4)
+batch_size = 16
+for step in range(TRAIN_STEPS):
+    idx = (step * batch_size) % len(hvac_corpus)
+    batch = {k: v[idx:idx+batch_size] for k, v in hvac_enc.items()}
+    out = model_hvac(**batch, labels=batch[&quot;input_ids&quot;])
+    out.loss.backward(); optimizer_h.step(); optimizer_h.zero_grad()
+    if (step + 1) % 50 == 0:
+        print(f&quot;  step {step+1}/{TRAIN_STEPS}  loss={out.loss.item():.4f}&quot;)
+
+dir_hvac = tempfile.mkdtemp(prefix=&quot;hvac_domain_&quot;)
+model_hvac.save_pretrained(dir_hvac, selected_adapters=[&quot;hvac&quot;])
+
+# --- Train Energy adapter ---
+print(f&quot;\nTraining Energy adapter ({TRAIN_STEPS} steps)...&quot;)
+base_energy = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+model_energy = get_peft_model(base_energy, lora_cfg, adapter_name=&quot;energy&quot;)
+model_energy.train()
+
+energy_enc = tokenizer(energy_corpus, truncation=True, padding=True, max_length=80,
+                       return_tensors=&quot;pt&quot;).to(DEVICE)
+optimizer_e = torch.optim.AdamW(model_energy.parameters(), lr=3e-4)
+for step in range(TRAIN_STEPS):
+    idx = (step * batch_size) % len(energy_corpus)
+    batch = {k: v[idx:idx+batch_size] for k, v in energy_enc.items()}
+    out = model_energy(**batch, labels=batch[&quot;input_ids&quot;])
+    out.loss.backward(); optimizer_e.step(); optimizer_e.zero_grad()
+    if (step + 1) % 50 == 0:
+        print(f&quot;  step {step+1}/{TRAIN_STEPS}  loss={out.loss.item():.4f}&quot;)
+
+dir_energy = tempfile.mkdtemp(prefix=&quot;energy_domain_&quot;)
+model_energy.save_pretrained(dir_energy, selected_adapters=[&quot;energy&quot;])
+
+# --- Perplexity evaluation ---
+def compute_perplexity(model, texts, tok, max_len=80):
+    &quot;&quot;&quot;Compute perplexity on a list of texts.&quot;&quot;&quot;
+    model.eval()
+    device = next(model.parameters()).device
+    total_loss, total_tokens = 0.0, 0
+    for text in texts:
+        enc = tok(text, return_tensors=&quot;pt&quot;, truncation=True, max_length=max_len).to(device)
+        with torch.no_grad():
+            out = model(**enc, labels=enc[&quot;input_ids&quot;])
+        n_tok = enc[&quot;input_ids&quot;].shape[1]
+        total_loss += out.loss.item() * n_tok
+        total_tokens += n_tok
+    return math.exp(total_loss / total_tokens)
+
+# Hold-out test sentences (never seen during training)
+hvac_test = [
+    &quot;The rooftop unit compressor is short-cycling due to low refrigerant charge.&quot;,
+    &quot;Supply air fan VFD drive faulted on overcurrent during morning startup.&quot;,
+    &quot;Occupied zone temperature drifted 3 degrees above cooling setpoint.&quot;,
+    &quot;The pneumatic-to-digital retrofit improved control accuracy by 40%.&quot;,
+    &quot;Mixed air plenum temperature sensor reading is 5 degrees below expected.&quot;,
+    &quot;The chiller sequencing algorithm prioritized the most efficient unit first.&quot;,
+    &quot;Exhaust fan interlock with the makeup air unit failed during test.&quot;,
+    &quot;Humidity control in the server room required reheat coil activation.&quot;,
+]
+energy_test = [
+    &quot;Utility demand charges accounted for 35% of the monthly electricity bill.&quot;,
+    &quot;Behind-the-meter storage reduced peak demand by 120 kW this billing cycle.&quot;,
+    &quot;The energy audit identified $180K in annual savings from lighting retrofit.&quot;,
+    &quot;Net metering credits offset daytime solar export at the retail electricity rate.&quot;,
+    &quot;Onsite cogeneration provided 60% of the facility thermal load last quarter.&quot;,
+    &quot;The power purchase agreement locked in solar energy at 4 cents per kilowatt hour.&quot;,
+    &quot;Peak shaving with battery dispatch saved $22K in demand charges this month.&quot;,
+    &quot;Carbon accounting showed a 30% reduction in Scope 2 emissions year over year.&quot;,
+]
+# Generic text — neither domain (control group)
+generic_test = [
+    &quot;The restaurant on the corner serves excellent pasta and fresh bread.&quot;,
+    &quot;Scientists discovered a new species of butterfly in the Amazon rainforest.&quot;,
+    &quot;The basketball team won their third consecutive championship last night.&quot;,
+    &quot;Modern smartphones contain more computing power than early space missions.&quot;,
+]
+
+# Load both adapters onto one base for fair comparison
+base_eval = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+
+# Base model perplexity (no adapter)
+ppl_base_hvac = compute_perplexity(base_eval, hvac_test, tokenizer)
+ppl_base_energy = compute_perplexity(base_eval, energy_test, tokenizer)
+ppl_base_generic = compute_perplexity(base_eval, generic_test, tokenizer)
+
+# Load bigger model for comparison: GPT-2 Medium (355M params, ~3x GPT-2)
+big_model_name = &quot;gpt2-medium&quot;
+print(f&quot;\nLoading {big_model_name} (355M params) for size comparison...&quot;)
+big_model = AutoModelForCausalLM.from_pretrained(big_model_name).to(DEVICE)
+big_tokenizer = AutoTokenizer.from_pretrained(big_model_name)
+big_tokenizer.pad_token = big_tokenizer.eos_token
+big_model.eval()
+big_params = sum(p.numel() for p in big_model.parameters())
+print(f&quot;  {big_model_name}: {big_params:,} params ({big_params/base_params:.1f}× GPT-2)&quot;)
+
+ppl_big_hvac = compute_perplexity(big_model, hvac_test, big_tokenizer)
+ppl_big_energy = compute_perplexity(big_model, energy_test, big_tokenizer)
+ppl_big_generic = compute_perplexity(big_model, generic_test, big_tokenizer)
+
+# HVAC adapter perplexity
+multi = PeftModel.from_pretrained(base_eval, os.path.join(dir_hvac, &quot;hvac&quot;),
+                                  adapter_name=&quot;hvac&quot;)
+multi.load_adapter(os.path.join(dir_energy, &quot;energy&quot;), adapter_name=&quot;energy&quot;)
+multi.eval()
+
+multi.set_adapter(&quot;hvac&quot;)
+ppl_hvac_on_hvac = compute_perplexity(multi, hvac_test, tokenizer)
+ppl_hvac_on_energy = compute_perplexity(multi, energy_test, tokenizer)
+ppl_hvac_on_generic = compute_perplexity(multi, generic_test, tokenizer)
+
+multi.set_adapter(&quot;energy&quot;)
+ppl_energy_on_hvac = compute_perplexity(multi, hvac_test, tokenizer)
+ppl_energy_on_energy = compute_perplexity(multi, energy_test, tokenizer)
+ppl_energy_on_generic = compute_perplexity(multi, generic_test, tokenizer)
+
+print(f&quot;\n{&#x27;─&#x27; * 86}&quot;)
+print(f&quot;  PERPLEXITY TABLE (lower = model knows the domain better)&quot;)
+print(f&quot;  Test on hold-out sentences never seen during training&quot;)
+print(f&quot;{&#x27;─&#x27; * 86}&quot;)
+print(f&quot;  {&#x27;Model&#x27;:&lt;28s} {&#x27;HVAC (8)&#x27;:&gt;12s}  {&#x27;Energy (8)&#x27;:&gt;12s}  {&#x27;Generic (4)&#x27;:&gt;12s}&quot;)
+print(f&quot;  {&#x27;─&#x27; * 28}  {&#x27;─&#x27; * 12}  {&#x27;─&#x27; * 12}  {&#x27;─&#x27; * 12}&quot;)
+print(f&quot;  {&#x27;GPT-2 (124M, base)&#x27;:&lt;28s} {ppl_base_hvac:&gt;12.1f}  {ppl_base_energy:&gt;12.1f}  {ppl_base_generic:&gt;12.1f}&quot;)
+print(f&quot;  {&#x27;GPT-2 Medium (355M)&#x27;:&lt;28s} {ppl_big_hvac:&gt;12.1f}  {ppl_big_energy:&gt;12.1f}  {ppl_big_generic:&gt;12.1f}&quot;)
+print(f&quot;  {&#x27;GPT-2 + HVAC adapter&#x27;:&lt;28s} {ppl_hvac_on_hvac:&gt;12.1f}  {ppl_hvac_on_energy:&gt;12.1f}  {ppl_hvac_on_generic:&gt;12.1f}&quot;)
+print(f&quot;  {&#x27;GPT-2 + Energy adapter&#x27;:&lt;28s} {ppl_energy_on_hvac:&gt;12.1f}  {ppl_energy_on_energy:&gt;12.1f}  {ppl_energy_on_generic:&gt;12.1f}&quot;)
+print(f&quot;{&#x27;─&#x27; * 86}&quot;)
+
+# Key comparison: small+adapter vs big model
+hvac_adapter_vs_big = &quot;✓ SMALL + ADAPTER WINS&quot; if ppl_hvac_on_hvac &lt; ppl_big_hvac else &quot;  big model still better&quot;
+energy_adapter_vs_big = &quot;✓ SMALL + ADAPTER WINS&quot; if ppl_energy_on_energy &lt; ppl_big_energy else &quot;  big model still better&quot;
+generic_big_vs_adapter = &quot;✓ BIG MODEL WINS (expected)&quot; if ppl_big_generic &lt; ppl_hvac_on_generic else &quot;  adapter transferred&quot;
+
+# Highlight the diagonal — each adapter should win on its own domain
+hvac_best = &quot;✓ HVAC wins&quot; if ppl_hvac_on_hvac &lt; ppl_energy_on_hvac else &quot;✗ unexpected&quot;
+energy_best = &quot;✓ Energy wins&quot; if ppl_energy_on_energy &lt; ppl_hvac_on_energy else &quot;✗ unexpected&quot;
+
+print(f&quot;\n  VALIDATION 1 — Adapter specialization (small model):&quot;)
+print(f&quot;    On HVAC text:    HVAC adapter={ppl_hvac_on_hvac:.1f} vs Energy={ppl_energy_on_hvac:.1f}  → {hvac_best}&quot;)
+print(f&quot;    On Energy text:  Energy adapter={ppl_energy_on_energy:.1f} vs HVAC={ppl_hvac_on_energy:.1f}  → {energy_best}&quot;)
+print(f&quot;&quot;)
+print(f&quot;  VALIDATION 2 — Small + adapter vs 3× bigger model:&quot;)
+print(f&quot;    HVAC text:    GPT-2+adapter={ppl_hvac_on_hvac:.1f} vs GPT-2 Medium={ppl_big_hvac:.1f}  → {hvac_adapter_vs_big}&quot;)
+print(f&quot;    Energy text:  GPT-2+adapter={ppl_energy_on_energy:.1f} vs GPT-2 Medium={ppl_big_energy:.1f}  → {energy_adapter_vs_big}&quot;)
+print(f&quot;    Generic text: GPT-2 Medium={ppl_big_generic:.1f} vs GPT-2+adapter={ppl_hvac_on_generic:.1f}  → {generic_big_vs_adapter}&quot;)
+print(f&quot;&quot;)
+print(f&quot;  VALIDATION 3 — Improvement percentages:&quot;)
+print(f&quot;    HVAC adapter on HVAC text:     {(1 - ppl_hvac_on_hvac/ppl_base_hvac)*100:+.1f}% vs base&quot;)
+print(f&quot;    Energy adapter on Energy text:  {(1 - ppl_energy_on_energy/ppl_base_energy)*100:+.1f}% vs base&quot;)
+print(f&quot;    GPT-2 Medium on HVAC text:      {(1 - ppl_big_hvac/ppl_base_hvac)*100:+.1f}% vs base (just from being bigger)&quot;)
+print(f&quot;    GPT-2 Medium on Energy text:    {(1 - ppl_big_energy/ppl_base_energy)*100:+.1f}% vs base (just from being bigger)&quot;)
+print(f&quot;&quot;)
+print(f&quot;  THE ARGUMENT: A 124M model + 1 MB adapter can match or beat a 355M model&quot;)
+print(f&quot;  on domain text — at 1/3 the memory, 1/3 the latency, and the adapter&quot;)
+print(f&quot;  can be swapped in milliseconds. Best is not always better.&quot;)
+
+# --- Generation comparison table ---
+# Mix of domain-specific, ambiguous, and cross-domain prompts
+prompts = [
+    # HVAC-leaning
+    &quot;The building system&quot;,
+    &quot;The controller reported&quot;,
+    &quot;The temperature in zone&quot;,
+    # Energy-leaning
+    &quot;Energy consumption&quot;,
+    &quot;The solar panels&quot;,
+    &quot;Peak demand&quot;,
+    # Ambiguous — could go either way
+    &quot;The facility manager&quot;,
+    &quot;The sensor detected&quot;,
+]
+
+print(f&quot;\n{&#x27;─&#x27; * 90}&quot;)
+print(f&quot;  GENERATION COMPARISON (greedy, 30 tokens)&quot;)
+print(f&quot;  4 models: GPT-2 base (124M), GPT-2 Medium (355M), GPT-2 + HVAC adapter, GPT-2 + Energy adapter&quot;)
+print(f&quot;{&#x27;─&#x27; * 90}&quot;)
+
+for prompt in prompts:
+    inp = tokenizer(prompt, return_tensors=&quot;pt&quot;).to(DEVICE)
+    inp_big = big_tokenizer(prompt, return_tensors=&quot;pt&quot;).to(DEVICE)
+    print(f&quot;\n  Prompt: \&quot;{prompt}\&quot;&quot;)
+
+    # Base (disable adapters)
+    multi.disable_adapter_layers()
+    with torch.no_grad():
+        out = multi.generate(**inp, max_new_tokens=30, do_sample=False)
+    print(f&quot;  [GPT-2 124M]      {tokenizer.decode(out[0], skip_special_tokens=True)}&quot;)
+    multi.enable_adapter_layers()
+
+    # GPT-2 Medium
+    with torch.no_grad():
+        out = big_model.generate(**inp_big, max_new_tokens=30, do_sample=False,
+                                 pad_token_id=big_tokenizer.eos_token_id)
+    print(f&quot;  [GPT-2 Medium]    {big_tokenizer.decode(out[0], skip_special_tokens=True)}&quot;)
+
+    # HVAC
+    multi.set_adapter(&quot;hvac&quot;)
+    with torch.no_grad():
+        out = multi.generate(**inp, max_new_tokens=30, do_sample=False)
+    print(f&quot;  [124M + hvac]     {tokenizer.decode(out[0], skip_special_tokens=True)}&quot;)
+
+    # Energy
+    multi.set_adapter(&quot;energy&quot;)
+    with torch.no_grad():
+        out = multi.generate(**inp, max_new_tokens=30, do_sample=False)
+    print(f&quot;  [124M + energy]   {tokenizer.decode(out[0], skip_special_tokens=True)}&quot;)
+
+print(f&quot;\n{&#x27;─&#x27; * 90}&quot;)
+print(f&quot;  The 124M model + domain adapter produces more relevant completions than&quot;)
+print(f&quot;  the 355M model on domain text — at 1/3 the memory and 1/3 the latency.&quot;)
+print(f&quot;  On generic text, the bigger model wins — as expected.&quot;)
+print(f&quot;  That&#x27;s the trade-off. Best is not always better.&quot;)
+print(f&quot;{&#x27;─&#x27; * 90}&quot;)
+
+del big_model  # free memory for benchmark section
+import gc; gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+
+# Save references for Part G benchmark
+dir_a = dir_hvac
+dir_b = dir_energy
+
+print(f&quot;&quot;&quot;
+┌─────────────────────────────────────────────────────────────────────┐
+│  THE ADAPTER REGISTRY PATTERN                                       │
+│                                                                     │
+│  One base model + named adapters = organizational knowledge registry│
+│                                                                     │
+│  ┌──────────┐   ┌───────────────┐                                   │
+│  │ Base Model│──▶│ hvac-faults   │ ← domain expertise, versioned    │
+│  │ (shared)  │──▶│ energy-opt    │ ← independently trainable        │
+│  │           │──▶│ maintenance   │ ← auditable, swappable           │
+│  │           │──▶│ compliance    │ ← add/retire without touching    │
+│  └──────────┘   └───────────────┘   the base model                  │
+│                                                                     │
+│  Add knowledge  → train a new adapter                               │
+│  Retire knowledge → delete the adapter                              │
+│  Update knowledge → retrain, push new version to Hub                │
+│                                                                     │
+│  An org that maintains an adapter registry OWNS its AI knowledge —  │
+│  versioned like code, auditable like data, vendor-independent.      │
+└─────────────────────────────────────────────────────────────────────┘
+&quot;&quot;&quot;)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART G: The Numbers — Adapter vs Full Model (realistic benchmark)
+# ═══════════════════════════════════════════════════════════════════════════════
+# The real argument: measure load time, swap time, disk, and memory.
+# This uses the adapters we already trained above.
+
+print(&quot;\n&quot; + &quot;=&quot; * 72)
+print(&quot;PART G: Benchmark — Adapter advantage in real numbers&quot;)
+print(&quot;=&quot; * 72)
+
+import time
+import gc
+
+N_ADAPTERS = 5  # simulate 5 domain specialists
+
+# --- 1. Disk cost: N full models vs 1 base + N adapters ---
+adapter_file = os.path.join(dir_a, &quot;hvac&quot;, &quot;adapter_model.safetensors&quot;)
+adapter_disk = os.path.getsize(adapter_file)
+base_disk = base_params * 4  # fp32 approximation
+
+full_model_disk = N_ADAPTERS * base_disk
+registry_disk = base_disk + N_ADAPTERS * adapter_disk
+
+print(f&quot;\n1. DISK COST ({N_ADAPTERS} specialists)&quot;)
+print(f&quot;   Full-model approach:     {N_ADAPTERS} × {base_disk/1024/1024:.0f} MB = &quot;
+      f&quot;{full_model_disk/1024/1024:.0f} MB&quot;)
+print(f&quot;   Adapter registry:        1 × {base_disk/1024/1024:.0f} MB + &quot;
+      f&quot;{N_ADAPTERS} × {adapter_disk/1024/1024:.1f} MB = &quot;
+      f&quot;{registry_disk/1024/1024:.0f} MB&quot;)
+print(f&quot;   Savings:                 {(1 - registry_disk/full_model_disk)*100:.0f}%&quot;)
+
+# --- 2. Load time: full model vs adapter ---
+# Warm-up (ensure model is cached on disk)
+_ = AutoModelForCausalLM.from_pretrained(model_name)
+del _; gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+
+# Time loading a full model from scratch
+times_full = []
+for _ in range(3):
+    gc.collect()
+    t0 = time.perf_counter()
+    m = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+    times_full.append(time.perf_counter() - t0)
+    del m; gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+avg_full = sum(times_full) / len(times_full)
+
+# Time loading base once + adapter on top
+times_adapter = []
+base_load = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+for _ in range(3):
+    gc.collect()
+    t0 = time.perf_counter()
+    m = PeftModel.from_pretrained(base_load, os.path.join(dir_a, &quot;hvac&quot;),
+                                  adapter_name=&quot;test&quot;, is_trainable=False)
+    times_adapter.append(time.perf_counter() - t0)
+    m.delete_adapter(&quot;test&quot;)
+    gc.collect()
+
+avg_adapter = sum(times_adapter) / len(times_adapter)
+
+print(f&quot;\n2. LOAD TIME (avg of 3 runs)&quot;)
+print(f&quot;   Load full model:         {avg_full*1000:.0f} ms&quot;)
+print(f&quot;   Load adapter (base warm):{avg_adapter*1000:.0f} ms&quot;)
+print(f&quot;   Speedup:                 {avg_full/avg_adapter:.1f}×&quot;)
+
+# --- 3. Adapter swap time ---
+# Load two adapters, measure set_adapter() time
+swap_model = PeftModel.from_pretrained(base_load, os.path.join(dir_a, &quot;hvac&quot;),
+                                       adapter_name=&quot;hvac&quot;)
+swap_model.load_adapter(os.path.join(dir_b, &quot;energy&quot;), adapter_name=&quot;energy&quot;)
+swap_model.eval()
+
+times_swap = []
+for _ in range(20):
+    t0 = time.perf_counter()
+    swap_model.set_adapter(&quot;energy&quot;)
+    times_swap.append(time.perf_counter() - t0)
+    t0 = time.perf_counter()
+    swap_model.set_adapter(&quot;hvac&quot;)
+    times_swap.append(time.perf_counter() - t0)
+
+avg_swap = sum(times_swap) / len(times_swap)
+
+print(f&quot;\n3. ADAPTER SWAP TIME (avg of 40 swaps)&quot;)
+print(f&quot;   set_adapter():           {avg_swap*1000:.2f} ms&quot;)
+print(f&quot;   vs loading full model:   {avg_full*1000:.0f} ms&quot;)
+print(f&quot;   Speedup:                 {avg_full/avg_swap:.0f}×&quot;)
+
+# --- 4. Inference latency (adapter vs merged vs base) ---
+prompt = &quot;The building management system&quot;
+input_ids = tokenizer(prompt, return_tensors=&quot;pt&quot;).to(DEVICE)
+
+# Adapter inference
+swap_model.set_adapter(&quot;hvac&quot;)
+times_inf_adapter = []
+for _ in range(5):
+    t0 = time.perf_counter()
+    with torch.no_grad():
+        swap_model.generate(**input_ids, max_new_tokens=20, do_sample=False)
+    times_inf_adapter.append(time.perf_counter() - t0)
+
+avg_inf_adapter = sum(times_inf_adapter) / len(times_inf_adapter)
+
+# Merged inference (from Part D — use a fresh merge)
+merged_bench = swap_model.merge_and_unload()
+merged_bench.eval()
+times_inf_merged = []
+for _ in range(5):
+    t0 = time.perf_counter()
+    with torch.no_grad():
+        merged_bench.generate(**input_ids, max_new_tokens=20, do_sample=False)
+    times_inf_merged.append(time.perf_counter() - t0)
+
+avg_inf_merged = sum(times_inf_merged) / len(times_inf_merged)
+
+print(f&quot;\n4. INFERENCE LATENCY (20 tokens, avg of 5 runs)&quot;)
+print(f&quot;   With PEFT adapter:       {avg_inf_adapter*1000:.0f} ms&quot;)
+print(f&quot;   Merged (no PEFT):        {avg_inf_merged*1000:.0f} ms&quot;)
+overhead_pct = ((avg_inf_adapter - avg_inf_merged) / avg_inf_merged * 100)
+print(f&quot;   PEFT overhead:           {overhead_pct:+.1f}%&quot;)
+
+# --- Summary table ---
+print(f&quot;&quot;&quot;
+┌──────────────────────────────────────────────────────────────────────┐
+│  ADAPTER REGISTRY vs FULL-MODEL APPROACH ({N_ADAPTERS} specialists)          │
+├───────────────────────────┬──────────────────┬───────────────────────┤
+│  Metric                   │  Full Models     │  Adapter Registry     │
+├───────────────────────────┼──────────────────┼───────────────────────┤
+│  Disk ({N_ADAPTERS} specialists)       │  {full_model_disk/1024/1024:&gt;6.0f} MB       │  {registry_disk/1024/1024:&gt;6.0f} MB              │
+│  Load new specialist      │  {avg_full*1000:&gt;6.0f} ms       │  {avg_adapter*1000:&gt;6.0f} ms (adapter)     │
+│  Switch specialist        │  {avg_full*1000:&gt;6.0f} ms       │  {avg_swap*1000:&gt;6.2f} ms (set_adapter) │
+│  Inference (20 tok)       │  {avg_inf_merged*1000:&gt;6.0f} ms       │  {avg_inf_adapter*1000:&gt;6.0f} ms              │
+│  Add new domain           │  Clone + retrain │  Train adapter only   │
+│  Version control          │  Full checkpoint │  ~{adapter_disk/1024:.0f} KB file          │
+└───────────────────────────┴──────────────────┴───────────────────────┘
+&quot;&quot;&quot;)
+
+del base_load, swap_model, merged_bench
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART H: Push to Hub (explained, not executed)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Pushing adapters to the Hub follows the same pattern as full models.
+# We show the code but don&#x27;t execute it (requires authentication).
+
+print(&quot;\n&quot; + &quot;=&quot; * 72)
+print(&quot;PART H: Pushing adapters to the HuggingFace Hub&quot;)
+print(&quot;=&quot; * 72)
+
+print(&quot;&quot;&quot;
+# ── Push adapter to Hub ──────────────────────────────────────────────
+# Requires: huggingface-cli login (or HF_TOKEN env var)
+
+# After training:
+model.push_to_hub(&quot;your-username/gpt2-hvac-lora&quot;)
+tokenizer.push_to_hub(&quot;your-username/gpt2-hvac-lora&quot;)
+
+# What gets uploaded:
+#   adapter_config.json        (~1 KB)  — LoRA hyperparameters
+#   adapter_model.safetensors  (~5 MB)  — just the LoRA weights
+#   tokenizer files            (~2 MB)  — for reproducibility
+#
+# Total upload: ~7 MB instead of ~500 MB
+
+# ── Pull adapter from Hub ────────────────────────────────────────────
+from peft import PeftModel
+base = AutoModelForCausalLM.from_pretrained(&quot;openai-community/gpt2&quot;)
+model = PeftModel.from_pretrained(base, &quot;your-username/gpt2-hvac-lora&quot;)
+
+# ── Or use AutoPeftModel (auto-detects base model) ───────────────────
+from peft import AutoPeftModelForCausalLM
+model = AutoPeftModelForCausalLM.from_pretrained(&quot;your-username/gpt2-hvac-lora&quot;)
+# ^ reads adapter_config.json → finds base_model_name_or_path → loads both
+
+# ── Private adapters for teams ────────────────────────────────────────
+model.push_to_hub(&quot;my-org/hvac-fault-adapter&quot;, private=True)
+# Team members: PeftModel.from_pretrained(base, &quot;my-org/hvac-fault-adapter&quot;)
+&quot;&quot;&quot;)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART I: Cheatsheet
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print(&quot;=&quot; * 72)
+print(&quot;CHEATSHEET: Adapter Lifecycle&quot;)
+print(&quot;=&quot; * 72)
+print(&quot;&quot;&quot;
+  ┌─────────────┐     save_pretrained()     ┌──────────────────┐
+  │   Train      │ ────────────────────────▶ │  Local Disk      │
+  │   (LoRA)     │                           │  adapter_config   │
+  │              │     push_to_hub()         │  adapter_model    │
+  │              │ ────────────────────────▶ │  (~5 MB)          │
+  └─────────────┘                           └──────────────────┘
+                                                     │
+                      PeftModel.from_pretrained()    │
+                   ◀─────────────────────────────────┘
+                      (local path OR Hub repo ID)
+                                │
+                ┌───────────────┼───────────────┐
+                ▼               ▼               ▼
+         ┌────────────┐  ┌───────────┐  ┌─────────────┐
+         │ Inference   │  │  Merge    │  │  Swap       │
+         │ (with PEFT) │  │  &amp; Unload │  │  Adapters   │
+         │             │  │           │  │             │
+         │ model.eval()│  │ No PEFT   │  │ set_adapter │
+         │ generate()  │  │ at deploy │  │ (&quot;hvac&quot;)    │
+         └────────────┘  └───────────┘  └─────────────┘
+
+  ╔═══════════════════════════════════════════════════════════════════╗
+  ║  GOTCHAS                                                         ║
+  ╠═══════════════════════════════════════════════════════════════════╣
+  ║  • get_peft_model() = create new adapter for TRAINING            ║
+  ║    PeftModel.from_pretrained() = LOAD trained adapter            ║
+  ║    Mixing them up = random weights or crashes.                   ║
+  ║                                                                  ║
+  ║  • merge_and_unload() is NOT in-place:                           ║
+  ║    model = model.merge_and_unload()  ✓                           ║
+  ║    model.merge_and_unload()          ✗ (returns new, ignores)    ║
+  ║                                                                  ║
+  ║  • Base model version must match. adapter_config.json records    ║
+  ║    the base model — load a different one and shapes mismatch.    ║
+  ║                                                                  ║
+  ║  • load_adapter() does NOT activate it. Call set_adapter() too.  ║
+  ║                                                                  ║
+  ║  • QLoRA: if you trained with 4-bit base, load with 4-bit base. ║
+  ║    Adapter weights are fp32 regardless.                          ║
+  ╚═══════════════════════════════════════════════════════════════════╝
+&quot;&quot;&quot;)
+
+print(&quot;Done. Run this script in .venv (requires peft, transformers, torch).&quot;)
+</pre>
+  </details>
+
 
 <!-- ════════════════ PART V ════════════════ -->
 <div class="part-banner" id="partv" style="background:linear-gradient(135deg,#0891b2,#155e75); padding:30px 34px; border-radius:14px; margin:34px 0 6px;">
