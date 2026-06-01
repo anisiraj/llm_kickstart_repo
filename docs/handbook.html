@@ -1049,9 +1049,86 @@ out = trainer.<span class="fn">predict</span>(test_ds)      <span class="cm"># o
     <div><div class="chapter-title">Bring Your Own Data</div><div class="chapter-subtitle">CSV · JSONL · Plain text → trainer-ready datasets</div></div>
   </div>
 
-  <p class="chapter-intro">Every trainer expects a specific column layout. This section shows exactly how to get your CSV, JSONL, or plain text files into the right shape — no guessing, just <code>load_dataset()</code> + one <code>.map()</code> call.</p>
+  <p class="chapter-intro">This is the chapter that quietly decides whether your fine-tune works. Get the data shape right and the trainer does the correct thing automatically; get it subtly wrong and training looks healthy while the model learns the wrong thing. So before any <code>load_dataset()</code> call, we'll build up — from zero — the three ideas everything else rests on: <strong>the tokenizer</strong>, <strong>the chat template</strong>, and <strong>how those two create the loss mask</strong>. Every sequence and number below was produced by running the real <code>SmolLM2-135M-Instruct</code> tokenizer, not sketched.</p>
 
-  <div class="grid2" style="gap:14px;">
+  <!-- ON-RAMP 1: tokenizer + chat template from zero -->
+  <div class="card full" style="margin-top:8px; border:1px solid #7c3aed;">
+    <div class="card-title" style="background:#3b0764; color:#e9d5ff;">① First principles: a model only ever sees a flat list of token IDs</div>
+    <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
+      A language model cannot read your Python dict <code>{"role": "user", "content": "What is HVAC?"}</code>. It can't even read text. It reads <strong>integers</strong> — token IDs. Two objects bridge the gap, and they're worth naming precisely because the rest of the chapter is just consequences of them:
+      <ul style="padding-left:18px; margin:8px 0; color:#cbd5e1;">
+        <li><strong>The tokenizer</strong> turns a string into a list of integer IDs (and back). <code>"What is HVAC?"</code> → <code>[1780, 314, 30551, 47]</code>. That's it — a reversible string↔integer codec the model was trained alongside.</li>
+        <li><strong>The chat template</strong> is a small <a href="https://huggingface.co/docs/transformers/chat_templating" target="_blank" style="color:#c4b5fd;">Jinja snippet stored on the tokenizer</a> (<code>tokenizer.chat_template</code>) that turns a <em>list of role/content messages</em> into <em>one flat string</em>, inserting the special control tokens the model was fine-tuned to recognize — like <code>&lt;|im_start|&gt;</code> and <code>&lt;|im_end|&gt;</code>. As the official transformers docs put it: <em>"the list of role and content dictionaries you pass to a chat model gets converted to a token sequence, often with control tokens like <code>&lt;|user|&gt;</code> or <code>&lt;|assistant|&gt;</code>."</em></li>
+      </ul>
+      <div class="tip"><strong>Why this matters for data prep:</strong> the model has no built-in notion of "user" or "assistant." It only learned that the token <code>&lt;|im_start|&gt;assistant</code> means "your turn starts here." The chat template is the <em>only</em> thing that puts those tokens in the right places. Different model families use different control tokens (ChatML's <code>&lt;|im_start|&gt;</code>, Llama-3's <code>&lt;|start_header_id|&gt;</code>, Mistral's <code>[INST]</code>) — so you never hardcode them; you let the tokenizer's own template do it. <strong>Always check what you have first:</strong> <code>print(tokenizer.chat_template)</code> — <code>None</code> means a base model with no template (you'll need to supply one).</div>
+    </div>
+  </div>
+
+  <!-- ON-RAMP 2: see the real sequence -->
+  <div class="card full" style="margin-top:14px; border:1px solid #7c3aed;">
+    <div class="card-title" style="background:#3b0764; color:#e9d5ff;">② See the actual string the model trains on (measured, not sketched)</div>
+    <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
+      Take one Q&amp;A pair and run it through <code>apply_chat_template</code>. Here is the <em>exact</em> output from the SmolLM2 tokenizer (ChatML), with the control tokens highlighted:
+<pre>msgs = [{<span class="st">"role"</span>:<span class="st">"user"</span>,      <span class="st">"content"</span>:<span class="st">"What is HVAC?"</span>},
+        {<span class="st">"role"</span>:<span class="st">"assistant"</span>, <span class="st">"content"</span>:<span class="st">"Heating, Ventilation, and Air Conditioning."</span>}]
+text = tok.<span class="fn">apply_chat_template</span>(msgs, tokenize=<span class="kw">False</span>)   <span class="cm"># add_generation_prompt=False (training)</span>
+
+<span class="cm"># ── exact output ──</span>
+<span class="kw">&lt;|im_start|&gt;</span>system
+You are a helpful AI assistant named SmolLM, trained by Hugging Face<span class="kw">&lt;|im_end|&gt;</span>
+<span class="kw">&lt;|im_start|&gt;</span>user
+What is HVAC?<span class="kw">&lt;|im_end|&gt;</span>
+<span class="kw">&lt;|im_start|&gt;</span>assistant
+Heating, Ventilation, and Air Conditioning.<span class="kw">&lt;|im_end|&gt;</span></pre>
+      Three things to notice, because each one bites someone: <strong>(1)</strong> a <code>system</code> message you never wrote was injected — SmolLM's template adds a default one. <strong>(2)</strong> Every turn is wrapped in <code>&lt;|im_start|&gt;role … &lt;|im_end|&gt;</code>. <strong>(3)</strong> The whole conversation became <em>one string</em> — the dict structure is gone. That string is what gets tokenized into IDs and fed to the model.
+      <div class="warn" style="margin-top:8px;"><strong>The duplicate-special-tokens trap:</strong> the template already inserts all needed special tokens. If you render with <code>tokenize=False</code> and then tokenize the string yourself, pass <code>add_special_tokens=False</code> — otherwise the tokenizer prepends another <code>&lt;bos&gt;</code> and you train on a malformed sequence. (Using <code>tokenize=True</code> directly avoids this entirely — the safer option, per the transformers docs.)</div>
+    </div>
+  </div>
+
+  <!-- ON-RAMP 3: how the template creates the loss mask -->
+  <div class="card full" style="margin-top:14px; border:2px solid #7c3aed;">
+    <div class="card-title" style="background:#3b0764; color:#e9d5ff;">③ How that string becomes the loss mask — the whole game, token by token</div>
+    <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
+      SFT for a Q&amp;A model should teach it to <em>produce the answer</em>, not to recite the question. "Completion-only loss" does exactly that by setting every <strong>prompt</strong> token's label to <code>-100</code> (PyTorch's cross-entropy ignore index) and keeping only the <strong>answer</strong> tokens live. Here is the real 46-token sequence from the pair above, with the actual mask TRL computes — <strong>34 masked, 12 learned</strong>:
+<pre><span class="cm"># idx  token                     label</span>
+[ 0] <span class="st">'&lt;|im_start|&gt;'</span>            <span class="cm">-100   🚫 system…</span>
+ ...  (system + user turn)      <span class="cm">-100   🚫</span>
+[26] <span class="st">' HVAC'</span>                   <span class="cm">-100   🚫</span>
+[27] <span class="st">'?'</span>                       <span class="cm">-100   🚫</span>
+[28] <span class="st">'&lt;|im_end|&gt;'</span>              <span class="cm">-100   🚫</span>
+[30] <span class="st">'&lt;|im_start|&gt;'</span>            <span class="cm">-100   🚫</span>
+[31] <span class="st">'ass'</span> [32] <span class="st">'istant'</span> [33] <span class="st">'\n'</span>  <span class="cm">-100   🚫  ← prompt ends here</span>
+[34] <span class="st">'He'</span>                      <span class="cm">3681   ✏️ learn  ← answer starts</span>
+[35] <span class="st">'ating'</span> ... [43] <span class="st">'.'</span>        <span class="cm">      ✏️ learn</span>
+[44] <span class="st">'&lt;|im_end|&gt;'</span>              <span class="cm">      ✏️ learn  ← learn to STOP, too</span>
+[45] <span class="st">'\n'</span>                      <span class="cm">      ✏️ learn</span>
+<span class="cm"># measured: 34/46 masked, 12 learned → 26% unmasked</span></pre>
+      <strong>Read what the model is being graded on:</strong> only positions 34–45 — the answer text <em>plus</em> the closing <code>&lt;|im_end|&gt;</code> (so it learns where to stop). The attention is never masked — the model still <em>reads</em> the whole question — we simply refuse to <em>grade</em> its predictions on the prompt. Mask the wrong span and the loss still drops; you've just taught the wrong skill.
+      <div class="good" style="margin-top:8px;">The boundary the mask keys off is literally <code>&lt;|im_start|&gt;assistant\n</code> — the template's own control tokens. That's why "data prep" and "loss" are the same topic: <strong>the chat template draws the line, and the line is where the mask flips from 🚫 to ✏️.</strong> Full mechanics + the three ways to set this: <a href="#lossmasking" style="color:#c4b5fd;">Loss-Masking chapter</a>.</div>
+    </div>
+  </div>
+
+  <!-- ON-RAMP 4: training vs inference -->
+  <div class="card full" style="margin-top:14px; border:1px solid #38bdf8;">
+    <div class="card-title" style="background:#0c4a6e; color:#bae6fd;">④ One flag flips the same template between training and inference</div>
+    <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
+      The same <code>apply_chat_template</code> is used at train time and at generation time — the only difference is <code>add_generation_prompt</code>, and getting it backwards is a top "why is my model broken" cause:
+      <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.84em;">
+        <tr style="border-bottom:2px solid #475569;"><th style="text-align:left; padding:6px 8px;"></th><th style="text-align:left; padding:6px 8px;">Training</th><th style="text-align:left; padding:6px 8px;">Inference</th></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;">flag</td><td style="padding:6px 8px;"><code>add_generation_prompt=False</code> (default)</td><td style="padding:6px 8px;"><code>add_generation_prompt=True</code></td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;">you pass</td><td style="padding:6px 8px;">the <em>full</em> conversation (incl. the assistant answer)</td><td style="padding:6px 8px;">only the user turn(s)</td></tr>
+        <tr style="border-bottom:1px solid #1e293b;"><td style="padding:6px 8px;">string ends with</td><td style="padding:6px 8px;"><code>…Air Conditioning.&lt;|im_end|&gt;</code></td><td style="padding:6px 8px;"><code>…&lt;|im_start|&gt;assistant\n</code> (open turn)</td></tr>
+        <tr><td style="padding:6px 8px;">so the model…</td><td style="padding:6px 8px;">learns "given the full turn, predict each next token"</td><td style="padding:6px 8px;">is asked to <em>write</em> the assistant turn from here</td></tr>
+      </table>
+      </div>
+      <div class="tip" style="margin-top:8px;">Per the transformers docs: <em>"Set <code>add_generation_prompt=False</code> [during training] because the additional tokens to prompt an assistant response aren't helpful during training."</em> At inference you flip it to <code>True</code> so the string stops exactly at <code>&lt;|im_start|&gt;assistant\n</code> and the model continues from there. Train with the full turn; generate with the open turn. Same template, one flag.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:18px; font-size:0.7em; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#7c3aed;">Now the mechanics: loading &amp; reshaping your files</div>
+
+  <div class="grid2" style="gap:14px; margin-top:8px;">
 
     <div class="card" style="border-color:#7c3aed;">
       <div class="card-title" style="background:#3b0764; color:#e9d5ff;">📥 Loading Your Files</div>
@@ -1204,10 +1281,73 @@ ds.<span class="fn">save_to_disk</span>(<span class="st">"processed_dataset/"</s
         <ul style="padding-left:18px; margin:6px 0; color:#94a3b8;">
           <li><strong>You actually want full-sequence loss</strong> — i.e. CPT / continued pretraining on chat-formatted text (you <em>want</em> it to learn the whole turn structure).</li>
           <li><strong>Your data doesn't fit the four shapes</strong> (odd columns like Alpaca's <code>instruction/input/output</code>) and you'd rather format once with <code>formatting_func</code> — accepting full-sequence loss.</li>
-          <li><strong>You're using Unsloth's <code>train_on_responses_only</code></strong>, which re-introduces the mask <em>after</em> templating by string-matching the response marker — the one supported way to get completion-only behavior from flattened chat text (see <a href="#engines" style="color:#c4b5fd;">Engines</a>).</li>
+          <li><strong>You're using Unsloth's <code>train_on_responses_only</code></strong> — it re-introduces the mask <em>after</em> templating (illustrated just below), the supported way to get completion-only behavior from already-templated chat text.</li>
         </ul>
       </div>
       <div class="good" style="margin-top:6px;"><strong>Default recommendation:</strong> for instruction/Q&amp;A SFT, keep your data as <code>prompt</code> + <code>completion</code> (or <code>messages</code>) and let TRL apply the template. You get correct completion-only masking for free, and your dataset stays inspectable. Only flatten to <code>"text"</code> when you genuinely want full-sequence loss. Full mechanics in the <a href="#lossmasking" style="color:#c4b5fd;">Loss-Masking chapter</a>; sources: <a href="https://huggingface.co/docs/trl/sft_trainer" target="_blank" style="color:#c4b5fd;">TRL SFT Trainer</a> · <a href="https://huggingface.co/docs/trl/dataset_formats" target="_blank" style="color:#c4b5fd;">Dataset formats</a>.</div>
+    </div>
+  </div>
+
+  <!-- UNSLOTH train_on_responses_only ILLUSTRATED -->
+  <div class="card full" style="margin-top:18px; border:1px solid #b45309;">
+    <div class="card-title" style="background:#713f12; color:#fde68a;">🔁 What <code>train_on_responses_only</code> actually does — illustrated on the real sequence</div>
+    <div class="card-body" style="font-size:0.9em; color:#cbd5e1; line-height:1.75;">
+      Here's the case the clarity card calls the exception. On the Unsloth path you often hand the trainer <em>already-templated</em> chat text (one flat string per row), so TRL has no <code>prompt</code>/<code>completion</code> boundary to build a mask from — by default it would grade <em>every</em> token (full-sequence). <code>train_on_responses_only</code> recreates completion-only masking <em>after</em> templating, by <strong>string-matching the role markers</strong>: it finds each <code>response_part</code> marker, keeps the tokens after it live, and sets everything else (system + user spans) to <code>-100</code>. Per Unsloth's docs it <em>"masks the user question and trains the model to output the assistant response with higher weighting."</em>
+      <p style="margin:10px 0 4px; color:#94a3b8;"><strong>You give it the two markers that bracket the turns</strong> (these must match your template's tokens byte-for-byte — ChatML shown; Llama-3 differs):</p>
+<pre><span class="kw">from</span> unsloth.chat_templates <span class="kw">import</span> train_on_responses_only   <span class="cm"># UNSLOTH, not TRL</span>
+trainer = <span class="fn">train_on_responses_only</span>(
+    trainer,
+    instruction_part = <span class="st">"&lt;|im_start|&gt;user\n"</span>,        <span class="cm"># everything from here … </span>
+    response_part    = <span class="st">"&lt;|im_start|&gt;assistant\n"</span>,   <span class="cm"># … up to here becomes -100</span>
+)</pre>
+      <p style="margin:10px 0 4px; color:#94a3b8;"><strong>The effect, on the same conversation</strong> — the markers split the flat string into masked vs learned spans:</p>
+<pre><span class="cm"># the one flat templated string, color-coded by resulting label:</span>
+<span class="kw">&lt;|im_start|&gt;</span>user                            <span class="cm">🚫 -100  (instruction_part marker)</span>
+What is HVAC?<span class="kw">&lt;|im_end|&gt;</span>                   <span class="cm">🚫 -100  (the question — masked)</span>
+<span class="kw">&lt;|im_start|&gt;</span>assistant                       <span class="cm">🚫 -100  (response_part marker itself)</span>
+Heating, Ventilation, and Air Cond…    <span class="cm">✏️ learn (the answer — graded)</span>
+<span class="kw">&lt;|im_end|&gt;</span>                              <span class="cm">✏️ learn (learn to stop)</span>
+<span class="cm"># identical result to completion_only_loss=True — same 12 tokens learned —</span>
+<span class="cm"># but reconstructed by MARKER MATCHING instead of from prompt/completion columns.</span></pre>
+      <div class="warn" style="margin-top:8px;"><strong>Why two ways exist, and which to pick.</strong> <code>completion_only_loss=True</code> (TRL) needs <code>prompt</code>+<code>completion</code> columns and gets the boundary <em>for free</em> from your data. <code>train_on_responses_only</code> (Unsloth) works on <em>flattened</em> chat text by matching markers — more flexible (handles multi-turn, custom formats), but it <strong>silently masks everything if your marker strings don't match the template exactly</strong> — the classic "all labels are -100, loss looks fine, model learns nothing." Its upside: you can inspect <code>trainer.train_dataset[0]["labels"]</code> and literally <em>see</em> the mask. Either way, run the <a href="#lossmasking" style="color:#fcd34d;">one-line health-check</a> before training.</div>
+      <div style="font-size:0.78em; color:#64748b; margin-top:6px;">Sources: <a href="https://unsloth.ai/docs/basics/troubleshooting-and-faqs" target="_blank" style="color:#fcd34d;">Unsloth FAQs</a> · <a href="https://github.com/unslothai/unsloth/issues/1290" target="_blank" style="color:#fcd34d;">marker-mismatch issue #1290</a>. Verified signature (installed <code>unsloth_zoo</code>): <code>train_on_responses_only(trainer, instruction_part=None, response_part=None, force_match=True, …)</code>.</div>
+    </div>
+  </div>
+
+  <!-- RESEARCH RECIPES -->
+  <div class="card full" style="margin-top:18px; border:1px solid #15803d;">
+    <div class="card-title" style="background:#14532d; color:#bbf7d0;">🧭 Recipe cards — pick the data shape + loss for your situation</div>
+    <div class="card-body" style="font-size:0.88em; color:#cbd5e1; line-height:1.7;">
+      The interplay in one place: <strong>your situation → the data shape you build → the loss that follows.</strong> These are the five that cover almost everything.
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
+
+        <div style="border:1px solid #14532d; border-radius:8px; padding:12px 14px; background:#071109;">
+          <div style="color:#86efac; font-weight:700; margin-bottom:4px;">A · Single-turn Q&amp;A on an instruct model</div>
+          <div style="font-size:0.92em;">Build <code>{"prompt","completion"}</code> (strings). Leave <code>completion_only_loss</code> at its default — TRL masks the prompt automatically. The 80%-case for "teach my model to answer questions in my domain." LoRA LR ≈ 1e-4.</div>
+        </div>
+
+        <div style="border:1px solid #14532d; border-radius:8px; padding:12px 14px; background:#071109;">
+          <div style="color:#86efac; font-weight:700; margin-bottom:4px;">B · Multi-turn chat (user↔assistant↔…)</div>
+          <div style="font-size:0.92em;">Build <code>{"messages":[…]}</code> and set <code>assistant_only_loss=True</code> so every user turn in the middle is masked, every assistant turn is learned. <strong>Requires</strong> a template with <code>{% generation %}</code> markers (TRL auto-patches Qwen3/Llama-3/Gemma/Phi-3/…; not SmolLM2).</div>
+        </div>
+
+        <div style="border:1px solid #14532d; border-radius:8px; padding:12px 14px; background:#071109;">
+          <div style="color:#86efac; font-weight:700; margin-bottom:4px;">C · Turn a base model into an instruct model</div>
+          <div style="font-size:0.92em;">Base model + a chat dataset. Pass <code>SFTConfig(chat_template_path="…")</code> to import a template, add its special tokens, and resize embeddings — then it trains like B. Needs <em>thousands</em> of examples; a few hundred won't instill chat behavior.</div>
+        </div>
+
+        <div style="border:1px solid #14532d; border-radius:8px; padding:12px 14px; background:#071109;">
+          <div style="color:#86efac; font-weight:700; margin-bottom:4px;">D · CPT / domain adaptation on raw text</div>
+          <div style="font-size:0.92em;">Build <code>{"text": …}</code> (raw documents). <code>completion_only_loss=False</code> — you <em>want</em> loss on every token. Turn <code>packing=True</code> for efficiency. This teaches knowledge/style, not answering — usually followed by an SFT pass (A/B).</div>
+        </div>
+
+        <div style="border:1px solid #14532d; border-radius:8px; padding:12px 14px; background:#071109; grid-column:1 / -1;">
+          <div style="color:#fcd34d; font-weight:700; margin-bottom:4px;">★ E · New domain + only a little SFT data (the realistic hard case)</div>
+          <div style="font-size:0.92em;">Domain the model doesn't know, and you have just a few hundred Q&amp;A pairs. <strong>Start from the <em>instruct</em> model, not the base</strong> — your SFT set is too small to teach "be an assistant" from scratch, but it's enough to nudge domain style on top of existing chat behavior. Sequence: optional light <strong>CPT</strong> on domain <code>text</code> (Recipe D, <strong>1 epoch, replay 5–10% general chat to fight forgetting</strong>) → small <strong>SFT</strong> on <code>prompt/completion</code> (Recipe A). Smoke-test chat ability <em>between</em> the two stages; if CPT scrambled it, lower the LR/epochs before SFT. This is exactly the path the <a href="#casestudy" style="color:#fcd34d;">🧪 Case Study</a> walks, and the data-scarcity reason it matters is measured there (~99× raw-vs-instruction gap).</div>
+        </div>
+
+      </div>
+      <div style="font-size:0.78em; color:#64748b; margin-top:10px;">Recipe E's "instruct over base for small SFT" guidance follows current catastrophic-forgetting research (replay is the most effective single mitigation): <a href="https://arxiv.org/abs/2504.09687" target="_blank" style="color:#86efac;">Domain-Adaptive CPT of Small LMs (arXiv 2504.09687)</a> · <a href="https://arxiv.org/pdf/2504.17780" target="_blank" style="color:#86efac;">Replay to Remember (arXiv 2504.17780)</a>. Base-model CPT can win with very large corpora + merging, but that's a different regime.</div>
     </div>
   </div>
 </div>
