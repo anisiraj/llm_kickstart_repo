@@ -1846,6 +1846,17 @@ model.<span class="fn">push_to_hub_merged</span>(<span class="st">"user/MyModel"
     </div>
   </div>
 
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:16px 0;">
+    <div style="border:1px solid #4f46e5; border-radius:10px; padding:14px 16px; background:#0f1020;">
+      <div style="font-size:0.72em; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#a5b4fc; margin-bottom:6px;">🤔 Check yourself (Socratic)</div>
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.7;">Your last SFT came out worse than CPT. Ask: what columns did that dataset have? If it was a single <code>"text"</code> field, which <em>loss</em> did TRL actually compute — and was the model ever <em>graded</em> on producing an answer versus reciting the whole string? How would you have caught it in ten seconds <em>before</em> training?</div>
+    </div>
+    <div style="border:1px solid #15803d; border-radius:10px; padding:14px 16px; background:#0c1a12;">
+      <div style="font-size:0.72em; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#86efac; margin-bottom:6px;">💡 In plain words (Feynman)</div>
+      <div style="font-size:0.86em; color:#cbd5e1; line-height:1.7;">A <code>"text"</code> column tells TRL "this is one document — grade every token," i.e. CPT. To get real SFT you must hand it <code>prompt</code>+<code>completion</code> so it knows where the answer starts and masks the rest. The ten-second check: print <code>(labels != -100).float().mean()</code> — CPT ≈ 1.0, correct SFT ≈ 0.2–0.8. A 1.0 on a "SFT" run means you were doing CPT all along.</div>
+    </div>
+  </div>
+
   <div class="card full" style="border-color:#4f46e5; margin:16px 0;">
     <div class="card-title" style="background:#312e81; color:#c7d2fe;">✅ The three ways to mask loss in TRL — verified against <code>trl 0.24.0</code> / <code>transformers 5.5.0</code></div>
     <div class="card-body">
