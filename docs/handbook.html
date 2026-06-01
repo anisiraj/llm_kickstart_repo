@@ -2712,6 +2712,27 @@ gen_after  = <span class="fn">perplexity</span>(model1, tok, general_text)
   </div>
   <p class="chapter-intro">Merging averages weights in clever ways so one model inherits several specialists' skills — no GPUs, no training. The models must share the same base/architecture. Reference: <a href="cheatsheet_datagen_merge_hf.html" style="color:#67e8f9;">Data Gen · Merge · HF cheatsheet</a>. <strong style="color:#67e8f9;">🧪 Runnable:</strong> <code>scripts/20_merge_models.py</code> runs these merges on real SmolLM2-135M tensors — measured: from the base, Linear moves <strong>50%</strong> of the task vector, TIES <strong>83%</strong>, DARE <strong>141%</strong>, and the merged checkpoint reloads + generates correctly.</p>
 
+  <div style="margin:16px 0; padding:18px; background:#0a0f1a; border:1px solid #1e293b; border-radius:12px;">
+  <svg viewBox="0 0 860 250" width="100%" style="height:auto; font-family:system-ui,-apple-system,sans-serif;" role="img" aria-label="Task vector concept: fine-tuned weights minus base is a portable skill direction; merge methods move the base different fractions along it. Measured SmolLM2: Linear 50 percent, TIES 83 percent, DARE 141 percent.">
+    <text x="430" y="22" text-anchor="middle" fill="#94a3b8" font-size="13" font-weight="700" letter-spacing="1.1">TASK VECTOR — HOW FAR EACH MERGE MOVES THE BASE (measured, SmolLM2-135M)</text>
+    <text x="430" y="46" text-anchor="middle" fill="#cbd5e1" font-size="13" font-family="'Fira Mono',monospace">τ = θ<tspan baseline-shift="sub" font-size="9">fine-tuned</tspan> − θ<tspan baseline-shift="sub" font-size="9">base</tspan>   ·   merged = θ<tspan baseline-shift="sub" font-size="9">base</tspan> + weight · τ</text>
+    <line x1="80" y1="78" x2="80" y2="222" stroke="#475569" stroke-width="2"/>
+    <text x="80" y="240" text-anchor="middle" fill="#64748b" font-size="11">base 0%</text>
+    <line x1="560" y1="78" x2="560" y2="222" stroke="#38bdf8" stroke-width="2" stroke-dasharray="5,4"/>
+    <text x="560" y="240" text-anchor="middle" fill="#7dd3fc" font-size="11">full fine-tune 100%</text>
+    <text x="74" y="106" text-anchor="end" fill="#cbd5e1" font-size="12" font-weight="700">Linear</text>
+    <rect x="80" y="94" width="240" height="22" rx="4" fill="#0891b2"/>
+    <text x="330" y="110" fill="#67e8f9" font-size="12" font-weight="700">50%</text>
+    <text x="74" y="144" text-anchor="end" fill="#cbd5e1" font-size="12" font-weight="700">TIES</text>
+    <rect x="80" y="132" width="398" height="22" rx="4" fill="#0e7490"/>
+    <text x="488" y="148" fill="#67e8f9" font-size="12" font-weight="700">83%</text>
+    <text x="74" y="182" text-anchor="end" fill="#cbd5e1" font-size="12" font-weight="700">DARE</text>
+    <rect x="80" y="170" width="677" height="22" rx="4" fill="#155e75"/>
+    <text x="767" y="186" fill="#a5f3fc" font-size="12" font-weight="700">141%</text>
+  </svg>
+  <div style="font-size:0.84em; color:#94a3b8; line-height:1.6; margin-top:6px; text-align:center;">The <em>change</em> a fine-tune makes is a portable vector you can scale and add. These bars are the fraction of that vector each method applied to a real SmolLM2 checkpoint — DARE overshoots past 100% because it drops then rescales the deltas. Equal-weight Linear averaging is the safe baseline; TIES/DARE cut interference when several task vectors disagree. Always evaluate the merged model — a bigger number isn't automatically better.</div>
+  </div>
+
   <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #0891b2; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#67e8f9;">The closest thing fine-tuning has to a free lunch:</strong> take two models that already exist and produce a third that blends their skills, using nothing but arithmetic on their weights — no GPUs, no training, seconds of compute. It works because of a quietly profound fact: the <em>change</em> a fine-tune makes (tuned weights minus base) behaves like a portable skill vector you can scale, add, or average — as long as everyone started from the same base.<br><br>The cards go from the naive version to the robust one. Plain averaging (a "model soup") is the baseline and is surprisingly strong; trouble starts when two skill-vectors disagree on a weight and cancel out. TIES and DARE are the standard fixes for that interference, and mergekit runs them all from a short config. The measured numbers here — how far each method moves a real SmolLM2 checkpoint along its task vector — are in because merging sounds like magic until you watch it move real tensors.</div>
 
   <div class="grid2" style="gap:14px;">
@@ -2765,6 +2786,32 @@ dtype: bfloat16
     <div><div class="chapter-title">Quantization Internals</div><div class="chapter-subtitle">4-bit for training (QLoRA) and for deploy (GGUF) — and where it breaks</div></div>
   </div>
   <p class="chapter-intro">Quantization shows up twice: <strong>NF4</strong> to <em>train</em> a big model on one GPU (QLoRA), and <strong>GGUF Q-levels</strong> to <em>ship</em> it small. Same idea (fewer bits per weight), different stage. Reference: <a href="cheatsheet_deployment.html" style="color:#fdba74;">Deployment cheatsheet</a>. <strong style="color:#fdba74;">🧪 Runnable:</strong> the NF4 config lives in <code>scripts/utils.py</code>; <code>scripts/09_merge_and_gguf.py</code> + <code>11_edge_benchmark.py</code> produce the GGUF and measure the footprints quoted here (1.9 GB / 0.69 GB).</p>
+
+  <div style="margin:16px 0; padding:18px; background:#0a0f1a; border:1px solid #1e293b; border-radius:12px;">
+  <svg viewBox="0 0 860 270" width="100%" style="height:auto; font-family:system-ui,-apple-system,sans-serif;" role="img" aria-label="Quantization bit-width ladder from FP16 16 bits down to Q2 2.6 bits, with Q4_K_M as the recommended default.">
+    <text x="430" y="22" text-anchor="middle" fill="#94a3b8" font-size="13" font-weight="700" letter-spacing="1.1">FEWER BITS PER WEIGHT → SMALLER FILE, LOWER FIDELITY</text>
+    <text x="120" y="58" text-anchor="end" fill="#e2e8f0" font-size="12" font-weight="700">FP16 / BF16</text>
+    <rect x="130" y="46" width="640" height="18" rx="3" fill="#475569"/>
+    <text x="780" y="60" fill="#cbd5e1" font-size="11">16 bits · "full" precision · training</text>
+    <text x="120" y="90" text-anchor="end" fill="#e2e8f0" font-size="12" font-weight="700">Q8_0</text>
+    <rect x="130" y="78" width="340" height="18" rx="3" fill="#16a34a"/>
+    <text x="480" y="92" fill="#86efac" font-size="11">~8.5 bits · near-lossless</text>
+    <text x="120" y="122" text-anchor="end" fill="#e2e8f0" font-size="12" font-weight="700">Q5_K_M</text>
+    <rect x="130" y="110" width="220" height="18" rx="3" fill="#22c55e"/>
+    <text x="360" y="124" fill="#86efac" font-size="11">~5.5 bits · high quality</text>
+    <text x="120" y="154" text-anchor="end" fill="#fbbf24" font-size="12" font-weight="800">Q4_K_M ★</text>
+    <rect x="130" y="142" width="192" height="18" rx="3" fill="#f59e0b"/>
+    <text x="332" y="156" fill="#fcd34d" font-size="11" font-weight="700">~4.8 bits · the default sweet spot</text>
+    <text x="120" y="186" text-anchor="end" fill="#e2e8f0" font-size="12" font-weight="700">Q3_K_M</text>
+    <rect x="130" y="174" width="156" height="18" rx="3" fill="#ea580c"/>
+    <text x="296" y="188" fill="#fdba74" font-size="11">~3.9 bits · tight RAM, quality slips</text>
+    <text x="120" y="218" text-anchor="end" fill="#e2e8f0" font-size="12" font-weight="700">Q2_K</text>
+    <rect x="130" y="206" width="104" height="18" rx="3" fill="#b91c1c"/>
+    <text x="244" y="220" fill="#fca5a5" font-size="11">~2.6 bits · last resort</text>
+    <text x="430" y="252" text-anchor="middle" fill="#94a3b8" font-size="12">Footprint ≈ params × bits ÷ 8. Measured at Q4_K_M: SmolLM3-3B → <tspan fill="#fff" font-weight="700">1.9 GB</tspan>, MiniCPM5-1B → <tspan fill="#fff" font-weight="700">0.69 GB</tspan> (fits a Pi).</text>
+  </svg>
+  <div style="font-size:0.84em; color:#94a3b8; line-height:1.6; margin-top:6px; text-align:center;">Bar length is bits-per-weight (≈ relative file size). Below ~Q3 quality drops fast, and <strong>small models degrade earlier than big ones</strong> (less redundancy to spare) — a 1B at Q2 can be noticeably worse while a 70B at Q2 is still usable. Pick the smallest quant that fits RAM with KV-cache headroom, then verify with a perplexity/recall check.</div>
+  </div>
 
   <div style="margin:14px 0 4px; padding:14px 18px; border-left:3px solid #c2410c; background:#0f172a; border-radius:0 8px 8px 0; font-size:0.9em; line-height:1.8; color:#cbd5e1;"><!--dive-lead--><strong style="color:#fdba74;">Quantization is what stands between "this 8B wants 16 GB" and "this 8B runs on my laptop."</strong> The mechanism is mundane — store each weight in 4 bits instead of 16 — but the question beginners skip is the good one: <em>why does the model still work afterward?</em> Because a trained network is hugely redundant; no single weight means much, so coarse approximations produce tiny, roughly-independent errors that wash out across a layer. The whole art is the exception — a few outlier weights that carry far more than their share, which every scheme is really a strategy for protecting.<br><br>That's the lens for the cards: you'll meet the same idea at two stages — NF4 to <em>train</em> a big model on one GPU (the "Q" in QLoRA) and GGUF's Q-levels to <em>ship</em> it small — and see why the granularity of the scale decides quality, and why small models quantize worse than large ones. The footprints here are weighed on real checkpoints, because the only honest way to know if Q4 is good enough for <em>your</em> model is to weigh it and test it.</div>
 
