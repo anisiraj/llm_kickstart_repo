@@ -287,6 +287,7 @@
       <li><a href="handbook.html#evaluation">📊 Evaluation</a></li>
       <li><a href="handbook.html#owndata">📂 Your Data</a></li>
       <li><a href="handbook.html#bootcamp" style="color:#f59e0b;">🏋️ Bootcamp</a></li>
+      <li><a href="handbook.html#casestudy" style="color:#34d399;">🧪 Case Study: CPT→SFT→Edge</a></li>
     </ul>
   </nav>
 
@@ -433,6 +434,22 @@
 
   </div>
 
+  <a href="handbook.html#casestudy" class="card card-main" style="display:block; margin-bottom:32px; border-color:rgba(52,211,153,.45); background:linear-gradient(135deg,#08140d,#0c2d1f);">
+    <div class="card-header">
+      <div class="card-icon" style="background:linear-gradient(135deg,#059669,#34d399);">🧪</div>
+      <div>
+        <div class="card-title" style="color:#34d399; font-size:1.05em;">Case Study — Teach a Small Model Chemistry, Then Run It on a Laptop</div>
+        <div class="card-desc" style="margin-top:4px;">A full follow-along build: Wikipedia → continued pretraining → supervised fine-tuning → a sub-2&nbsp;GB model serving locally. Clean explained code at every step, the exact CPT-vs-SFT loss difference, a LoRA-rank sweep, edge deployment, and measured results on SmolLM2-135M, SmolLM3-3B &amp; MiniCPM5-1B.</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="tag green">CPT → SFT → Edge</span>
+      <span class="tag green">QLoRA + rsLoRA</span>
+      <span class="tag green">8 steps, runnable</span>
+      <span class="tag green">measured</span>
+    </div>
+  </a>
+
   <!-- ── Advanced Concepts ────────────────────────────────────────────── -->
   <div class="section-title" id="advanced">🔬 Advanced Concepts — Where Silent Bugs Live</div>
   <div style="font-size:.78em; color:var(--muted); margin:-8px 0 14px; line-height:1.6;">
@@ -516,6 +533,83 @@
       </div>
     </a>
 
+    <a href="handbook.html#lossmasking" class="card" style="border-left:3px solid #4f46e5;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#312e81,#4f46e5);">🎭</div>
+        <div>
+          <div class="card-title">Loss · Templates · Learning Rates</div>
+          <div class="card-desc">The SFT mechanics that decide everything: full vs completion-only vs assistant-only loss, how the chat template defines the mask boundary, and LRs for adapters vs embeddings. Proven by <code>05_sft.py</code>.</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag blue">Deep dive</span><span class="tag green">Runnable</span></div>
+    </a>
+
+    <a href="handbook.html#tokensurgery" class="card" style="border-left:3px solid #7c3aed;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#3b0764,#7c3aed);">🔤</div>
+        <div>
+          <div class="card-title">Tokenizer & Vocabulary Surgery</div>
+          <div class="card-desc">Extra/new tokens, <code>resize_token_embeddings(mean_resizing)</code>, when to retrain embeddings (and the 116 MB→1.2 GB cost). Verified by <code>18_token_surgery.py</code> — new row lands 0.0001 from the mean.</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag purple">Deep dive</span><span class="tag green">Runnable</span></div>
+    </a>
+
+    <a href="handbook.html#engines" class="card" style="border-left:3px solid #b45309;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#713f12,#b45309);">⚙️</div>
+        <div>
+          <div class="card-title">Unsloth vs TRL — the Engines</div>
+          <div class="card-desc">Same fine-tune, different machinery: speed/VRAM/coverage trade-offs and the casting/import gotchas that cost hours. Both backends run in <code>03_cpt.py</code>; benchmarked in <code>08_unsloth_vs_hf.py</code>.</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag yellow">Deep dive</span><span class="tag green">Runnable</span></div>
+    </a>
+
+    <a href="handbook.html#synthdata" class="card" style="border-left:3px solid #15803d;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#14532d,#15803d);">🧫</div>
+        <div>
+          <div class="card-title">Synthetic Data Generation</div>
+          <div class="card-desc">Close the ~99× data gap: distillation, Self-Instruct, Evol-Instruct, Magpie + the QC that matters. <code>19_synth_data.py</code> distills from a local Ollama teacher and runs decontaminate/dedupe/filter.</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag green">Deep dive</span><span class="tag green">Runnable</span></div>
+    </a>
+
+    <a href="handbook.html#forgetting" class="card" style="border-left:3px solid #0d9488;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#134e4a,#0d9488);">🧠</div>
+        <div>
+          <div class="card-title">Catastrophic Forgetting</div>
+          <div class="card-desc">Detect it with a general-text perplexity check (measured 8.33→8.19 — no forgetting) and prevent it: LoRA isolation, lower LR, fewer epochs, replay. Measured by <code>04_cpt_base_vs_instruct.py</code>.</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag green">Deep dive</span><span class="tag green">Measured</span></div>
+    </a>
+
+    <a href="handbook.html#merging" class="card" style="border-left:3px solid #0891b2;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#083344,#0891b2);">🔗</div>
+        <div>
+          <div class="card-title">Model Merging / Fusing</div>
+          <div class="card-desc">Combine specialists with zero training: SLERP/TIES/DARE/task-arithmetic via mergekit. <code>20_merge_models.py</code> runs them on real tensors (Linear 50%, TIES 83%, DARE 141% of the task vector).</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag blue">Deep dive</span><span class="tag green">Runnable</span></div>
+    </a>
+
+    <a href="handbook.html#quantization" class="card" style="border-left:3px solid #c2410c;">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#7c2d12,#c2410c);">🗜️</div>
+        <div>
+          <div class="card-title">Quantization Internals</div>
+          <div class="card-desc">NF4 + double-quant for QLoRA training → GGUF Q-levels for deploy; the real size/quality curve and where small models break. Footprints (1.9 GB / 0.69 GB) measured by <code>11_edge_benchmark.py</code>.</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag orange">Deep dive</span><span class="tag green">Measured</span></div>
+    </a>
+
   </div>
 
   <!-- ── Cheatsheets ────────────────────────────────────────────────────── -->
@@ -575,6 +669,61 @@
         </div>
       </div>
       <div class="card-footer"><span class="tag orange">SageMaker</span><span class="tag orange">Bedrock</span></div>
+    </a>
+
+    <a href="cheatsheet_sft_trainer.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#312e81,#4f46e5);">🎯</div>
+        <div>
+          <div class="card-title">SFT Trainer</div>
+          <div class="card-desc">completion-only vs assistant-only loss, grad-accum/batch, QLoRA bnb, Unsloth vs TRL</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag blue">8 cards</span><span class="tag blue">Print-ready</span></div>
+    </a>
+
+    <a href="cheatsheet_chat_templates_data.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#3b0764,#7c3aed);">💬</div>
+        <div>
+          <div class="card-title">Chat Templates & Data Prep</div>
+          <div class="card-desc">model-family tokens, tool calls, new/custom tokens, embeddings, equations, tables, structured</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag purple">10 cards</span><span class="tag purple">Print-ready</span></div>
+    </a>
+
+    <a href="cheatsheet_metrics.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#083344,#0891b2);">📐</div>
+        <div>
+          <div class="card-title">Evaluation Metrics</div>
+          <div class="card-desc">perplexity, recall/F1, ROUGE, BERTScore, exact-match, pass@k, lm-eval, tok/s — with code</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag green">10 cards</span><span class="tag green">Print-ready</span></div>
+    </a>
+
+    <a href="cheatsheet_deployment.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#7c2d12,#c2410c);">🚀</div>
+        <div>
+          <div class="card-title">Deployment</div>
+          <div class="card-desc">merge → GGUF → quantize → serve: transformers, vLLM, llama.cpp, Ollama, Unsloth export</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag orange">10 cards</span><span class="tag orange">Print-ready</span></div>
+    </a>
+
+    <a href="cheatsheet_datagen_merge_hf.html" class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#14532d,#15803d);">🧬</div>
+        <div>
+          <div class="card-title">Data Gen · Merge · Push-to-HF</div>
+          <div class="card-desc">synthetic data (distillation, Self-Instruct, Magpie), mergekit (SLERP/TIES/DARE), publish to the Hub</div>
+        </div>
+      </div>
+      <div class="card-footer"><span class="tag green">10 cards</span><span class="tag green">Print-ready</span></div>
     </a>
 
     <a href="vscode_shortcuts.html" class="card">
@@ -734,6 +883,11 @@
   <a href="cheatsheet_hf_transformers.html">Transformers</a> &nbsp;·&nbsp;
   <a href="cheatsheet_unsloth_lora.html">Unsloth</a> &nbsp;·&nbsp;
   <a href="cheatsheet_aws_sagemaker_bedrock.html">AWS</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_sft_trainer.html">SFT</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_chat_templates_data.html">Chat/Data</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_metrics.html">Metrics</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_deployment.html">Deploy</a> &nbsp;·&nbsp;
+  <a href="cheatsheet_datagen_merge_hf.html">DataGen/HF</a> &nbsp;·&nbsp;
   <a href="vscode_shortcuts.html">VSCode</a>
   <div style="margin-top:8px; color:#475569; font-size:.85em;">
     <a href="https://github.com/anisiraj/llm_kickstart_repo" target="_blank">Finetune Handbook for Weekend Warriors</a>

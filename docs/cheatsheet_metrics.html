@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LLM Metrics Cheatsheet — perplexity, recall, ROUGE, BERTScore, pass@k, tok/s</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 14px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 1040px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.85em; color: #0891b2; border-bottom: 3px solid #0891b2; padding-bottom: 6px; margin-bottom: 6px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .lede { color: #475569; font-size: 0.92em; margin-bottom: 16px; line-height: 1.6; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.74em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.84em; line-height: 1.55; white-space: pre-wrap; }
+  .kw { color: #c678dd; font-weight: 600; } .fn { color: #0891b2; } .st { color: #16a34a; }
+  .cm { color: #7f848e; font-style: italic; } .nb { color: #d97706; }
+  .c1 { background: #ecfeff; border-left: 3px solid #0891b2; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c2 { background: #fff7ed; border-left: 3px solid #f97316; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c3 { background: #fef2f2; border-left: 3px solid #ef4444; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .t1 .card-title { background: #0e7490; } .t2 .card-title { background: #b91c1c; }
+  .t3 .card-title { background: #15803d; } .t4 .card-title { background: #b45309; }
+  .t5 .card-title { background: #6d28d9; } .t6 .card-title { background: #be185d; }
+  .t7 .card-title { background: #4338ca; } .t8 .card-title { background: #0369a1; }
+  .t9 .card-title { background: #374151; } .t10 .card-title { background: #9333ea; }
+  .full { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8em; margin: 6px 0 2px; }
+  td, th { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; } tr:last-child td { border-bottom: none; }
+  code { background: #ecfeff; padding: 1px 4px; border-radius: 3px; font-family: 'Fira Mono', monospace; font-size: 0.92em; }
+  @media print { body { background: white; font-size: 11px; } .page { box-shadow: none; margin: 0; padding: 16px 20px; } }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a><span style="color:#475569;">|</span><a href="handbook.html#casestudy" style="color:#94a3b8;text-decoration:none;">🧪 Case Study</a></div>
+<div class="page">
+  <h1>📐 LLM Evaluation Metrics <span>— what they mean, the code, and when each one lies</span></h1>
+  <p class="lede">You can't improve what you mis-measure. Each metric answers a <em>different</em> question; the classic mistake is scoring an instruction model with a metric that punishes its format. Pick the metric that matches the task — and report <strong>relative</strong> change on small data, never absolute leaderboard scores.</p>
+
+  <div class="grid">
+
+    <!-- 1: PERPLEXITY -->
+    <div class="card t1">
+      <div class="card-title">① Perplexity — did training fit the text?</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> torch
+<span class="kw">def</span> <span class="fn">perplexity</span>(model, tok, text):
+    ids = tok(text, return_tensors=<span class="st">"pt"</span>).input_ids.<span class="fn">to</span>(model.device)
+    <span class="kw">with</span> torch.no_grad():
+        loss = model(ids, labels=ids).loss   <span class="cm"># mean CE over tokens</span>
+    <span class="kw">return</span> torch.<span class="fn">exp</span>(loss).<span class="fn">item</span>()                <span class="cm"># PPL = e^loss</span>
+</pre>
+        <span class="c1"><strong>PPL = exp(cross-entropy)</strong> — "how many tokens is the model effectively choosing between." Lower = less surprised. <strong>Domain PPL</strong> (on raw text) judges CPT; <strong>completion PPL</strong> (mask the prompt, score the answer) judges SFT.</span>
+        <span class="c2">Only comparable on the <em>same</em> text + tokenizer. Don't compare PPL across models with different vocabularies.</span>
+      </div>
+    </div>
+
+    <!-- 2: THE FORMAT TRAP -->
+    <div class="card t2">
+      <div class="card-title">② ⚠ The format trap — when PPL lies</div>
+      <div class="card-body">
+        <span class="c3">An instruction-tuned model scored on <strong>plain text</strong> looks <em>worse</em> (higher PPL) than a base model — not because it's worse, but because it "wants" chat tokens. SFT can even <em>raise</em> domain PPL while drastically lowering completion PPL.</span>
+        <span class="c1"><strong>Rule:</strong> never rank a base-vs-instruct (or pre-vs-post-SFT) decision on a single perplexity number. Cross-check with a <em>generation-based</em> metric (recall/ROUGE/BERTScore) that doesn't care about format.</span>
+        <span class="c2">Real case-study example: MiniCPM5-1B completion PPL 107.7→3.6 (great) while domain PPL rose 24.8→34.9 — the two losses pull opposite ways.</span>
+      </div>
+    </div>
+
+    <!-- 3: KEYWORD RECALL / TOKEN F1 -->
+    <div class="card t3">
+      <div class="card-title">③ Keyword recall / token-F1 — format-robust</div>
+      <div class="card-body"><pre>
+<span class="kw">def</span> <span class="fn">keyword_recall</span>(gold, gen):
+    <span class="kw">import</span> re
+    g = <span class="fn">set</span>(re.<span class="fn">findall</span>(<span class="st">r"\w+"</span>, gold.<span class="fn">lower</span>()))
+    h = <span class="fn">set</span>(re.<span class="fn">findall</span>(<span class="st">r"\w+"</span>, gen.<span class="fn">lower</span>()))
+    <span class="kw">return</span> <span class="fn">len</span>(g &amp; h) / <span class="fn">max</span>(<span class="fn">len</span>(g), <span class="nb">1</span>)   <span class="cm"># fraction of gold words present</span>
+</pre>
+        <span class="c1">Generate an answer, measure how much of the gold answer's content it actually produced. <strong>Format-robust</strong>: it won't punish the model for chat tokens or phrasing, so it's the honest tie-breaker when perplexity is ambiguous.</span>
+        <span class="c2">Cheap + interpretable. For a stricter version use token-level <strong>F1</strong> (precision×recall) so verbosity is penalised too.</span>
+      </div>
+    </div>
+
+    <!-- 4: ROUGE / BLEU -->
+    <div class="card t4">
+      <div class="card-title">④ ROUGE & BLEU — n-gram overlap</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> evaluate
+rouge = evaluate.<span class="fn">load</span>(<span class="st">"rouge"</span>)
+rouge.<span class="fn">compute</span>(predictions=preds, references=refs)
+<span class="cm"># {'rouge1':.., 'rouge2':.., 'rougeL':..}</span>
+
+bleu = evaluate.<span class="fn">load</span>(<span class="st">"bleu"</span>)      <span class="cm"># precision-oriented (MT)</span>
+</pre>
+        <span class="c1"><strong>ROUGE</strong> = recall of overlapping n-grams (summarisation, QA). <strong>ROUGE-L</strong> = longest common subsequence. <strong>BLEU</strong> = precision of n-grams (translation). Fast, reference-based.</span>
+        <span class="c3">Surface-level: a correct paraphrase with different words scores low. Good for structured/templated outputs, weak for open-ended ones.</span>
+      </div>
+    </div>
+
+    <!-- 5: BERTSCORE -->
+    <div class="card t5">
+      <div class="card-title">⑤ BERTScore — semantic similarity</div>
+      <div class="card-body"><pre>
+<span class="kw">import</span> evaluate
+bs = evaluate.<span class="fn">load</span>(<span class="st">"bertscore"</span>)
+bs.<span class="fn">compute</span>(predictions=preds, references=refs, lang=<span class="st">"en"</span>)
+<span class="cm"># P/R/F1 from contextual embedding cosine similarity</span>
+</pre>
+        <span class="c1">Embeds both texts with a pretrained encoder and matches by <strong>cosine similarity</strong> — so "fast" ≈ "quick" scores high even with zero word overlap. Captures meaning ROUGE/BLEU miss.</span>
+        <span class="c2">Heavier (loads a model); score scale isn't 0–1-intuitive — use it for <em>relative</em> comparisons, not an absolute bar.</span>
+      </div>
+    </div>
+
+    <!-- 6: EXACT MATCH / ACCURACY -->
+    <div class="card t6">
+      <div class="card-title">⑥ Exact match & accuracy — structured tasks</div>
+      <div class="card-body"><pre>
+<span class="kw">def</span> <span class="fn">exact_match</span>(gold, gen):
+    <span class="kw">return</span> gold.<span class="fn">strip</span>().<span class="fn">lower</span>() == gen.<span class="fn">strip</span>().<span class="fn">lower</span>()
+
+<span class="cm"># multiple-choice: compare predicted letter to key</span>
+acc = <span class="fn">sum</span>(p==k <span class="kw">for</span> p,k <span class="kw">in</span> <span class="fn">zip</span>(preds, keys)) / <span class="fn">len</span>(keys)
+</pre>
+        <span class="c1">% of outputs that exactly equal the reference. The right metric for classification, multiple-choice, JSON-field extraction — anything with one correct string. Often normalised (lowercase, strip, articles).</span>
+        <span class="c3">Brutal for free text: "Paris." ≠ "Paris" fails EM. Reserve for genuinely closed outputs.</span>
+      </div>
+    </div>
+
+    <!-- 7: PASS@K -->
+    <div class="card t7">
+      <div class="card-title">⑦ pass@k — functional correctness (code)</div>
+      <div class="card-body"><pre>
+<span class="cm"># Generate n≥k samples/problem, c = # that pass unit tests</span>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">def</span> <span class="fn">pass_at_k</span>(n, c, k):
+    <span class="kw">if</span> n - c &lt; k: <span class="kw">return</span> <span class="nb">1.0</span>
+    <span class="kw">return</span> <span class="nb">1.0</span> - np.<span class="fn">prod</span>(<span class="nb">1.0</span> - k/np.<span class="fn">arange</span>(n-c+<span class="nb">1</span>, n+<span class="nb">1</span>))
+</pre>
+        <span class="c1">For code/agents: a generation is "correct" iff it <strong>passes the tests</strong>. <code>pass@k</code> = P(at least one of k samples works), unbiased estimator from n samples (HumanEval). Measures behaviour, not text overlap.</span>
+        <span class="c2">Tooling: <code>bigcode-evaluation-harness</code> (HumanEval/MBPP). Run generated code <strong>sandboxed</strong>.</span>
+      </div>
+    </div>
+
+    <!-- 8: LM-EVAL-HARNESS -->
+    <div class="card t8">
+      <div class="card-title">⑧ lm-evaluation-harness — standard benchmarks</div>
+      <div class="card-body"><pre>
+pip install lm-eval
+lm_eval --model hf \
+  --model_args pretrained=./merged_model \
+  --tasks mmlu,arc_easy,hellaswag,gsm8k \
+  --device cuda:0 --batch_size auto
+</pre>
+        <span class="c1">EleutherAI's harness: 60+ academic benchmarks (MMLU, ARC, HellaSwag, GSM8K, TruthfulQA) with consistent, comparable scoring. The standard way to report "how capable" a model is.</span>
+        <span class="c2">Great for <em>capability</em> regressions (did fine-tuning hurt general skill?); not a substitute for <em>your task's</em> own metric.</span>
+      </div>
+    </div>
+
+    <!-- 9: RUNTIME / EDGE -->
+    <div class="card t9">
+      <div class="card-title">⑨ Runtime metrics — can it actually ship?</div>
+      <div class="card-body"><pre>
+<span class="cm"># From an Ollama/llama.cpp response, measure honestly:</span>
+tok_per_s = eval_count / (eval_duration / <span class="nb">1e9</span>)
+<span class="cm"># TTFT  = time to first token (prompt_eval_duration)</span>
+<span class="cm"># footprint ≈ quantized file size on disk ≈ RAM needed</span>
+</pre>
+        <table>
+          <tr><th>Metric</th><th>Means</th></tr>
+          <tr><td>tok/s</td><td>generation throughput</td></tr>
+          <tr><td>TTFT</td><td>latency to first token</td></tr>
+          <tr><td>footprint</td><td>disk ≈ RAM (Q4_K_M ≈ 0.55×params GB)</td></tr>
+        </table>
+        <span class="c3">Measure tok/s on a <em>normal-length</em> answer (≥ a few dozen tokens). An under-trained model that emits EOS instantly gives a meaningless 1-token number.</span>
+      </div>
+    </div>
+
+    <!-- 10: LLM-AS-JUDGE -->
+    <div class="card t10">
+      <div class="card-title">⑩ LLM-as-judge — open-ended quality</div>
+      <div class="card-body"><pre>
+<span class="cm"># Ask a strong model to score on a rubric (1–5): correctness,</span>
+<span class="cm"># conciseness, faithfulness. Use pairwise A/B for less bias.</span>
+judge(<span class="st">"Rate 1-5 for factual correctness:\nQ:..\nGold:..\nAns:.."</span>)
+</pre>
+        <span class="c1">When there's no single right string (style, helpfulness), a rubric-driven judge correlates better with humans than n-gram metrics. Average over many items.</span>
+        <span class="c3">Biased toward verbosity/its own style; pin the rubric, randomise A/B order, and spot-check against humans. Never the <em>only</em> metric.</span>
+      </div>
+    </div>
+
+  </div><!-- grid -->
+
+  <div style="margin-top:14px; background:#ecfeff; border:1px solid #0891b2; border-radius:8px; padding:12px 16px;">
+    <strong style="color:#0e7490; font-size:0.85em; text-transform:uppercase; letter-spacing:0.06em;">⚡ Which metric for which task</strong>
+    <div style="margin-top:8px; font-size:0.84em; color:#374151;">
+      <table style="font-size:1em;">
+        <tr><th>Task</th><th>Primary</th><th>Cross-check</th></tr>
+        <tr><td>CPT (domain)</td><td>domain perplexity ↓</td><td>no general-PPL regression (forgetting)</td></tr>
+        <tr><td>SFT (Q&amp;A)</td><td>completion perplexity ↓</td><td>keyword recall / ROUGE ↑ (format-robust)</td></tr>
+        <tr><td>Summarise / QA</td><td>ROUGE-L</td><td>BERTScore (semantic)</td></tr>
+        <tr><td>Classify / extract</td><td>exact match / accuracy</td><td>per-class F1</td></tr>
+        <tr><td>Code / agent</td><td>pass@k</td><td>lm-eval / human</td></tr>
+        <tr><td>Open-ended chat</td><td>LLM-as-judge</td><td>human spot-check</td></tr>
+        <tr><td>Edge deploy</td><td>tok/s + footprint</td><td>TTFT, accuracy retained</td></tr>
+      </table>
+    </div>
+    <div style="margin-top:8px; font-size:0.8em; color:#64748b;">Used in the <a href="handbook.html#casestudy" style="color:#0891b2;">🧪 Case Study</a> (Step 6 + metrics glossary). Install: <code>pip install evaluate rouge_score bert_score lm-eval</code></div>
+  </div>
+</div>
+</body>
+</html>

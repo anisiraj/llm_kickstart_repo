@@ -101,4 +101,52 @@ with tempfile.TemporaryDirectory() as tmp:
         out = model2(sample)
     print("  loaded model output:", out)
 
+# ── 8. Mixed Precision (AMP) — the running example behind "2x faster" ─────────
+# The cheatsheet claims autocast + GradScaler is "2x faster on modern GPUs".
+# Here we actually time it so the claim is demonstrated, not asserted. AMP only
+# speeds up on a CUDA GPU with Tensor Cores; on CPU it's a no-op (shown honestly).
+print("\n=== 8. Mixed Precision (AMP) ===")
+import time
+
+# Compute-bound stack (big matmuls) so fp16 Tensor Cores can actually pay off.
+big = nn.Sequential(
+    nn.Linear(8192, 8192), nn.ReLU(),
+    nn.Linear(8192, 8192), nn.ReLU(),
+    nn.Linear(8192, 8192),
+).to(device)
+opt = torch.optim.SGD(big.parameters(), lr=1e-3)
+data = torch.randn(512, 8192, device=device)
+target = torch.randn(512, 8192, device=device)
+loss_fn = nn.MSELoss()
+
+
+def run(use_amp, steps=30, warmup=5):
+    scaler = torch.amp.GradScaler(device, enabled=use_amp)
+
+    def step():
+        opt.zero_grad()
+        with torch.autocast(device_type=device, enabled=use_amp):
+            loss = loss_fn(big(data), target)
+        scaler.scale(loss).backward()
+        scaler.step(opt)
+        scaler.update()
+
+    for _ in range(warmup):   # warmup: pay CUDA init / cudnn autotune before timing
+        step()
+    if device == "cuda":
+        torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    for _ in range(steps):
+        step()
+    if device == "cuda":
+        torch.cuda.synchronize()
+    return time.perf_counter() - t0
+
+
+fp32 = run(use_amp=False)
+amp = run(use_amp=True)
+print(f"  device={device}  fp32={fp32:.3f}s  amp={amp:.3f}s  speedup={fp32/amp:.2f}x")
+if device != "cuda":
+    print("  (CPU has no Tensor Cores — AMP shows ~1x here. The 2x claim is GPU-only.)")
+
 print("\nAll PyTorch basics OK!")

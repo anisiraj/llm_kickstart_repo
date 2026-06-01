@@ -93,6 +93,16 @@ collator = DataCollatorWithPadding(tok)
 
 model = AutoModelForSequenceClassification.from_pretrained(MODEL, num_labels=2)
 
+# compute_metrics: the running example behind the cheatsheet's "Evaluation & Metrics"
+# card. We compute accuracy inline with numpy (offline) — `evaluate.load("accuracy")`
+# is the library equivalent but pulls the metric script from the Hub.
+import numpy as np
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    preds = np.argmax(logits, axis=-1)
+    return {"accuracy": float((preds == labels).mean())}
+
 with tempfile.TemporaryDirectory() as tmp:
     t_args = TrainingArguments(
         output_dir=tmp,
@@ -110,11 +120,18 @@ with tempfile.TemporaryDirectory() as tmp:
         eval_dataset=tok_ds["test"],
         processing_class=tok,          # ← modern API (replaces tokenizer= kwarg)
         data_collator=collator,
+        compute_metrics=compute_metrics,
     )
     train_result = trainer.train()
     print("  train loss:", round(train_result.training_loss, 4))
     metrics = trainer.evaluate()
     print("  eval loss:", round(metrics["eval_loss"], 4))
+    print("  eval accuracy:", round(metrics["eval_accuracy"], 4))
+
+    # trainer.predict() — raw logits + true labels for further analysis
+    pred_out = trainer.predict(tok_ds["test"])
+    print("  predict logits shape:", tuple(pred_out.predictions.shape),
+          "| labels:", pred_out.label_ids.tolist())
 
 # ── 6. Save + reload ─────────────────────────────────────────────────────────
 print("\n=== 6. Save + reload ===")

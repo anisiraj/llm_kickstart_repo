@@ -250,7 +250,7 @@ ds.<span class="fn">info</span>      <span class="cm"># metadata</span>
 ds.<span class="fn">num_rows</span>  <span class="cm"># row count</span>
 <span class="fn">len</span>(ds)      <span class="cm"># same</span>
 </pre>
-<span class="c2">💡  batched=True in map() is 10-100x faster — always use it.</span>
+<span class="c2">💡  batched=True in map() is much faster (10-100x with fast tokenizers; ~9x even on a tiny one) — always use it.</span>
 </div>
     </div>
 

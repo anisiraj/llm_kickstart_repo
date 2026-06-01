@@ -99,4 +99,41 @@ print("  from datasets import load_dataset")
 print("  ds = load_dataset('tatsu-lab/alpaca', split='train')")
 print("  ds = load_dataset('openai/gsm8k', 'main', split='train')")
 
+# ── 11. batched=True vs batched=False — the running example behind "10-100x" ──
+# The cheatsheet claims batched=True in map() is "10-100x faster". That speedup
+# is real for FAST (Rust) tokenizers: batched=True hands the whole batch to one
+# Rust call instead of N Python round-trips. Here we time it to show the claim.
+print("\n=== 11. map() batched vs unbatched (fast tokenizer) ===")
+import time
+
+big_ds = Dataset.from_dict({"text": ["LoRA reduces memory usage drastically. " * 4] * 4000})
+
+try:
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    from transformers import AutoTokenizer
+    tok = AutoTokenizer.from_pretrained("sshleifer/tiny-gpt2", local_files_only=True)
+    assert tok.is_fast, "need a fast (Rust) tokenizer to show the speedup"
+
+    def tok_one(x):
+        return tok(x["text"], truncation=True, max_length=64)
+
+    def tok_batch(x):
+        return tok(x["text"], truncation=True, max_length=64)
+
+    t0 = time.perf_counter()
+    big_ds.map(tok_one, batched=False, load_from_cache_file=False)
+    slow = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    big_ds.map(tok_batch, batched=True, batch_size=1000, load_from_cache_file=False)
+    fast = time.perf_counter() - t0
+
+    print(f"  {len(big_ds)} rows | batched=False {slow:.3f}s | batched=True {fast:.3f}s "
+          f"| speedup {slow/fast:.1f}x")
+    print("  -> The 10-100x range depends on tokenizer & batch size; fast tokenizers gain most.")
+except Exception as e:
+    print(f"  [skip] tokenizer not cached ({type(e).__name__}) — pre-cache with: "
+          "huggingface-cli download sshleifer/tiny-gpt2")
+
 print("\nAll HF Datasets basics OK!")

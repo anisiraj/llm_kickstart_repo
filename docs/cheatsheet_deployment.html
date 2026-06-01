@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Deployment Cheatsheet — merge, GGUF, llama.cpp, Ollama, vLLM, Unsloth</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 14px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 1040px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.85em; color: #c2410c; border-bottom: 3px solid #c2410c; padding-bottom: 6px; margin-bottom: 6px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .lede { color: #475569; font-size: 0.92em; margin-bottom: 16px; line-height: 1.6; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.74em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.84em; line-height: 1.55; white-space: pre-wrap; }
+  .kw { color: #c678dd; font-weight: 600; } .fn { color: #0891b2; } .st { color: #16a34a; }
+  .cm { color: #7f848e; font-style: italic; } .nb { color: #d97706; }
+  .c1 { background: #fff7ed; border-left: 3px solid #c2410c; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c2 { background: #ecfeff; border-left: 3px solid #0891b2; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c3 { background: #fef2f2; border-left: 3px solid #ef4444; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .t1 .card-title { background: #9a3412; } .t2 .card-title { background: #15803d; }
+  .t3 .card-title { background: #0369a1; } .t4 .card-title { background: #6d28d9; }
+  .t5 .card-title { background: #b45309; } .t6 .card-title { background: #0f766e; }
+  .t7 .card-title { background: #be185d; } .t8 .card-title { background: #4338ca; }
+  .t9 .card-title { background: #374151; } .t10 .card-title { background: #b91c1c; }
+  .full { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8em; margin: 6px 0 2px; }
+  td, th { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; } tr:last-child td { border-bottom: none; }
+  code { background: #fff7ed; padding: 1px 4px; border-radius: 3px; font-family: 'Fira Mono', monospace; font-size: 0.92em; }
+  @media print { body { background: white; font-size: 11px; } .page { box-shadow: none; margin: 0; padding: 16px 20px; } }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a><span style="color:#475569;">|</span><a href="handbook.html#casestudy" style="color:#94a3b8;text-decoration:none;">🧪 Case Study</a></div>
+<div class="page">
+  <h1>🚀 Deployment <span>— from a LoRA adapter to a model serving locally</span></h1>
+  <p class="lede">A fine-tune is useless until it runs. The path is always: <strong>merge → (convert) → quantize → serve</strong>. Pick the runtime by where it runs — transformers/vLLM on a GPU server, llama.cpp/Ollama on a laptop or edge box. Commands verified May 2026.</p>
+
+  <div class="grid">
+
+    <!-- 1: DECIDE -->
+    <div class="card t1">
+      <div class="card-title">① Pick the runtime</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Runtime</th><th>Best for</th></tr>
+          <tr><td>transformers</td><td>quick test, scripts, training parity</td></tr>
+          <tr><td>vLLM / TGI</td><td>GPU server, high throughput, OpenAI API</td></tr>
+          <tr><td>llama.cpp</td><td>CPU/edge, GGUF, full control</td></tr>
+          <tr><td>Ollama</td><td>laptop/edge, easiest, one Modelfile</td></tr>
+        </table>
+        <span class="c1">GGUF (llama.cpp/Ollama) is the CPU/edge format; safetensors (transformers/vLLM) is the GPU-server format. You can keep both from one merge.</span>
+      </div>
+    </div>
+
+    <!-- 2: MERGE -->
+    <div class="card t2">
+      <div class="card-title">② Merge the LoRA (always step 1)</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> peft <span class="kw">import</span> PeftModel
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoModelForCausalLM, AutoTokenizer
+
+base = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(BASE, torch_dtype=<span class="st">"bfloat16"</span>)
+model = PeftModel.<span class="fn">from_pretrained</span>(base, <span class="st">"adapter/"</span>).<span class="fn">merge_and_unload</span>()
+model.<span class="fn">save_pretrained</span>(<span class="st">"merged/"</span>, safe_serialization=<span class="kw">True</span>)
+AutoTokenizer.<span class="fn">from_pretrained</span>(BASE).<span class="fn">save_pretrained</span>(<span class="st">"merged/"</span>)
+</pre>
+        <span class="c3">Converters and most servers won't read a PEFT adapter directly — <strong>merge first</strong>. Always save the tokenizer alongside the weights.</span>
+        <span class="c2">Unsloth shortcut: <code>model.save_pretrained_merged("merged", tok, save_method="merged_16bit")</code>.</span>
+      </div>
+    </div>
+
+    <!-- 3: TRANSFORMERS -->
+    <div class="card t3">
+      <div class="card-title">③ transformers — simplest serve</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> pipeline
+pipe = <span class="fn">pipeline</span>(<span class="st">"text-generation"</span>, <span class="st">"merged/"</span>,
+               torch_dtype=<span class="st">"bfloat16"</span>, device_map=<span class="st">"auto"</span>)
+out = <span class="fn">pipe</span>([{<span class="st">"role"</span>:<span class="st">"user"</span>,<span class="st">"content"</span>:<span class="st">"What is DFT?"</span>}],
+           max_new_tokens=<span class="nb">128</span>, do_sample=<span class="kw">False</span>)
+<span class="fn">print</span>(out[<span class="nb">0</span>][<span class="st">"generated_text"</span>][-<span class="nb">1</span>][<span class="st">"content"</span>])
+</pre>
+        <span class="c1">Applies the chat template for you. Perfect for verifying the merge matches training. Not for high concurrency.</span>
+      </div>
+    </div>
+
+    <!-- 4: VLLM -->
+    <div class="card t4">
+      <div class="card-title">④ vLLM — GPU server, OpenAI-compatible</div>
+      <div class="card-body"><pre>
+pip install vllm
+vllm serve ./merged --port <span class="nb">8000</span>
+<span class="cm"># serve the LoRA WITHOUT merging:</span>
+<span class="cm"># vllm serve BASE --enable-lora --lora-modules chem=./adapter</span>
+
+curl localhost:<span class="nb">8000</span>/v1/chat/completions -d <span class="st">'{
+ "model":"merged","messages":[{"role":"user","content":"Hi"}]}'</span>
+</pre>
+        <span class="c1">PagedAttention → very high throughput; drop-in OpenAI API for harnesses/agents. Can hot-swap LoRA adapters without merging.</span>
+      </div>
+    </div>
+
+    <!-- 5: LLAMA.CPP -->
+    <div class="card t5">
+      <div class="card-title">⑤ llama.cpp — convert + quantize + serve</div>
+      <div class="card-body"><pre>
+<span class="cm"># 1. HF safetensors → F16 GGUF (Python, no build needed)</span>
+python llama.cpp/convert_hf_to_gguf.py merged/ \
+   --outfile model-f16.gguf --outtype f16
+
+<span class="cm"># 2. quantize (needs the compiled binary)</span>
+./llama.cpp/llama-quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
+
+<span class="cm"># 3. serve an OpenAI-compatible API</span>
+./llama.cpp/llama-server -m model-Q4_K_M.gguf -c <span class="nb">4096</span>
+</pre>
+        <span class="c2">Runs on pure CPU; offload layers to GPU with <code>-ngl N</code>. Constrain JSON output with <code>--grammar</code>.</span>
+      </div>
+    </div>
+
+    <!-- 6: OLLAMA -->
+    <div class="card t6">
+      <div class="card-title">⑥ Ollama — easiest local serve</div>
+      <div class="card-body"><pre>
+<span class="cm"># Modelfile</span>
+FROM ./model-Q4_K_M.gguf      <span class="cm"># or FROM ./merged (Llama-arch safetensors)</span>
+PARAMETER temperature 0.3
+PARAMETER stop <span class="st">"&lt;|im_end|&gt;"</span>      <span class="cm"># the model's end-of-turn token!</span>
+SYSTEM <span class="st">"You are a concise chemistry assistant."</span>
+
+<span class="cm"># build (quantizes on import), run, or hit the API</span>
+ollama create chem -q q4_K_M -f Modelfile
+ollama run chem <span class="st">"What is DFT?"</span>
+curl localhost:<span class="nb">11434</span>/api/generate -d <span class="st">'{"model":"chem","prompt":"hi"}'</span>
+</pre>
+        <span class="c1">The <code>stop</code> token must match the model's chat template (e.g. ChatML <code>&lt;|im_end|&gt;</code>) or it rambles past the answer.</span>
+      </div>
+    </div>
+
+    <!-- 7: UNSLOTH -->
+    <div class="card t7">
+      <div class="card-title">⑦ Unsloth — one-call GGUF export</div>
+      <div class="card-body"><pre>
+<span class="cm"># merge + convert + quantize in one go</span>
+model.<span class="fn">save_pretrained_gguf</span>(<span class="st">"gguf"</span>, tok, quantization_method=<span class="st">"q4_k_m"</span>)
+
+<span class="cm"># or straight to the Hub (multiple quants)</span>
+model.<span class="fn">push_to_hub_gguf</span>(<span class="st">"user/Model-GGUF"</span>, tok,
+                        quantization_method=[<span class="st">"q4_k_m"</span>,<span class="st">"q8_0"</span>])
+<span class="cm"># then: ollama run hf.co/user/Model-GGUF</span>
+</pre>
+        <span class="c2">Bundles the merge + llama.cpp steps. Handy when you trained in Unsloth anyway.</span>
+      </div>
+    </div>
+
+    <!-- 8: ARCH CAVEAT -->
+    <div class="card t8">
+      <div class="card-title">⑧ ⚠ Architecture decides your path</div>
+      <div class="card-body">
+        <span class="c1"><strong>Llama-architecture</strong> models (Llama, MiniCPM5, many Qwen) → Ollama imports the <em>safetensors</em> directly: <code>FROM ./merged</code>. No GGUF step.</span>
+        <span class="c3">A <strong>newer/unsupported arch</strong> (e.g. <code>SmolLM3ForCausalLM</code>) → Ollama can't read the safetensors. You must <code>convert_hf_to_gguf.py</code> first, then <code>FROM ./model-f16.gguf</code>. Check arch support <em>before</em> you pick a base model.</span>
+        <span class="c2">convert_hf_to_gguf.py supports a fixed list of architectures — if yours errors, update llama.cpp or wait for support.</span>
+      </div>
+    </div>
+
+    <!-- 9: QUANT LEVELS -->
+    <div class="card t9">
+      <div class="card-title">⑨ Quantization levels — size vs quality</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Quant</th><th>bits/wt</th><th>Use</th></tr>
+          <tr><td>Q8_0</td><td>~8.5</td><td>near-lossless, biggest</td></tr>
+          <tr><td>Q5_K_M</td><td>~5.5</td><td>high quality</td></tr>
+          <tr><td><strong>Q4_K_M</strong></td><td>~4.8</td><td><strong>default</strong> — best size/quality</td></tr>
+          <tr><td>Q3_K_M</td><td>~3.9</td><td>tight RAM, quality drops</td></tr>
+          <tr><td>IQ2/Q2_K</td><td>~2.6</td><td>last resort</td></tr>
+        </table>
+        <span class="c1">Footprint ≈ params × bits/8. A 3B at Q4_K_M ≈ 1.9 GB; a 1B ≈ 0.7 GB. Below ~Q3 quality falls fast on small models.</span>
+      </div>
+    </div>
+
+    <!-- 10: EDGE -->
+    <div class="card t10">
+      <div class="card-title">⑩ Edge & measuring honestly</div>
+      <div class="card-body"><pre>
+<span class="cm"># same Modelfile runs on a Raspberry Pi / Jetson via Ollama.</span>
+<span class="cm"># tok/s from the API, NOT a stopwatch:</span>
+tok_s = eval_count / (eval_duration / <span class="nb">1e9</span>)
+</pre>
+        <span class="c1">Pick a model whose Q4_K_M footprint fits RAM with headroom (KV-cache grows with context). 1–3B is the sweet spot for laptops/Pi-class boards.</span>
+        <span class="c3">Measure throughput on a normal-length answer. A barely-trained model that emits EOS immediately yields a meaningless 1-token "speed."</span>
+      </div>
+    </div>
+
+  </div><!-- grid -->
+
+  <div style="margin-top:14px; background:#fff7ed; border:1px solid #c2410c; border-radius:8px; padding:12px 16px;">
+    <strong style="color:#9a3412; font-size:0.85em; text-transform:uppercase; letter-spacing:0.06em;">⚡ The pipeline in one glance</strong>
+    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:0.85em;">
+      <span style="background:#15803d;color:white;padding:4px 10px;border-radius:20px;">merge_and_unload</span><span style="color:#999;">→</span>
+      <span style="background:#b45309;color:white;padding:4px 10px;border-radius:20px;">convert_hf_to_gguf (if non-Llama)</span><span style="color:#999;">→</span>
+      <span style="background:#0f766e;color:white;padding:4px 10px;border-radius:20px;">quantize Q4_K_M</span><span style="color:#999;">→</span>
+      <span style="background:#9a3412;color:white;padding:4px 10px;border-radius:20px;">Ollama / llama-server / vLLM</span>
+    </div>
+    <div style="margin-top:8px; font-size:0.8em; color:#64748b;">Walked end-to-end in the <a href="handbook.html#casestudy" style="color:#c2410c;">🧪 Case Study</a> (Step 9, measured ~242 tok/s). Ollama-ready merged model: <a href="https://huggingface.co/anisiraj/MiniCPM5-1B-compchem-merged" style="color:#c2410c;">MiniCPM5-1B-compchem-merged</a></div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SFT Trainer Cheatsheet — TRL, loss masking, batching, QLoRA</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; font-size: 14px; background: #f7f8fc; color: #1a1a2e; }
+  .page { max-width: 1000px; margin: 24px auto; padding: 28px 32px; background: white; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.9em; color: #4f46e5; border-bottom: 3px solid #4f46e5; padding-bottom: 6px; margin-bottom: 6px; }
+  h1 span { color: #555; font-size: 0.5em; font-weight: 400; }
+  .lede { color: #475569; font-size: 0.92em; margin-bottom: 16px; line-height: 1.6; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+  .card-title { font-size: 0.74em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 12px; color: white; }
+  .card-body { padding: 10px 12px; background: #fafafa; }
+  pre { font-family: 'Fira Mono', monospace; font-size: 0.84em; line-height: 1.55; white-space: pre-wrap; }
+  .kw  { color: #c678dd; font-weight: 600; }
+  .fn  { color: #0891b2; }
+  .st  { color: #16a34a; }
+  .cm  { color: #7f848e; font-style: italic; }
+  .nb  { color: #d97706; }
+  .c1  { background: #eef2ff; border-left: 3px solid #4f46e5; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c2  { background: #fff7ed; border-left: 3px solid #f97316; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .c3  { background: #fef2f2; border-left: 3px solid #ef4444; padding: 5px 9px; border-radius: 0 4px 4px 0; font-size: 0.84em; margin: 6px 0; display: block; }
+  .t1 .card-title { background: #4338ca; } .t2 .card-title { background: #0369a1; }
+  .t3 .card-title { background: #6d28d9; } .t4 .card-title { background: #be185d; }
+  .t5 .card-title { background: #b45309; } .t6 .card-title { background: #15803d; }
+  .t7 .card-title { background: #0f766e; } .t8 .card-title { background: #374151; }
+  .full { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82em; margin: 6px 0 2px; }
+  td, th { padding: 4px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code { background: #eef2ff; padding: 1px 4px; border-radius: 3px; font-family: 'Fira Mono', monospace; font-size: 0.92em; }
+  @media print { body { background: white; font-size: 11px; } .page { box-shadow: none; margin: 0; padding: 16px 20px; } }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:#0c1a2e;border-bottom:1px solid #334155;padding:8px 20px;font-size:.8em;display:flex;gap:16px;align-items:center;"><a href="index.html" style="color:#38bdf8;text-decoration:none;font-weight:600;">← Back to Index</a><span style="color:#475569;">|</span><a href="handbook.html" style="color:#94a3b8;text-decoration:none;">Handbook</a><span style="color:#475569;">|</span><a href="handbook.html#casestudy" style="color:#94a3b8;text-decoration:none;">🧪 Case Study</a></div>
+<div class="page">
+  <h1>🎯 SFT Trainer <span>— TRL loss masking, batching & QLoRA, the parts that bite</span></h1>
+  <p class="lede">Supervised fine-tuning with 🤗 <code>trl.SFTTrainer</code>. The whole game is <strong>which tokens carry the loss</strong> and <strong>what your effective batch actually is</strong>. Verified against TRL 1.x / 0.2x behaviour; every claim has a one-line check you can run.</p>
+
+  <div class="grid">
+
+    <!-- 1: THREE LOSS MODES -->
+    <div class="card t1">
+      <div class="card-title">① The 3 loss modes — pick before anything else</div>
+      <div class="card-body">
+        <table>
+          <tr><th>Mode</th><th>Loss on</th><th>Use for</th></tr>
+          <tr><td>full causal</td><td><strong>every</strong> token</td><td>CPT / pretraining on raw text</td></tr>
+          <tr><td>completion-only</td><td>completion, <em>prompt masked</em></td><td>SFT on prompt→completion pairs</td></tr>
+          <tr><td>assistant-only</td><td>only assistant turns</td><td>multi-turn chat (mask user + system)</td></tr>
+        </table>
+        <span class="c1">Masked tokens get label <code>-100</code> → PyTorch <code>CrossEntropyLoss(ignore_index=-100)</code> skips them. "Masking" here means <em>masking the loss</em>, not attention.</span>
+        <span class="c2">Why mask the prompt? You don't want the model learning to <em>generate questions</em>. Train it to write questions and at inference it'll "echo the prompt back" before answering — the #1 SFT bug.</span>
+      </div>
+    </div>
+
+    <!-- 2: DATASET FORMAT DRIVES MASKING -->
+    <div class="card t2">
+      <div class="card-title">② Dataset format auto-selects the masking</div>
+      <div class="card-body"><pre>
+<span class="cm"># TRL infers the recipe from your columns:</span>
+
+<span class="cm"># (a) language modeling — one "text" field → FULL loss</span>
+{<span class="st">"text"</span>: <span class="st">"Density functional theory ..."</span>}
+
+<span class="cm"># (b) prompt-completion → COMPLETION-ONLY loss (default!)</span>
+{<span class="st">"prompt"</span>: <span class="st">"What is DFT?"</span>,
+ <span class="st">"completion"</span>: <span class="st">"A method that ..."</span>}
+
+<span class="cm"># (c) conversational → use assistant_only_loss=True</span>
+{<span class="st">"messages"</span>: [{<span class="st">"role"</span>:<span class="st">"user"</span>,    <span class="st">"content"</span>:<span class="st">"What is DFT?"</span>},
+              {<span class="st">"role"</span>:<span class="st">"assistant"</span>,<span class="st">"content"</span>:<span class="st">"A method ..."</span>}]}
+</pre>
+        <span class="c1">For a <strong>prompt-completion</strong> dataset, <code>completion_only_loss</code> defaults to <strong>True</strong> — the prompt is masked for you. (TRL docs.)</span>
+      </div>
+    </div>
+
+    <!-- 3: COMPLETION ONLY LOSS -->
+    <div class="card t3">
+      <div class="card-title">③ completion_only_loss — & how to PROVE it</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> trl <span class="kw">import</span> SFTConfig, SFTTrainer
+
+trainer = <span class="fn">SFTTrainer</span>(
+    model=model, train_dataset=qa_pairs, processing_class=tok,
+    args=<span class="fn">SFTConfig</span>(
+        completion_only_loss=<span class="kw">True</span>,   <span class="cm"># mask the prompt</span>
+        packing=<span class="kw">False</span>,               <span class="cm"># packing can blur the mask — keep off for SFT</span>
+        max_length=<span class="nb">1024</span>))
+
+<span class="cm"># PROOF: pull ONE real collated batch, count non-(-100) labels</span>
+lab = <span class="fn">next</span>(<span class="fn">iter</span>(trainer.<span class="fn">get_train_dataloader</span>()))[<span class="st">"labels"</span>]
+<span class="fn">print</span>((lab != -<span class="nb">100</span>).<span class="fn">float</span>().<span class="fn">mean</span>())   <span class="cm"># ~0.6–0.8 (SFT). 1.0 means NOTHING is masked!</span>
+</pre>
+        <span class="c3">If that number is 1.0 your prompt isn't masked — wrong dataset format or flag. Fix before you waste a training run.</span>
+      </div>
+    </div>
+
+    <!-- 4: ASSISTANT ONLY LOSS -->
+    <div class="card t4">
+      <div class="card-title">④ assistant_only_loss (multi-turn chat)</div>
+      <div class="card-body"><pre>
+args = <span class="fn">SFTConfig</span>(assistant_only_loss=<span class="kw">True</span>)  <span class="cm"># default False</span>
+
+<span class="cm"># REQUIRES the chat template to mark assistant spans with</span>
+<span class="cm"># {% generation %} ... {% endgeneration %} so TRL knows</span>
+<span class="cm"># which tokens are the assistant's. Most modern templates do.</span>
+</pre>
+        <span class="c2">Masks system + every user turn; trains only on assistant replies — the right choice for multi-turn data so the model isn't penalised for "predicting" the user.</span>
+        <span class="c3">Silently ignored if <code>use_liger_kernel=True</code> (known TRL issue) — loss falls back to the whole sequence. Verify with the same non-(-100) count.</span>
+      </div>
+    </div>
+
+    <!-- 5: BATCH SIZE & GRAD ACCUM -->
+    <div class="card t5">
+      <div class="card-title">⑤ Batch size × grad accumulation = the real knob</div>
+      <div class="card-body"><pre>
+args = <span class="fn">SFTConfig</span>(
+    per_device_train_batch_size = <span class="nb">2</span>,   <span class="cm"># fits in VRAM</span>
+    gradient_accumulation_steps = <span class="nb">8</span>,   <span class="cm"># accumulate before step</span>
+    <span class="cm"># effective batch = 2 × 8 × num_gpus = 16</span>
+)
+</pre>
+        <table>
+          <tr><th>Want</th><th>Do</th></tr>
+          <tr><td>↓ VRAM</td><td>batch 1, grad-accum ↑ (same effective batch, slower)</td></tr>
+          <tr><td>↑ speed</td><td>batch ↑ until OOM, grad-accum ↓</td></tr>
+          <tr><td>stable loss</td><td>keep effective batch ~16–64 for SFT</td></tr>
+        </table>
+        <span class="c1"><strong>Grad-accum is "fake" big batch</strong>: forward+backward on micro-batches, sum grads, step once. Mathematically ≈ one big batch — at the cost of more forward passes. Add <code>gradient_checkpointing=True</code> to trade ~20% speed for a big VRAM cut.</span>
+      </div>
+    </div>
+
+    <!-- 6: QLORA BITSANDBYTES -->
+    <div class="card t6">
+      <div class="card-title">⑥ Canonical QLoRA (bitsandbytes 4-bit)</div>
+      <div class="card-body"><pre>
+<span class="kw">from</span> transformers <span class="kw">import</span> BitsAndBytesConfig
+<span class="kw">import</span> torch
+
+bnb = <span class="fn">BitsAndBytesConfig</span>(
+    load_in_4bit              = <span class="kw">True</span>,
+    bnb_4bit_quant_type       = <span class="st">"nf4"</span>,        <span class="cm"># NormalFloat4 (QLoRA paper)</span>
+    bnb_4bit_use_double_quant = <span class="kw">True</span>,         <span class="cm"># quantize the quant constants too</span>
+    bnb_4bit_compute_dtype    = torch.bfloat16) <span class="cm"># compute in bf16, store in 4-bit</span>
+
+model = AutoModelForCausalLM.<span class="fn">from_pretrained</span>(
+    name, quantization_config=bnb, device_map=<span class="st">"auto"</span>)
+model = <span class="fn">prepare_model_for_kbit_training</span>(model)  <span class="cm"># grad-ckpt + upcast norms</span>
+</pre>
+        <span class="c1">QLoRA = frozen base in <strong>4-bit NF4</strong>, trainable LoRA adapters in bf16. ~6 GB for a 7–8B. The base never updates; gradients only flow to the adapters.</span>
+      </div>
+    </div>
+
+    <!-- 7: UNSLOTH VS TRANSFORMERS -->
+    <div class="card t7">
+      <div class="card-title">⑦ Unsloth vs Transformers/TRL — when & gotchas</div>
+      <div class="card-body">
+        <table>
+          <tr><th></th><th>Unsloth</th><th>HF + TRL</th></tr>
+          <tr><td>speed/VRAM</td><td>~2× / −60%</td><td>baseline</td></tr>
+          <tr><td>GPUs</td><td>single only</td><td>multi-GPU / FSDP</td></tr>
+          <tr><td>models</td><td>patched subset</td><td>everything</td></tr>
+          <tr><td>4-bit SFT</td><td>rock-solid</td><td>can mis-cast</td></tr>
+        </table>
+        <span class="c3"><strong>"expected BFloat16 but found Float"</strong> on 4-bit SFT with plain TRL: it re-prepares the quantized model and upcasts <code>lm_head</code>. Fix → route QLoRA SFT through Unsloth <code>FastLanguageModel</code>.</span>
+        <span class="c2"><code>import unsloth</code> <strong>first</strong> (before transformers/trl) or its patches don't apply; set <code>dataset_num_proc=1</code> to dodge a pickling error.</span>
+      </div>
+    </div>
+
+    <!-- 8: FULL CONFIG -->
+    <div class="card t8">
+      <div class="card-title">⑧ A canonical SFTConfig (annotated)</div>
+      <div class="card-body"><pre>
+<span class="fn">SFTConfig</span>(
+  output_dir                  = <span class="st">"out"</span>,
+  num_train_epochs            = <span class="nb">3</span>,        <span class="cm"># tiny data → 2–4 epochs</span>
+  per_device_train_batch_size = <span class="nb">2</span>,
+  gradient_accumulation_steps = <span class="nb">8</span>,        <span class="cm"># eff. batch 16</span>
+  gradient_checkpointing      = <span class="kw">True</span>,
+  learning_rate               = <span class="nb">2e-4</span>,     <span class="cm"># LoRA likes 1e-4–3e-4</span>
+  lr_scheduler_type           = <span class="st">"cosine"</span>,
+  warmup_ratio                = <span class="nb">0.03</span>,
+  optim                       = <span class="st">"adamw_8bit"</span>,<span class="cm"># 8-bit optimizer saves VRAM</span>
+  bf16                        = <span class="kw">True</span>,
+  completion_only_loss        = <span class="kw">True</span>,
+  packing                     = <span class="kw">False</span>,
+  logging_steps               = <span class="nb">5</span>,
+  seed                        = <span class="nb">42</span>)            <span class="cm"># reproducibility</span>
+</pre>
+      </div>
+    </div>
+
+  </div><!-- grid -->
+
+  <div style="margin-top:14px; background:#eef2ff; border:1px solid #4f46e5; border-radius:8px; padding:12px 16px;">
+    <strong style="color:#4338ca; font-size:0.85em; text-transform:uppercase; letter-spacing:0.06em;">⚡ Decide in one glance</strong>
+    <div style="margin-top:8px; font-size:0.86em; color:#374151; line-height:1.7;">
+      <strong>Raw text?</strong> → full loss (CPT). &nbsp;<strong>Q&amp;A pairs?</strong> → completion-only. &nbsp;<strong>Multi-turn chat?</strong> → assistant-only.<br>
+      <strong>OOM?</strong> → batch 1 + grad-accum↑ + grad-checkpointing + 4-bit NF4 + adamw_8bit. &nbsp;
+      <strong>Eff. batch</strong> = per_device × accum × gpus (aim 16–64).<br>
+      <strong>Always verify the mask</strong> with the non-(-100) label count before a long run. &nbsp;<strong>4-bit SFT casting errors?</strong> → use Unsloth.
+    </div>
+    <div style="margin-top:8px; font-size:0.8em; color:#64748b;">Seen end-to-end in the <a href="handbook.html#casestudy" style="color:#4f46e5;">🧪 Case Study</a> (Steps 4–5) · adapters: <a href="https://huggingface.co/anisiraj/SmolLM3-3B-compchem-sft-lora" style="color:#4f46e5;">SmolLM3 SFT LoRA</a></div>
+  </div>
+</div>
+</body>
+</html>

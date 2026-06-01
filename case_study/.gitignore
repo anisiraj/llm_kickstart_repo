@@ -1,0 +1,9 @@
+# Regenerable from the scripts (run 01_build_corpus.py / 02_data_availability.py) — keep the repo light.
+data/
+# Trained adapters, merged/GGUF models, checkpoints, metrics — large + reproducible from a FULL run.
+outputs/
+__pycache__/
+logs/
+unsloth_compiled_cache/
+_unsloth_temporary_saved_buffers/
+*.lock
