@@ -4494,6 +4494,8 @@ if __name__ == &quot;__main__&quot;:
     <div><div class="chapter-title">AWS SageMaker</div><div class="chapter-subtitle">Train &amp; deploy HF models in the cloud — full control</div></div>
   </div>
   <p class="chapter-intro"><strong>SageMaker</strong> manages compute provisioning, distributed training, spot interruption recovery, and model artifact storage. You write a standard training script, wrap it in a <em>HuggingFace estimator</em>, and SageMaker handles everything else. It's the right choice when your dataset or model is too large for a local GPU — or when you need reproducible, auditable training runs at scale.</p>
+
+  <div class="warn" style="margin-bottom:14px;"><strong>⏱️ Cloud APIs drift — read this as a pattern, not gospel.</strong> Unlike the rest of this book, the AWS chapters can't be pinned to a tested local stack, and AWS changes them often. <strong>Two specific things below were already stale and are corrected here</strong> (the framework-version pins, and Bedrock's move to inference profiles). Treat every <em>version string, instance type, and model ID</em> as "look it up for today" — the <em>shape</em> of the workflow (estimator → fit → deploy → delete) is what's stable. Last reconciled against AWS docs: <strong>2026-06</strong>.</div>
   <div class="grid2">
 
     <div class="card">
@@ -4539,8 +4541,11 @@ s3_train = sess.<span class="fn">upload_data</span>(<span class="st">"./data"</s
 estimator = <span class="fn">HuggingFace</span>(entry_point=<span class="st">"train.py"</span>,
     source_dir=<span class="st">"./scripts"</span>, role=role,
     instance_type=<span class="st">"ml.g5.2xlarge"</span>, instance_count=<span class="nb">1</span>,
-    transformers_version=<span class="st">"4.36"</span>, pytorch_version=<span class="st">"2.1"</span>,
-    py_version=<span class="st">"py310"</span>,
+    <span class="cm"># ⚠️ DON'T copy these version numbers — pin to a CURRENT HF Deep Learning</span>
+    <span class="cm"># Container. Old pins fail to launch as AWS retires images. Either look up</span>
+    <span class="cm"># the latest at github.com/aws/deep-learning-containers, OR skip these three</span>
+    <span class="cm"># args entirely and pass image_uri=&lt;current HF DLC URI&gt; instead.</span>
+    transformers_version=<span class="st">"4.xx"</span>, pytorch_version=<span class="st">"2.x"</span>, py_version=<span class="st">"py3xx"</span>,
     hyperparameters={<span class="st">"model_name"</span>:<span class="st">"distilbert-base-uncased"</span>,<span class="st">"epochs"</span>:<span class="nb">3</span>},
     use_spot_instances=<span class="kw">True</span>, max_wait=<span class="nb">7200</span>, max_run=<span class="nb">3600</span>)
 estimator.<span class="fn">fit</span>({<span class="st">"train"</span>: s3_train})
@@ -4570,12 +4575,12 @@ predictor.<span class="fn">delete_endpoint</span>()   <span class="cm"># ← alw
 need = params_b * VRAM_PER_B[method] * <span class="nb">1.25</span>
 <span class="cm"># then pick the cheapest box whose VRAM >= need</span>
 </pre>
-<div class="good">09_sagemaker_train.py runs this for 7B–70B × {qlora, lora, full}. Sample: 8B QLoRA → ~7GB → V100 16GB; 8B LoRA → ~20GB → A10G 24GB; 8B Full → ~160GB → 8×V100. Heuristics match <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/15_lora_footprint.py" target="_blank" style="color:#38bdf8;">15_lora_footprint.py</a>.</div>
+<div class="good">09_sagemaker_train.py runs this for 7B–70B × {qlora, lora, full}. Sample: 8B QLoRA → ~7GB → fits g5/g6 (A10G/L4, 24GB); 8B LoRA → ~20GB → g5/g6 24GB; 8B Full → ~160GB → multi-GPU A100/H100 (p4d/p5). The GB→instance mapping shifts as AWS adds GPU families; the GB <em>requirement</em> is the stable part. Heuristics match <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/15_lora_footprint.py" target="_blank" style="color:#38bdf8;">15_lora_footprint.py</a>.</div>
 </div>
     </div>
 
   </div>
-  <div class="tip" style="margin-top:12px;"><strong>Instances:</strong> ml.g5.2xlarge (A10G 24GB) → 7B-8B &nbsp;|&nbsp; ml.p3.2xlarge (V100 16GB) → small models &nbsp;|&nbsp; ml.g5.12xlarge (4×A10G) → 34B &nbsp;|&nbsp; use_spot_instances=True → up to 70% cheaper (AWS spot pricing) &nbsp;—&nbsp; run <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank" style="color:#38bdf8;">09_sagemaker_train.py</a> for the sizing math.</div>
+  <div class="tip" style="margin-top:12px;"><strong>Instances (current-gen GPU families):</strong> ml.g5 (A10G 24GB) → 7B–8B &nbsp;|&nbsp; ml.g6 / g6e (L4 / L40S) → newer, often better price/perf than g5 &nbsp;|&nbsp; ml.g5.12xlarge (4×A10G) → ~34B &nbsp;|&nbsp; ml.p4d / p5 (A100 / H100) → large/full FT &nbsp;|&nbsp; <code>use_spot_instances=True</code> → typically up to ~70% cheaper. <strong>Avoid the older p3 (V100) family — it's legacy.</strong> Availability and pricing vary by region and change often, so confirm in the AWS console; the <em>sizing math</em> (VRAM from params × method) is what's stable — run <a href="https://github.com/anisiraj/llm_kickstart_repo/blob/master/scripts/09_sagemaker_train.py" target="_blank" style="color:#38bdf8;">09_sagemaker_train.py</a> for it.</div>
 </div>
 
 <div class="chapter c-bedrock" id="bedrock">
@@ -4593,24 +4598,28 @@ need = params_b * VRAM_PER_B[method] * <span class="nb">1.25</span>
 
 rt = boto3.<span class="fn">client</span>(<span class="st">"bedrock-runtime"</span>, region_name=<span class="st">"us-east-1"</span>)
 
-<span class="cm"># One-shot</span>
+<span class="cm"># ⚠️ BREAKING CHANGE you must know: most current models can no longer be invoked</span>
+<span class="cm"># on-demand by their BARE model id. You pass an INFERENCE PROFILE id — the same id</span>
+<span class="cm"># with a geo prefix (us. / eu. / apac.). Bare-id on-demand now errors with</span>
+<span class="cm"># "Invocation ... isn't supported. Retry with the id or ARN of an inference profile."</span>
 r = rt.<span class="fn">converse</span>(
-    modelId  = <span class="st">"anthropic.claude-3-5-sonnet-20241022-v2:0"</span>,
+    modelId  = <span class="st">"us.anthropic.claude-sonnet-4-20250514-v1:0"</span>,   <span class="cm"># ← note the "us." prefix</span>
     messages = [{<span class="st">"role"</span>:<span class="st">"user"</span>,<span class="st">"content"</span>:[{<span class="st">"text"</span>:<span class="st">"Hello!"</span>}]}],
     inferenceConfig={<span class="st">"maxTokens"</span>:<span class="nb">512</span>,<span class="st">"temperature"</span>:<span class="nb">0.7</span>})
 <span class="fn">print</span>(r[<span class="st">"output"</span>][<span class="st">"message"</span>][<span class="st">"content"</span>][<span class="nb">0</span>][<span class="st">"text"</span>])
 
-<span class="cm"># Streaming</span>
-stream = rt.<span class="fn">converse_stream</span>(modelId=<span class="st">"..."</span>, messages=[...])
+<span class="cm"># Streaming — same modelId rules apply</span>
+stream = rt.<span class="fn">converse_stream</span>(modelId=<span class="st">"us.anthropic..."</span>, messages=[...])
 <span class="kw">for</span> evt <span class="kw">in</span> stream[<span class="st">"stream"</span>]:
     <span class="kw">if</span> <span class="st">"contentBlockDelta"</span> <span class="kw">in</span> evt:
         <span class="fn">print</span>(evt[<span class="st">"contentBlockDelta"</span>][<span class="st">"delta"</span>][<span class="st">"text"</span>], end=<span class="st">""</span>)
 
-<span class="cm"># Model IDs</span>
-<span class="cm"># anthropic.claude-3-5-sonnet-20241022-v2:0</span>
-<span class="cm"># meta.llama3-70b-instruct-v1:0</span>
-<span class="cm"># mistral.mistral-large-2402-v1:0</span>
-<span class="cm"># amazon.titan-text-express-v1</span>
+<span class="cm"># Inference-profile IDs are listed on each model's detail page in the Bedrock</span>
+<span class="cm"># console (Models → pick model → "Inference profile IDs"). They look like:</span>
+<span class="cm">#   us.anthropic.claude-sonnet-4-20250514-v1:0     (US geo)</span>
+<span class="cm">#   eu.anthropic.claude-...                         (EU geo)</span>
+<span class="cm">#   us.meta.llama3-3-70b-instruct-v1:0</span>
+<span class="cm"># Exact ids change as models are released/retired — always copy the current one.</span>
 </pre></div>
     </div>
 
